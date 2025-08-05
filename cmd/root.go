@@ -13,7 +13,7 @@ deployments and troubleshoot common issues across multiple programming languages
 
 The tool provides modular detection of libraries and issues, making it easy
 to extend support for new languages and problem patterns.`,
-	Version: "1.0.0",
+	Version: Version,
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.

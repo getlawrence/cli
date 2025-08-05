@@ -13,6 +13,47 @@ Lawrence is a CLI tool for analyzing codebases to detect OpenTelemetry deploymen
 
 ## Installation
 
+### Quick Install (Recommended)
+
+```bash
+curl -sSL https://raw.githubusercontent.com/getlawrence/cli/main/install.sh | bash
+```
+
+### Using Go Install
+
+```bash
+go install github.com/getlawrence/cli@latest
+```
+
+Make sure `$GOPATH/bin` is in your `$PATH`:
+
+```bash
+export PATH=$PATH:$(go env GOPATH)/bin
+```
+
+### Using Homebrew (macOS/Linux)
+
+```bash
+# Add our tap (once available)
+brew tap getlawrence/tap
+brew install lawrence
+```
+
+### Download Pre-built Binaries
+
+Download the latest release from the [releases page](https://github.com/getlawrence/cli/releases).
+
+Available for:
+- Linux (x64, ARM64)
+- macOS (x64, ARM64) 
+- Windows (x64, ARM64)
+
+### Using Docker
+
+```bash
+docker run --rm -v $(pwd):/workspace ghcr.io/getlawrence/cli analyze /workspace
+```
+
 ### From Source
 
 ```bash
@@ -20,10 +61,6 @@ git clone https://github.com/getlawrence/cli.git
 cd cli
 go build -o lawrence
 ```
-
-### Pre-built Binaries
-
-Download the latest release from the [releases page](https://github.com/getlawrence/cli/releases).
 
 ## Quick Start
 
