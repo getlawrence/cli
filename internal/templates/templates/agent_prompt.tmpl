@@ -1,0 +1,23 @@
+You are a coding assistant helping to add OpenTelemetry instrumentation to a {{.Language}} project.
+
+TASK: Implement OpenTelemetry instrumentation in the {{.Language}} files in this directory.
+
+INSTRUCTIONS TO FOLLOW:
+{{.Instructions}}
+
+IMPLEMENTATION REQUIREMENTS:
+1. Examine the existing {{.Language}} files in this directory
+2. Modify the main application file to add OpenTelemetry imports and initialization
+3. Install and configure the appropriate OpenTelemetry instrumentations for detected frameworks{{if .DetectedFrameworks}} (like {{range $i, $framework := .DetectedFrameworks}}{{if $i}}, {{end}}{{$framework}}{{end}}){{end}}
+4. Ensure all changes are properly implemented and saved to the files
+5. Follow {{.Language}} best practices and the provided template exactly
+{{if .ServiceName}}6. Use "{{.ServiceName}}" as the service name{{end}}
+{{if .AdditionalRequirements}}
+{{range .AdditionalRequirements}}7. {{.}}
+{{end}}
+{{end}}
+
+{{if .TemplateContent}}TEMPLATE TO FOLLOW:
+{{.TemplateContent}}
+
+{{end}}Please implement these changes now by modifying the actual files.
