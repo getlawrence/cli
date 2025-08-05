@@ -225,7 +225,7 @@ func (g *Generator) executeOpportunities(ctx context.Context, opportunities []Op
 	fmt.Printf("Combined Instructions:\n%s\n", combinedInstructions)
 
 	// Execute with selected agent - single call
-	if err := g.agentMgr.ExecuteWithAgent(req.AgentType, combinedInstructions); err != nil {
+	if err := g.agentMgr.ExecuteWithAgent(req.AgentType, combinedInstructions, req.CodebasePath); err != nil {
 		return fmt.Errorf("failed to execute with agent %s: %v", req.AgentType, err)
 	}
 

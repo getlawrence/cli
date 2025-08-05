@@ -74,54 +74,58 @@ func (d *Detector) getAgentVersion(agent Agent) string {
 }
 
 // ExecuteWithAgent sends instructions to the specified agent
-func (d *Detector) ExecuteWithAgent(agentType AgentType, instructions string) error {
+func (d *Detector) ExecuteWithAgent(agentType AgentType, instructions string, targetDir string) error {
 	for _, agent := range d.agents {
 		if agent.Type == agentType && d.isAgentAvailable(agent) {
-			return d.executeCommand(agent, instructions)
+			return d.executeCommand(agent, instructions, targetDir)
 		}
 	}
 	return fmt.Errorf("agent %s not available", agentType)
 }
 
-func (d *Detector) executeCommand(agent Agent, instructions string) error {
+func (d *Detector) executeCommand(agent Agent, instructions string, targetDir string) error {
 	// Implementation depends on each agent's API
 	switch agent.Type {
 	case GitHubCLI:
-		return d.executeGitHubCopilot(instructions)
+		return d.executeGitHubCopilot(instructions, targetDir)
 	case GeminiCLI:
-		return d.executeGemini(instructions)
+		return d.executeGemini(instructions, targetDir)
 	case ClaudeCode:
-		return d.executeClaude(instructions)
+		return d.executeClaude(instructions, targetDir)
 	case OpenAICodex:
-		return d.executeOpenAI(instructions)
+		return d.executeOpenAI(instructions, targetDir)
 	default:
 		return fmt.Errorf("agent execution not implemented for %s", agent.Type)
 	}
 }
 
-func (d *Detector) executeGitHubCopilot(instructions string) error {
+func (d *Detector) executeGitHubCopilot(instructions string, targetDir string) error {
 	cmd := exec.Command("gh", "copilot", "suggest", instructions)
+	cmd.Dir = targetDir
 	cmd.Stdout = nil // Let output go to terminal
 	cmd.Stderr = nil
 	return cmd.Run()
 }
 
-func (d *Detector) executeGemini(instructions string) error {
+func (d *Detector) executeGemini(instructions string, targetDir string) error {
 	cmd := exec.Command("gemini", "--prompt", instructions)
+	cmd.Dir = targetDir
 	cmd.Stdout = nil
 	cmd.Stderr = nil
 	return cmd.Run()
 }
 
-func (d *Detector) executeClaude(instructions string) error {
+func (d *Detector) executeClaude(instructions string, targetDir string) error {
 	cmd := exec.Command("claude", "code", instructions)
+	cmd.Dir = targetDir
 	cmd.Stdout = nil
 	cmd.Stderr = nil
 	return cmd.Run()
 }
 
-func (d *Detector) executeOpenAI(instructions string) error {
+func (d *Detector) executeOpenAI(instructions string, targetDir string) error {
 	cmd := exec.Command("openai", "api", "completions.create", "-p", instructions)
+	cmd.Dir = targetDir
 	cmd.Stdout = nil
 	cmd.Stderr = nil
 	return cmd.Run()
