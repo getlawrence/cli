@@ -1,7 +1,3 @@
-opentelemetry-api==1.21.0
-opentelemetry-sdk==1.21.0
-opentelemetry-exporter-console==1.21.0
-opentelemetry-instrumentation-flask==0.42b0
 flask==2.3.3
 requests==2.31.0
 psycopg2==2.9.7
