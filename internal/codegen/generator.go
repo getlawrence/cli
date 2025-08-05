@@ -42,10 +42,15 @@ func NewGenerator(detectorMgr *detector.Manager) (*Generator, error) {
 		return nil, fmt.Errorf("failed to initialize template manager: %w", err)
 	}
 
+	agentMgr, err := agents.NewDetector()
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize agent manager: %w", err)
+	}
+
 	return &Generator{
 		detector:    detectorMgr,
 		templateMgr: templateMgr,
-		agentMgr:    agents.NewDetector(),
+		agentMgr:    agentMgr,
 	}, nil
 }
 
@@ -166,45 +171,22 @@ func (g *Generator) filterByLanguage(opportunities []Opportunity, language strin
 
 func (g *Generator) executeOpportunities(ctx context.Context, opportunities []Opportunity, req GenerationRequest) error {
 	// Verify requested agent is available
-	availableAgents := g.agentMgr.DetectAvailableAgents()
-	agentAvailable := false
-	for _, agent := range availableAgents {
-		if agent.Type == req.AgentType {
-			agentAvailable = true
-			break
-		}
+	if err := g.verifyAgentAvailability(req.AgentType); err != nil {
+		return err
 	}
 
-	if !agentAvailable {
-		return fmt.Errorf("requested agent %s is not available", req.AgentType)
+	// Group opportunities by language to create comprehensive instructions
+	languageOpportunities := g.groupOpportunitiesByLanguage(opportunities)
+
+	if len(languageOpportunities) == 0 {
+		fmt.Println("No opportunities to process")
+		return nil
 	}
 
-	// Collect all instructions before sending to agent
-	var allInstructions []string
-
-	for _, opportunity := range opportunities {
-		data := templates.TemplateData{
-			Language:         opportunity.Language,
-			Method:           req.Method,
-			Instrumentations: opportunity.Instrumentations,
-			ServiceName:      filepath.Base(req.CodebasePath),
-		}
-
-		instructions, err := g.templateMgr.GenerateInstructions(
-			opportunity.Language,
-			req.Method,
-			data,
-		)
-		if err != nil {
-			fmt.Printf("Warning: failed to generate instructions for %s: %v\n",
-				opportunity.Language, err)
-			continue
-		}
-
-		fmt.Printf("Generated instrumentation instructions for %s in %s\n",
-			opportunity.Framework, opportunity.FilePath)
-
-		allInstructions = append(allInstructions, instructions)
+	// Generate comprehensive instructions
+	allInstructions, err := g.generateInstructionsForLanguages(languageOpportunities, req)
+	if err != nil {
+		return err
 	}
 
 	if len(allInstructions) == 0 {
@@ -212,23 +194,120 @@ func (g *Generator) executeOpportunities(ctx context.Context, opportunities []Op
 		return nil
 	}
 
-	// Combine all instructions and send to agent once
-	combinedInstructions := fmt.Sprintf("# OpenTelemetry Instrumentation for %s\n\nPlease implement the following instrumentation opportunities:\n\n%s",
-		filepath.Base(req.CodebasePath),
-		allInstructions[0]) // Start with first instruction
+	// Combine and send to agent
+	return g.sendInstructionsToAgent(allInstructions, req)
+}
 
-	// Add subsequent instructions
-	for i := 1; i < len(allInstructions); i++ {
-		combinedInstructions += fmt.Sprintf("\n\n---\n\n%s", allInstructions[i])
+func (g *Generator) verifyAgentAvailability(agentType agents.AgentType) error {
+	availableAgents := g.agentMgr.DetectAvailableAgents()
+	for _, agent := range availableAgents {
+		if agent.Type == agentType {
+			return nil
+		}
+	}
+	return fmt.Errorf("requested agent %s is not available", agentType)
+}
+
+func (g *Generator) generateInstructionsForLanguages(languageOpportunities map[string][]Opportunity, req GenerationRequest) ([]string, error) {
+	var allInstructions []string
+
+	for language, langOpportunities := range languageOpportunities {
+		// Collect all instrumentations for this language
+		allInstrumentations := g.collectAllInstrumentations(langOpportunities)
+
+		// Generate comprehensive instructions for this language
+		instructions, err := g.templateMgr.GenerateComprehensiveInstructions(
+			language,
+			req.Method,
+			allInstrumentations,
+			filepath.Base(req.CodebasePath),
+		)
+		if err != nil {
+			fmt.Printf("Warning: failed to generate comprehensive instructions for %s: %v\n", language, err)
+			continue
+		}
+
+		fmt.Printf("Generated comprehensive instrumentation instructions for %s\n", language)
+		allInstructions = append(allInstructions, instructions)
 	}
 
-	fmt.Printf("Combined Instructions:\n%s\n", combinedInstructions)
+	return allInstructions, nil
+}
 
-	// Execute with selected agent - single call
-	if err := g.agentMgr.ExecuteWithAgent(req.AgentType, combinedInstructions, req.CodebasePath); err != nil {
+func (g *Generator) sendInstructionsToAgent(allInstructions []string, req GenerationRequest) error {
+	// Combine all language instructions into a single comprehensive guide
+	combinedInstructions := g.combineInstructions(allInstructions, req.CodebasePath)
+
+	fmt.Printf("Generated comprehensive instrumentation guide\n")
+
+	// Determine the primary language or use "multi-language" if multiple
+	language := req.Language
+	if language == "" {
+		language = "multi-language" // Default for comprehensive guides
+	}
+
+	// Create agent execution request
+	agentRequest := agents.AgentExecutionRequest{
+		Language:     language,
+		Instructions: combinedInstructions,
+		TargetDir:    req.CodebasePath,
+		ServiceName:  filepath.Base(req.CodebasePath), // Use directory name as default service name
+	}
+
+	// Execute with selected agent - single call with comprehensive instructions
+	if err := g.agentMgr.ExecuteWithAgent(req.AgentType, agentRequest); err != nil {
 		return fmt.Errorf("failed to execute with agent %s: %v", req.AgentType, err)
 	}
 
-	fmt.Printf("Successfully sent combined instructions to %s agent\n", req.AgentType)
+	fmt.Printf("Successfully sent comprehensive instrumentation guide to %s agent\n", req.AgentType)
 	return nil
+}
+
+func (g *Generator) combineInstructions(allInstructions []string, codebasePath string) string {
+	if len(allInstructions) == 1 {
+		return allInstructions[0]
+	}
+
+	// Multiple languages - create a multi-language guide
+	combinedInstructions := fmt.Sprintf("# OpenTelemetry Instrumentation Guide for %s\n\n", filepath.Base(codebasePath))
+	combinedInstructions += "This guide provides comprehensive OpenTelemetry instrumentation for multiple languages detected in your project.\n\n"
+
+	for i, instructions := range allInstructions {
+		if i > 0 {
+			combinedInstructions += "\n\n---\n\n"
+		}
+		combinedInstructions += instructions
+	}
+
+	return combinedInstructions
+}
+
+// groupOpportunitiesByLanguage groups opportunities by programming language
+func (g *Generator) groupOpportunitiesByLanguage(opportunities []Opportunity) map[string][]Opportunity {
+	grouped := make(map[string][]Opportunity)
+
+	for _, opp := range opportunities {
+		if opp.Language != "" {
+			grouped[opp.Language] = append(grouped[opp.Language], opp)
+		}
+	}
+
+	return grouped
+}
+
+// collectAllInstrumentations extracts unique instrumentations from all opportunities
+func (g *Generator) collectAllInstrumentations(opportunities []Opportunity) []string {
+	seen := make(map[string]bool)
+	var instrumentations []string
+
+	for _, opp := range opportunities {
+		for _, instr := range opp.Instrumentations {
+			if !seen[instr] {
+				seen[instr] = true
+				instrumentations = append(instrumentations, instr)
+			}
+		}
+	}
+
+	return instrumentations
 }

@@ -1,0 +1,452 @@
+# OpenTelemetry Instrumentation Implementation for {{.ServiceName}}
+
+## Overview
+Implement comprehensive OpenTelemetry instrumentation for this Go project. This includes setting up tracing, installing required packages, and integrating instrumentations for detected frameworks.
+
+## Implementation Tasks
+
+### 1. Install Required Dependencies
+
+Add all OpenTelemetry dependencies to your `go.mod`:
+
+```bash
+# Core OpenTelemetry packages
+go get go.opentelemetry.io/otel
+go get go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp
+go get go.opentelemetry.io/otel/sdk
+go get go.opentelemetry.io/otel/sdk/resource
+go get go.opentelemetry.io/otel/semconv/v1.17.0
+
+# Instrumentation packages for detected frameworks
+{{range .Instrumentations}}
+{{if eq . "otelhttp"}}go get go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp{{end}}
+{{if eq . "otelgin"}}go get go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin{{end}}
+{{if eq . "otelmux"}}go get go.opentelemetry.io/contrib/instrumentation/github.com/gorilla/mux/otelmux{{end}}
+{{if eq . "otelsql"}}go get go.opentelemetry.io/contrib/instrumentation/database/sql/otelsql{{end}}
+{{if eq . "otelgorm"}}go get go.opentelemetry.io/contrib/instrumentation/gorm.io/gorm/otelgorm{{end}}
+{{if eq . "otelredis"}}go get go.opentelemetry.io/contrib/instrumentation/github.com/go-redis/redis/v8/otelredis{{end}}
+{{if eq . "otelgrpc"}}go get go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc{{end}}
+{{end}}
+```
+
+### 2. Create OpenTelemetry Configuration Package
+
+Create a new file `internal/telemetry/otel.go` (or follow your project's package structure):
+
+```go
+// Package telemetry provides OpenTelemetry configuration and instrumentation
+// for {{.ServiceName}}.
+package telemetry
+
+import (
+	"context"
+	"log"
+	"os"
+	"time"
+
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
+	"go.opentelemetry.io/otel/sdk/resource"
+	"go.opentelemetry.io/otel/sdk/trace"
+	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
+
+	// Import instrumentation packages
+{{range .Instrumentations}}
+{{if eq . "otelsql"}}"go.opentelemetry.io/contrib/instrumentation/database/sql/otelsql"{{end}}
+{{if eq . "otelgorm"}}"go.opentelemetry.io/contrib/instrumentation/gorm.io/gorm/otelgorm"{{end}}
+{{end}}
+)
+
+var (
+	// Tracer provides a global tracer instance for manual instrumentation
+	Tracer = otel.Tracer("{{.ServiceName}}")
+)
+
+// Config holds OpenTelemetry configuration options
+type Config struct {
+	ServiceName    string
+	ServiceVersion string
+	Environment    string
+	OTLPEndpoint   string
+	APIKey         string
+}
+
+// LoadConfig loads OpenTelemetry configuration from environment variables
+func LoadConfig() *Config {
+	return &Config{
+		ServiceName:    getEnvOrDefault("OTEL_SERVICE_NAME", "{{.ServiceName}}"),
+		ServiceVersion: getEnvOrDefault("OTEL_SERVICE_VERSION", "1.0.0"),
+		Environment:    getEnvOrDefault("OTEL_ENVIRONMENT", "development"),
+		OTLPEndpoint:   getEnvOrDefault("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", "http://localhost:4318/v1/traces"),
+		APIKey:         os.Getenv("OTEL_API_KEY"),
+	}
+}
+
+// Initialize sets up OpenTelemetry tracing with OTLP exporter
+func Initialize(ctx context.Context, config *Config) (func(context.Context) error, error) {
+	// Create resource with service information
+	res, err := resource.New(ctx,
+		resource.WithAttributes(
+			semconv.ServiceNameKey.String(config.ServiceName),
+			semconv.ServiceVersionKey.String(config.ServiceVersion),
+			semconv.DeploymentEnvironmentKey.String(config.Environment),
+		),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	// Create OTLP trace exporter
+	traceExporter, err := createOTLPExporter(ctx, config)
+	if err != nil {
+		return nil, err
+	}
+
+	// Create trace provider
+	tp := trace.NewTracerProvider(
+		trace.WithBatcher(traceExporter),
+		trace.WithResource(res),
+		trace.WithSampler(trace.AlwaysSample()), // Configure sampling as needed
+	)
+
+	// Set global trace provider
+	otel.SetTracerProvider(tp)
+
+	// Update global tracer
+	Tracer = otel.Tracer("{{.ServiceName}}")
+
+	// Return shutdown function
+	return tp.Shutdown, nil
+}
+
+func createOTLPExporter(ctx context.Context, config *Config) (trace.SpanExporter, error) {
+	opts := []otlptracehttp.Option{
+		otlptracehttp.WithEndpoint(config.OTLPEndpoint),
+		otlptracehttp.WithTimeout(time.Second * 30),
+	}
+
+	// Add authorization header if API key is provided
+	if config.APIKey != "" {
+		headers := map[string]string{
+			"Authorization": "Bearer " + config.APIKey,
+		}
+		opts = append(opts, otlptracehttp.WithHeaders(headers))
+	}
+
+	return otlptracehttp.New(ctx, opts...)
+}
+
+{{range .Instrumentations}}
+{{if eq . "otelsql"}}
+// WrapSQLDriver wraps a SQL driver with OpenTelemetry instrumentation
+func WrapSQLDriver(driverName, dataSourceName string, opts ...otelsql.Option) (*sql.DB, error) {
+	defaultOpts := []otelsql.Option{
+		otelsql.WithAttributes(semconv.DBSystemKey.String("postgresql")), // Adjust based on your database
+	}
+	allOpts := append(defaultOpts, opts...)
+	
+	return otelsql.Open(driverName, dataSourceName, allOpts...)
+}
+{{end}}
+{{if eq . "otelgorm"}}
+// ConfigureGORM adds OpenTelemetry instrumentation to a GORM database instance
+func ConfigureGORM(db *gorm.DB) error {
+	return db.Use(otelgorm.NewPlugin())
+}
+{{end}}
+{{end}}
+
+func getEnvOrDefault(key, defaultValue string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return defaultValue
+}
+```
+
+### 3. Framework Integration Instructions
+
+{{range .Instrumentations}}
+{{if eq . "otelhttp"}}
+#### Standard HTTP Server Integration
+
+For standard Go HTTP servers, wrap your handlers:
+
+```go
+package main
+
+import (
+	"context"
+	"log"
+	"net/http"
+	
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	"your-project/internal/telemetry" // Adjust import path
+)
+
+func main() {
+	// Initialize OpenTelemetry
+	config := telemetry.LoadConfig()
+	shutdown, err := telemetry.Initialize(context.Background(), config)
+	if err != nil {
+		log.Fatal("Failed to initialize OpenTelemetry:", err)
+	}
+	defer func() {
+		if err := shutdown(context.Background()); err != nil {
+			log.Printf("Error shutting down OpenTelemetry: %v", err)
+		}
+	}()
+
+	// Wrap your handlers with OpenTelemetry instrumentation
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", yourHandler)
+	
+	// Wrap the entire mux with OTEL instrumentation
+	handler := otelhttp.NewHandler(mux, "{{.ServiceName}}")
+	
+	log.Println("Server starting on :8080")
+	log.Fatal(http.ListenAndServe(":8080", handler))
+}
+
+func yourHandler(w http.ResponseWriter, r *http.Request) {
+	// Your handler logic here
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("Hello, World!"))
+}
+```
+{{end}}
+{{if eq . "otelgin"}}
+#### Gin Framework Integration
+
+For Gin web framework:
+
+```go
+package main
+
+import (
+	"context"
+	"log"
+	
+	"github.com/gin-gonic/gin"
+	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
+	"your-project/internal/telemetry" // Adjust import path
+)
+
+func main() {
+	// Initialize OpenTelemetry
+	config := telemetry.LoadConfig()
+	shutdown, err := telemetry.Initialize(context.Background(), config)
+	if err != nil {
+		log.Fatal("Failed to initialize OpenTelemetry:", err)
+	}
+	defer func() {
+		if err := shutdown(context.Background()); err != nil {
+			log.Printf("Error shutting down OpenTelemetry: %v", err)
+		}
+	}()
+
+	// Create Gin router
+	r := gin.Default()
+	
+	// Add OpenTelemetry middleware
+	r.Use(otelgin.Middleware("{{.ServiceName}}"))
+	
+	// Your routes
+	r.GET("/", func(c *gin.Context) {
+		c.JSON(200, gin.H{"message": "Hello, World!"})
+	})
+	
+	log.Println("Server starting on :8080")
+	r.Run(":8080")
+}
+```
+{{end}}
+{{if eq . "otelmux"}}
+#### Gorilla Mux Integration
+
+For Gorilla Mux router:
+
+```go
+package main
+
+import (
+	"context"
+	"log"
+	"net/http"
+	
+	"github.com/gorilla/mux"
+	"go.opentelemetry.io/contrib/instrumentation/github.com/gorilla/mux/otelmux"
+	"your-project/internal/telemetry" // Adjust import path
+)
+
+func main() {
+	// Initialize OpenTelemetry
+	config := telemetry.LoadConfig()
+	shutdown, err := telemetry.Initialize(context.Background(), config)
+	if err != nil {
+		log.Fatal("Failed to initialize OpenTelemetry:", err)
+	}
+	defer func() {
+		if err := shutdown(context.Background()); err != nil {
+			log.Printf("Error shutting down OpenTelemetry: %v", err)
+		}
+	}()
+
+	// Create Mux router
+	r := mux.NewRouter()
+	
+	// Add OpenTelemetry middleware
+	r.Use(otelmux.Middleware("{{.ServiceName}}"))
+	
+	// Your routes
+	r.HandleFunc("/", yourHandler).Methods("GET")
+	
+	log.Println("Server starting on :8080")
+	log.Fatal(http.ListenAndServe(":8080", r))
+}
+```
+{{end}}
+{{if eq . "otelsql"}}
+#### Database Integration (SQL)
+
+For SQL database connections:
+
+```go
+package main
+
+import (
+	"database/sql"
+	"log"
+	
+	_ "github.com/lib/pq" // PostgreSQL driver
+	"your-project/internal/telemetry" // Adjust import path
+)
+
+func setupDatabase() (*sql.DB, error) {
+	// Use the wrapped SQL driver
+	db, err := telemetry.WrapSQLDriver("postgres", "postgresql://user:password@localhost/dbname?sslmode=disable")
+	if err != nil {
+		return nil, err
+	}
+	
+	// Test the connection
+	if err := db.Ping(); err != nil {
+		return nil, err
+	}
+	
+	return db, nil
+}
+```
+{{end}}
+{{if eq . "otelgorm"}}
+#### GORM Integration
+
+For GORM ORM:
+
+```go
+package main
+
+import (
+	"log"
+	
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
+	"your-project/internal/telemetry" // Adjust import path
+)
+
+func setupGORMDatabase() (*gorm.DB, error) {
+	// Create GORM database connection
+	db, err := gorm.Open(postgres.Open("postgresql://user:password@localhost/dbname?sslmode=disable"), &gorm.Config{})
+	if err != nil {
+		return nil, err
+	}
+	
+	// Add OpenTelemetry instrumentation
+	if err := telemetry.ConfigureGORM(db); err != nil {
+		return nil, err
+	}
+	
+	return db, nil
+}
+```
+{{end}}
+{{end}}
+
+### 4. Environment Configuration
+
+Add these environment variables to your deployment configuration:
+
+```bash
+# OpenTelemetry configuration
+OTEL_SERVICE_NAME={{.ServiceName}}
+OTEL_SERVICE_VERSION=1.0.0
+OTEL_ENVIRONMENT=production
+OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=http://your-otel-collector:4318/v1/traces
+OTEL_API_KEY=your-api-key-if-needed
+```
+
+### 5. Project Structure Considerations
+
+- Place the `internal/telemetry/` package following Go conventions
+- If your project uses a different structure, adapt the package location accordingly
+- Ensure the telemetry package is importable from your main application
+- Consider adding telemetry configuration to your existing config package if you have one
+
+### 6. Manual Instrumentation Example
+
+For adding custom spans in your code:
+
+```go
+import (
+	"context"
+	"your-project/internal/telemetry"
+)
+
+func someBusinessLogic(ctx context.Context) error {
+	// Create a custom span
+	ctx, span := telemetry.Tracer.Start(ctx, "business-logic-operation")
+	defer span.End()
+	
+	// Add attributes to the span
+	span.SetAttributes(
+		attribute.String("operation.type", "business-logic"),
+		attribute.Int("operation.items", 42),
+	)
+	
+	// Your business logic here
+	// Pass ctx to downstream calls to maintain trace context
+	
+	return nil
+}
+```
+
+### 7. Testing the Implementation
+
+After implementation, verify the instrumentation is working:
+
+1. Build and start your application
+2. Make some requests to trigger traces
+3. Check your OpenTelemetry backend/collector for incoming trace data
+4. Verify that spans are being created for HTTP requests, database calls, and other instrumented operations
+
+### 8. Additional Notes
+
+- The instrumentation uses OTLP HTTP exporter by default
+- Sampling is set to always sample - adjust for production use
+- Add proper error handling and logging to the telemetry configuration
+- Consider adding health checks that verify OpenTelemetry connectivity
+- For performance-critical applications, review sampling strategies
+
+## Files to Create/Modify
+
+1. **Create**: `internal/telemetry/otel.go` - Main OpenTelemetry configuration package
+2. **Modify**: Your main application file - Add telemetry initialization
+{{range .Instrumentations}}
+{{if or (eq . "otelhttp") (eq . "otelgin") (eq . "otelmux")}}3. **Modify**: HTTP handler/router setup - Add middleware instrumentation{{end}}
+{{if or (eq . "otelsql") (eq . "otelgorm")}}3. **Modify**: Database setup code - Add database instrumentation{{end}}
+{{end}}
+4. **Update**: `go.mod` - Add OpenTelemetry dependencies
+5. **Update**: Environment configuration - Add OpenTelemetry environment variables
+6. **Update**: Application configuration - Include telemetry configuration
+
+This implementation provides comprehensive OpenTelemetry instrumentation while following Go best practices and allowing for easy configuration and maintenance.

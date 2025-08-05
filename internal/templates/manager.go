@@ -31,6 +31,16 @@ type TemplateData struct {
 	SpanProcessors []string `json:"span_processors,omitempty"`
 }
 
+// AgentPromptData contains all data needed for agent prompt generation
+type AgentPromptData struct {
+	Language               string   `json:"language"`
+	Instructions           string   `json:"instructions"`
+	DetectedFrameworks     []string `json:"detected_frameworks,omitempty"`
+	ServiceName            string   `json:"service_name,omitempty"`
+	AdditionalRequirements []string `json:"additional_requirements,omitempty"`
+	TemplateContent        string   `json:"template_content,omitempty"`
+}
+
 // Manager handles template loading and execution
 type Manager struct {
 	templates map[string]*template.Template
@@ -49,8 +59,34 @@ func NewManager() (*Manager, error) {
 	return m, nil
 }
 
+// GenerateAgentPrompt creates a prompt for coding agents
+func (m *Manager) GenerateAgentPrompt(data AgentPromptData) (string, error) {
+	tmpl, exists := m.templates["agent_prompt"]
+	if !exists {
+		return "", fmt.Errorf("agent prompt template not found")
+	}
+
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, data); err != nil {
+		return "", fmt.Errorf("agent prompt template execution failed: %w", err)
+	}
+
+	return buf.String(), nil
+}
+
 // GenerateInstructions creates instructions based on language and method
 func (m *Manager) GenerateInstructions(lang string, method InstallationMethod, data TemplateData) (string, error) {
+	// First try comprehensive template
+	comprehensiveKey := fmt.Sprintf("%s_comprehensive", lang)
+	if tmpl, exists := m.templates[comprehensiveKey]; exists {
+		var buf bytes.Buffer
+		if err := tmpl.Execute(&buf, data); err != nil {
+			return "", fmt.Errorf("comprehensive template execution failed: %w", err)
+		}
+		return buf.String(), nil
+	}
+
+	// Fallback to method-specific template
 	templateKey := fmt.Sprintf("%s_%s", lang, method)
 	tmpl, exists := m.templates[templateKey]
 	if !exists {
@@ -63,6 +99,35 @@ func (m *Manager) GenerateInstructions(lang string, method InstallationMethod, d
 	}
 
 	return buf.String(), nil
+}
+
+// GenerateComprehensiveInstructions creates a single comprehensive instruction
+// that includes all instrumentations for a given language
+func (m *Manager) GenerateComprehensiveInstructions(lang string, method InstallationMethod, allInstrumentations []string, serviceName string) (string, error) {
+	// Use comprehensive template if available
+	comprehensiveKey := fmt.Sprintf("%s_comprehensive", lang)
+	if tmpl, exists := m.templates[comprehensiveKey]; exists {
+		data := TemplateData{
+			Language:         lang,
+			Method:           method,
+			Instrumentations: allInstrumentations,
+			ServiceName:      serviceName,
+		}
+
+		var buf bytes.Buffer
+		if err := tmpl.Execute(&buf, data); err != nil {
+			return "", fmt.Errorf("comprehensive template execution failed: %w", err)
+		}
+		return buf.String(), nil
+	}
+
+	// Fallback: generate individual instructions and combine them
+	return m.GenerateInstructions(lang, method, TemplateData{
+		Language:         lang,
+		Method:           method,
+		Instrumentations: allInstrumentations,
+		ServiceName:      serviceName,
+	})
 }
 
 func (m *Manager) loadTemplates() error {
