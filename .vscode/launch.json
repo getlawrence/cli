@@ -19,7 +19,7 @@
             "program": "${workspaceFolder}",
             "args": [
                 "analyze",
-                "${workspaceFolder}/examples/go-sample",
+                "${workspaceFolder}/examples/monorepo-sample",
             ],
             "env": {
                 "GO111MODULE": "on"
@@ -34,7 +34,7 @@
             "args": [
                 "codegen",
                 "--path",
-                "${workspaceFolder}/examples/go-sample",
+                "${workspaceFolder}/examples/monorepo-sample",
             ],
             "env": {
                 "GO111MODULE": "on"

@@ -72,33 +72,11 @@ func (ca *CodebaseAnalyzer) AnalyzeCodebase(ctx context.Context, rootPath string
 		return nil, nil, fmt.Errorf("failed to detect languages: %w", err)
 	}
 
-	// Process languages and collect data
-	err = ca.processDirectoryLanguages(ctx, rootPath, directoryLanguages, analysis)
-	if err != nil {
-		return nil, nil, err
+	// iterate through detected languages in directories
+	if len(directoryLanguages) == 0 {
+		return nil, nil, fmt.Errorf("no languages detected in the codebase at %s", rootPath)
 	}
 
-	// Check for available instrumentations
-	err = ca.populateInstrumentations(ctx, analysis)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	// Run issue detectors
-	allIssues, err := ca.runIssueDetectors(ctx, analysis)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return analysis, allIssues, nil
-}
-
-// processDirectoryLanguages processes each directory with its detected language
-func (ca *CodebaseAnalyzer) processDirectoryLanguages(ctx context.Context, rootPath string, directoryLanguages map[string]string, analysis *Analysis) error {
-	// Track which languages we've seen to avoid duplicates
-	seenLanguages := make(map[string]bool)
-
-	// Process each directory with its detected language
 	for directory, language := range directoryLanguages {
 		languageDetector := ca.findLanguageDetector(language)
 		if languageDetector == nil {
@@ -109,19 +87,19 @@ func (ca *CodebaseAnalyzer) processDirectoryLanguages(ctx context.Context, rootP
 		// Calculate the full path for this directory
 		dirPath := ca.calculateDirectoryPath(rootPath, directory)
 
-		// Only process each language once, but collect all directories
-		if !seenLanguages[language] {
-			seenLanguages[language] = true
-			analysis.DetectedLanguages = append(analysis.DetectedLanguages, language)
+		analysis.DetectedLanguages = append(analysis.DetectedLanguages, language)
 
-			// Get OTel libraries for this language from the specific directory
-			err := ca.collectLibrariesAndPackages(ctx, dirPath, language, languageDetector, analysis)
-			if err != nil {
-				return err
-			}
+		// Get OTel libraries for this language from the specific directory
+		err, libs, packages := ca.collectLibrariesAndPackages(ctx, dirPath, language, languageDetector)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to collect libraries and packages for %s in %s: %w", language, dirPath, err)
 		}
+		err = ca.populateInstrumentations(ctx, analysis)
+		allIssues, err := ca.runIssueDetectors(ctx, analysis)
+
 	}
-	return nil
+
+	return analysis, allIssues, nil
 }
 
 // findLanguageDetector finds the corresponding language detector for a language name
@@ -139,22 +117,20 @@ func (ca *CodebaseAnalyzer) calculateDirectoryPath(rootPath, directory string) s
 }
 
 // collectLibrariesAndPackages collects OTel libraries and packages for a language
-func (ca *CodebaseAnalyzer) collectLibrariesAndPackages(ctx context.Context, dirPath, language string, languageDetector Language, analysis *Analysis) error {
+func (ca *CodebaseAnalyzer) collectLibrariesAndPackages(ctx context.Context, dirPath, language string, languageDetector Language) (error, []types.Library, []types.Package) {
 	// Get OTel libraries for this language from the specific directory
 	libs, err := languageDetector.GetOTelLibraries(ctx, dirPath)
 	if err != nil {
-		return fmt.Errorf("failed to get OTel libraries for %s in %s: %w", language, dirPath, err)
+		return fmt.Errorf("failed to get OTel libraries for %s in %s: %w", language, dirPath, err), nil, nil
 	}
-	analysis.Libraries = append(analysis.Libraries, libs...)
 
 	// Get all packages for this language from the specific directory
 	packages, err := languageDetector.GetAllPackages(ctx, dirPath)
 	if err != nil {
-		return fmt.Errorf("failed to get packages for %s in %s: %w", language, dirPath, err)
+		return fmt.Errorf("failed to get packages for %s in %s: %w", language, dirPath, err), nil, nil
 	}
-	analysis.Packages = append(analysis.Packages, packages...)
 
-	return nil
+	return nil, libs, packages
 }
 
 // populateInstrumentations checks for available instrumentations

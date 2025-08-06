@@ -191,7 +191,6 @@ func (g *Generator) convertIssuesToOpportunities(analysis *detector.Analysis, is
 		}
 	}
 
-	// Also create opportunities from available instrumentations
 	opportunities = append(opportunities, g.createOpportunitiesFromInstrumentations(analysis)...)
 
 	return opportunities
@@ -207,6 +206,7 @@ func (g *Generator) createOpportunitiesFromInstrumentations(analysis *detector.A
 				Framework:     instr.Package.Name,
 				Component:     instr.Package.Name,
 				ComponentType: ComponentTypeInstrumentation,
+				Type:          OpportunityInstallComponent,
 				Suggestion:    fmt.Sprintf("Add OpenTelemetry instrumentation for %s", instr.Package.Name),
 			}
 			opportunities = append(opportunities, opp)
