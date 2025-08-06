@@ -99,13 +99,44 @@ func outputText(analysis *detector.Analysis, detailed, verbose bool) error {
 	fmt.Printf("📊 OpenTelemetry Analysis Results\n")
 	fmt.Printf("=================================\n\n")
 
+	// Aggregate issues from all directories
+	var allIssues []types.Issue
+	for _, dirAnalysis := range analysis.DirectoryAnalyses {
+		allIssues = append(allIssues, dirAnalysis.Issues...)
+	}
+
 	// Summary
 	fmt.Printf("📂 Project Path: %s\n", analysis.RootPath)
 	fmt.Printf("🗣️  Languages Detected: %v\n", analysis.DetectedLanguages)
 	fmt.Printf("📦 OpenTelemetry Libraries: %d\n", len(analysis.Libraries))
 	fmt.Printf("📥 All Packages: %d\n", len(analysis.Packages))
 	fmt.Printf("🔧 Available Instrumentations: %d\n", len(analysis.AvailableInstrumentations))
-	fmt.Printf("⚠️  Issues Found: %d\n\n", len(issues))
+	fmt.Printf("📁 Directories Analyzed: %d\n", len(analysis.DirectoryAnalyses))
+	fmt.Printf("⚠️  Issues Found: %d\n\n", len(allIssues))
+
+	// Directory-specific analysis
+	if len(analysis.DirectoryAnalyses) > 0 && detailed {
+		fmt.Printf("📁 Directory Analysis:\n")
+		fmt.Printf("---------------------\n")
+		for directory, dirAnalysis := range analysis.DirectoryAnalyses {
+			fmt.Printf("  📂 %s (%s)\n", directory, dirAnalysis.Language)
+			fmt.Printf("    📦 Libraries: %d, Packages: %d, Instrumentations: %d, Issues: %d\n",
+				len(dirAnalysis.Libraries), len(dirAnalysis.Packages),
+				len(dirAnalysis.AvailableInstrumentations), len(dirAnalysis.Issues))
+
+			// Show directory-specific issues if any
+			if len(dirAnalysis.Issues) > 0 {
+				fmt.Printf("    ⚠️  Directory Issues:\n")
+				for _, issue := range dirAnalysis.Issues {
+					fmt.Printf("      • %s (%s)\n", issue.Title, issue.Severity)
+					if issue.Suggestion != "" {
+						fmt.Printf("        💡 %s\n", issue.Suggestion)
+					}
+				}
+			}
+		}
+		fmt.Println()
+	}
 
 	// Libraries
 	if len(analysis.Libraries) > 0 {
@@ -149,14 +180,14 @@ func outputText(analysis *detector.Analysis, detailed, verbose bool) error {
 	}
 
 	// Issues
-	if len(issues) > 0 {
+	if len(allIssues) > 0 {
 		fmt.Printf("⚠️  Issues and Recommendations:\n")
 		fmt.Printf("-------------------------------\n")
 
 		// Group issues by severity
-		errors := filterIssuesBySeverity(issues, types.SeverityError)
-		warnings := filterIssuesBySeverity(issues, types.SeverityWarning)
-		infos := filterIssuesBySeverity(issues, types.SeverityInfo)
+		errors := filterIssuesBySeverity(allIssues, types.SeverityError)
+		warnings := filterIssuesBySeverity(allIssues, types.SeverityWarning)
+		infos := filterIssuesBySeverity(allIssues, types.SeverityInfo)
 
 		printIssuesByCategory("🚨 Errors", errors, detailed)
 		printIssuesByCategory("⚠️  Warnings", warnings, detailed)
@@ -199,9 +230,23 @@ func printIssuesByCategory(title string, issues []types.Issue, detailed bool) {
 }
 
 func outputJSON(analysis *detector.Analysis) error {
+	// Aggregate issues from all directories for backward compatibility
+	var allIssues []types.Issue
+	for _, dirAnalysis := range analysis.DirectoryAnalyses {
+		allIssues = append(allIssues, dirAnalysis.Issues...)
+	}
+
 	result := map[string]interface{}{
-		"analysis": analysis,
-		"issues":   issues,
+		"analysis":   analysis,
+		"all_issues": allIssues,
+		"summary": map[string]interface{}{
+			"total_directories":      len(analysis.DirectoryAnalyses),
+			"total_languages":        len(analysis.DetectedLanguages),
+			"total_libraries":        len(analysis.Libraries),
+			"total_packages":         len(analysis.Packages),
+			"total_instrumentations": len(analysis.AvailableInstrumentations),
+			"total_issues":           len(allIssues),
+		},
 	}
 
 	encoder := json.NewEncoder(os.Stdout)
@@ -212,7 +257,7 @@ func outputJSON(analysis *detector.Analysis) error {
 func outputYAML(analysis *detector.Analysis) error {
 	// For simplicity, output as JSON for now
 	// In a real implementation, you'd use a YAML library
-	return outputJSON(analysis, issues)
+	return outputJSON(analysis)
 }
 
 // Filter functions

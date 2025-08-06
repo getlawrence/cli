@@ -108,6 +108,11 @@ func (ca *CodebaseAnalyzer) AnalyzeCodebase(ctx context.Context, rootPath string
 			return nil, fmt.Errorf("failed to process directory %s: %w", directory, err)
 		}
 		analysis.DirectoryAnalyses[directory] = dirAnalysis
+
+		// Aggregate results to main analysis
+		analysis.Libraries = append(analysis.Libraries, dirAnalysis.Libraries...)
+		analysis.Packages = append(analysis.Packages, dirAnalysis.Packages...)
+		analysis.AvailableInstrumentations = append(analysis.AvailableInstrumentations, dirAnalysis.AvailableInstrumentations...)
 	}
 
 	// Set detected languages from seen languages
@@ -141,6 +146,7 @@ func (ca *CodebaseAnalyzer) processDirectory(ctx context.Context, directory, dir
 	}
 	dirAnalysis := &DirectoryAnalysis{
 		Directory: directory,
+		Language:  language,
 		Libraries: libs,
 		Packages:  packages,
 	}
