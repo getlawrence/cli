@@ -72,17 +72,13 @@ func runAnalyze(cmd *cobra.Command, args []string) error {
 	}
 
 	// Create detection manager
-	manager := detector.NewManager()
-
-	// Register language detectors
-	manager.RegisterLanguageDetector("go", languages.NewGoDetector())
-	manager.RegisterLanguageDetector("python", languages.NewPythonDetector())
-
-	// Register issue detectors
-	manager.RegisterDetector(issues.NewMissingOTelDetector())
-	manager.RegisterDetector(issues.NewIncompleteInstrumentationDetector())
-	manager.RegisterDetector(issues.NewOutdatedLibrariesDetector())
-	manager.RegisterDetector(issues.NewMissingInstrumentationDetector())
+	manager := detector.NewManager([]detector.IssueDetector{
+		detector.NewCodeGenDetector(),
+		issues.NewMissingOTelDetector(),
+	}, map[string]detector.Language{
+		"go":     languages.NewGoDetector(),
+		"python": languages.NewPythonDetector(),
+	})
 
 	// Run analysis
 	ctx := context.Background()

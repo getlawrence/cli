@@ -54,21 +54,11 @@ type Manager struct {
 }
 
 // NewManager creates a new detection manager
-func NewManager() *Manager {
+func NewManager(detectors []IssueDetector, languages map[string]Language) *Manager {
 	return &Manager{
-		detectors:         make([]IssueDetector, 0),
-		languageDetectors: make(map[string]Language),
+		detectors:         detectors,
+		languageDetectors: languages,
 	}
-}
-
-// RegisterLanguageDetector adds a language detector
-func (m *Manager) RegisterLanguageDetector(name string, detector Language) {
-	m.languageDetectors[strings.ToLower(name)] = detector
-}
-
-// RegisterDetector adds an issue detector
-func (m *Manager) RegisterDetector(detector IssueDetector) {
-	m.detectors = append(m.detectors, detector)
 }
 
 // AnalyzeCodebase performs the full analysis

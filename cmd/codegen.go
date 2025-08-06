@@ -8,6 +8,7 @@ import (
 	"github.com/getlawrence/cli/internal/agents"
 	"github.com/getlawrence/cli/internal/codegen"
 	"github.com/getlawrence/cli/internal/detector"
+	"github.com/getlawrence/cli/internal/detector/issues"
 	"github.com/getlawrence/cli/internal/detector/languages"
 	"github.com/getlawrence/cli/internal/templates"
 	"github.com/spf13/cobra"
@@ -77,17 +78,18 @@ func init() {
 
 func runCodegen(cmd *cobra.Command, args []string) error {
 	ctx := context.Background()
-	detectorMgr := detector.NewManager()
 
-	// Register language detectors
-	detectorMgr.RegisterLanguageDetector("go", languages.NewGoDetector())
-	detectorMgr.RegisterLanguageDetector("python", languages.NewPythonDetector())
-
-	// Register the codegen detector
-	detectorMgr.RegisterDetector(detector.NewCodeGenDetector())
+	// Create detection manager
+	manager := detector.NewManager([]detector.IssueDetector{
+		detector.NewCodeGenDetector(),
+		issues.NewMissingOTelDetector(),
+	}, map[string]detector.Language{
+		"go":     languages.NewGoDetector(),
+		"python": languages.NewPythonDetector(),
+	})
 
 	// Initialize generator with existing detector system
-	generator, err := codegen.NewGenerator(detectorMgr)
+	generator, err := codegen.NewGenerator(manager)
 	if err != nil {
 		return fmt.Errorf("failed to initialize generator: %w", err)
 	}
