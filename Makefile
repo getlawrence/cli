@@ -40,6 +40,20 @@ clean: ## Clean build artifacts
 test: ## Run tests
 	$(GOTEST) -v ./...
 
+test-coverage: ## Run tests with coverage
+	$(GOTEST) -v -cover -race ./...
+
+test-coverage-html: ## Run tests with coverage and generate HTML report
+	$(GOTEST) -coverprofile=coverage.out ./...
+	$(GOCMD) tool cover -html=coverage.out -o coverage.html
+	@echo "Coverage report generated: coverage.html"
+
+test-detector: ## Run detector-specific tests
+	$(GOTEST) -v ./internal/detector/...
+
+test-watch: ## Run tests in watch mode (requires entr)
+	find . -name "*.go" | entr -c make test
+
 fmt: ## Format code
 	$(GOCMD) fmt ./...
 
@@ -48,6 +62,26 @@ vet: ## Run go vet
 
 lint: ## Run golangci-lint (requires golangci-lint to be installed)
 	golangci-lint run
+
+# E2E Tests
+validate-e2e: ## Validate E2E test structure without Docker
+	./validate-e2e.sh
+
+e2e-test: ## Run E2E tests in Docker
+	docker-compose -f docker-compose.e2e.yml up --build --abort-on-container-exit lawrence-e2e
+
+e2e-test-instrumentation: ## Run instrumentation-specific E2E tests
+	docker-compose -f docker-compose.e2e.yml up --build --abort-on-container-exit lawrence-instrumentation-tests
+
+e2e-test-multi: ## Run E2E tests on multiple distributions
+	docker-compose -f docker-compose.e2e.yml --profile multi-distro up --build --abort-on-container-exit
+
+e2e-clean: ## Clean up E2E test artifacts
+	docker-compose -f docker-compose.e2e.yml down --volumes --remove-orphans
+	docker system prune -f
+
+e2e-shell: ## Start an interactive shell in the E2E test environment
+	docker-compose -f docker-compose.e2e.yml run --rm lawrence-e2e /bin/bash
 
 install: build ## Install the binary to GOPATH/bin
 	cp $(BINARY_NAME) $(GOPATH)/bin/$(BINARY_NAME)

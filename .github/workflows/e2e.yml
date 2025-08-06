@@ -1,0 +1,81 @@
+name: E2E Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
+
+jobs:
+  e2e-tests:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        test-suite: [basic, instrumentation]
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+      
+    - name: Create results directory
+      run: mkdir -p e2e-results
+      
+    - name: Run E2E Tests - Basic Suite
+      if: matrix.test-suite == 'basic'
+      run: |
+        docker-compose -f docker-compose.e2e.yml up --build --abort-on-container-exit lawrence-e2e
+        
+    - name: Run E2E Tests - Instrumentation Suite
+      if: matrix.test-suite == 'instrumentation'
+      run: |
+        docker-compose -f docker-compose.e2e.yml up --build --abort-on-container-exit lawrence-instrumentation-tests
+        
+    - name: Upload test results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: e2e-test-results-${{ matrix.test-suite }}
+        path: e2e-results/
+        retention-days: 7
+        
+    - name: Clean up
+      if: always()
+      run: |
+        docker-compose -f docker-compose.e2e.yml down --volumes --remove-orphans
+        docker system prune -f
+        
+  e2e-multi-distro:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+      
+    - name: Create results directory
+      run: mkdir -p e2e-results
+      
+    - name: Run Multi-Distribution E2E Tests
+      run: |
+        docker-compose -f docker-compose.e2e.yml --profile multi-distro up --build --abort-on-container-exit
+        
+    - name: Upload multi-distro test results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: e2e-test-results-multi-distro
+        path: e2e-results/
+        retention-days: 7
+        
+    - name: Clean up
+      if: always()
+      run: |
+        docker-compose -f docker-compose.e2e.yml down --volumes --remove-orphans
+        docker system prune -f

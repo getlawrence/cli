@@ -1,0 +1,87 @@
+"""
+OpenTelemetry instrumentation for {{.ServiceName}}
+"""
+
+import os
+import logging
+from typing import Optional
+
+from opentelemetry import trace
+from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from opentelemetry.sdk.resources import Resource
+from opentelemetry.semconv.resource import ResourceAttributes
+{{range .Instrumentations}}
+{{if eq . "flask"}}from opentelemetry.instrumentation.flask import FlaskInstrumentor
+{{end}}{{if eq . "django"}}from opentelemetry.instrumentation.django import DjangoInstrumentor
+{{end}}{{if eq . "requests"}}from opentelemetry.instrumentation.requests import RequestsInstrumentor
+{{end}}{{if eq . "sqlalchemy"}}from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
+{{end}}{{if eq . "psycopg2"}}from opentelemetry.instrumentation.psycopg2 import Psycopg2Instrumentor
+{{end}}{{end}}
+
+logger = logging.getLogger(__name__)
+
+
+def init_tracer() -> Optional[TracerProvider]:
+    """Initialize OpenTelemetry tracing for {{.ServiceName}}"""
+    
+    # Create resource
+    resource = Resource.create({
+        ResourceAttributes.SERVICE_NAME: os.getenv("OTEL_SERVICE_NAME", "{{.ServiceName}}"),
+        ResourceAttributes.SERVICE_VERSION: os.getenv("OTEL_SERVICE_VERSION", "1.0.0"),
+        ResourceAttributes.DEPLOYMENT_ENVIRONMENT: os.getenv("OTEL_DEPLOYMENT_ENVIRONMENT", "development"),
+    })
+    
+    # Create tracer provider
+    tracer_provider = TracerProvider(resource=resource)
+    
+    # Create OTLP exporter
+    endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4318/v1/traces")
+    try:
+        otlp_exporter = OTLPSpanExporter(endpoint=endpoint)
+        span_processor = BatchSpanProcessor(otlp_exporter)
+        tracer_provider.add_span_processor(span_processor)
+    except Exception as e:
+        logger.error(f"Failed to create OTLP exporter: {e}")
+        return None
+    
+    # Set global tracer provider
+    trace.set_tracer_provider(tracer_provider)
+    
+    # Initialize instrumentations
+    try:
+        {{range .Instrumentations}}
+        {{if eq . "flask"}}FlaskInstrumentor().instrument()
+        {{end}}{{if eq . "django"}}DjangoInstrumentor().instrument()
+        {{end}}{{if eq . "requests"}}RequestsInstrumentor().instrument()
+        {{end}}{{if eq . "sqlalchemy"}}SQLAlchemyInstrumentor().instrument()
+        {{end}}{{if eq . "psycopg2"}}Psycopg2Instrumentor().instrument()
+        {{end}}{{end}}
+        logger.info("Successfully initialized OpenTelemetry instrumentations")
+    except Exception as e:
+        logger.error(f"Failed to initialize instrumentations: {e}")
+    
+    return tracer_provider
+
+
+def get_tracer() -> trace.Tracer:
+    """Get a tracer for the service"""
+    return trace.get_tracer("{{.ServiceName}}")
+
+
+def shutdown_tracing():
+    """Shutdown tracing and flush any remaining spans"""
+    try:
+        provider = trace.get_tracer_provider()
+        if hasattr(provider, 'shutdown'):
+            provider.shutdown()
+        logger.info("OpenTelemetry tracing shutdown complete")
+    except Exception as e:
+        logger.error(f"Error during tracing shutdown: {e}")
+
+
+# Initialize tracing when module is imported
+tracer_provider = init_tracer()
+if not tracer_provider:
+    logger.warning("Failed to initialize OpenTelemetry tracing")

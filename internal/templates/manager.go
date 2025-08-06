@@ -7,7 +7,7 @@ import (
 	"text/template"
 )
 
-//go:embed templates/*
+//go:embed *
 var templateFS embed.FS
 
 // InstallationMethod represents different OTEL installation approaches
@@ -75,6 +75,16 @@ func (m *Manager) GenerateAgentPrompt(data AgentPromptData) (string, error) {
 
 // GenerateInstructions creates instructions based on language and method
 func (m *Manager) GenerateInstructions(lang string, method InstallationMethod, data TemplateData) (string, error) {
+	// For template-based code generation, try code generation templates first
+	codeGenKey := fmt.Sprintf("%s_%s_gen", lang, method)
+	if tmpl, exists := m.templates[codeGenKey]; exists {
+		var buf bytes.Buffer
+		if err := tmpl.Execute(&buf, data); err != nil {
+			return "", fmt.Errorf("code generation template execution failed: %w", err)
+		}
+		return buf.String(), nil
+	}
+
 	// First try comprehensive template
 	comprehensiveKey := fmt.Sprintf("%s_comprehensive", lang)
 	if tmpl, exists := m.templates[comprehensiveKey]; exists {

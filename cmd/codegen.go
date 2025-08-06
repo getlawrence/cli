@@ -16,25 +16,39 @@ import (
 
 var codegenCmd = &cobra.Command{
 	Use:   "codegen",
-	Short: "Generate OTEL instrumentation code using AI agents",
+	Short: "Generate OTEL instrumentation code using AI agents or templates",
 	Long: `Analyze your codebase and generate OpenTelemetry instrumentation 
-using available coding agents like GitHub Copilot, Gemini CLI, or Claude Code.
+using AI agents or template-based code generation.
+
+AI Mode (default if agents available):
+- Uses coding agents like GitHub Copilot, Gemini CLI, or Claude Code
+- Generates instructions and lets AI implement the code
+- Requires an available coding agent
+
+Template Mode:
+- Directly generates instrumentation code using templates
+- Creates ready-to-use code files based on detected opportunities
+- Works without external dependencies
+- Supports --dry-run to preview generated code
 
 This command will:
-1. Detect available coding agents on your system
+1. Detect available coding agents and generation strategies
 2. Analyze your codebase for instrumentation opportunities  
-3. Generate appropriate instructions using templates
-4. Execute the instructions with your chosen AI agent`,
+3. Generate code using your chosen strategy (AI or template-based)`,
 	RunE: runCodegen,
 }
 
 var (
-	language      string
-	method        string
-	agentType     string
-	codebasePath  string
-	listAgents    bool
-	listTemplates bool
+	language       string
+	method         string
+	agentType      string
+	codebasePath   string
+	listAgents     bool
+	listTemplates  bool
+	listStrategies bool
+	generationMode string
+	outputDir      string
+	dryRun         bool
 )
 
 func init() {
@@ -52,6 +66,14 @@ func init() {
 		"List available coding agents")
 	codegenCmd.Flags().BoolVar(&listTemplates, "list-templates", false,
 		"List available templates")
+	codegenCmd.Flags().BoolVar(&listStrategies, "list-strategies", false,
+		"List available generation strategies")
+	codegenCmd.Flags().StringVarP(&generationMode, "mode", "", "",
+		"Generation mode (ai, template). Defaults to ai if agents available, otherwise template")
+	codegenCmd.Flags().StringVarP(&outputDir, "output", "o", "",
+		"Output directory for generated files (template mode only)")
+	codegenCmd.Flags().BoolVar(&dryRun, "dry-run", false,
+		"Show what would be generated without writing files (template mode only)")
 }
 
 func runCodegen(cmd *cobra.Command, args []string) error {
@@ -114,9 +136,24 @@ func runCodegen(cmd *cobra.Command, args []string) error {
 		return listAvailableTemplates(generator)
 	}
 
-	// Validate required parameters
-	if agentType == "" {
-		return fmt.Errorf("agent type is required. Use --list-agents to see available options")
+	if listStrategies {
+		return listAvailableStrategies(generator)
+	}
+
+	// Determine generation mode
+	mode := codegen.GenerationMode(generationMode)
+	if mode == "" {
+		mode = generator.GetDefaultStrategy()
+	}
+
+	// Validate mode
+	if mode != codegen.AIMode && mode != codegen.TemplateMode {
+		return fmt.Errorf("invalid generation mode %s. Valid options: ai, template", mode)
+	}
+
+	// Validate mode-specific requirements
+	if mode == codegen.AIMode && agentType == "" {
+		return fmt.Errorf("agent type is required for AI mode. Use --list-agents to see available options")
 	}
 
 	// Validate method
@@ -130,7 +167,13 @@ func runCodegen(cmd *cobra.Command, args []string) error {
 		CodebasePath: codebasePath,
 		Language:     language,
 		Method:       templates.InstallationMethod(method),
-		AgentType:    agents.AgentType(agentType),
+		AgentType:    agents.AgentType(agentType), // Deprecated field for backward compatibility
+		Config: codegen.StrategyConfig{
+			Mode:            mode,
+			AgentType:       agentType,
+			OutputDirectory: outputDir,
+			DryRun:          dryRun,
+		},
 	}
 
 	return generator.GenerateInstrumentation(ctx, req)
@@ -164,6 +207,23 @@ func listAvailableTemplates(generator *codegen.Generator) error {
 	for _, template := range templates {
 		fmt.Printf("  %s\n", template)
 	}
+
+	return nil
+}
+
+func listAvailableStrategies(generator *codegen.Generator) error {
+	strategies := generator.ListAvailableStrategies()
+
+	fmt.Println("Available generation strategies:")
+	for mode, available := range strategies {
+		status := "available"
+		if !available {
+			status = "not available"
+		}
+		fmt.Printf("  %s - %s\n", mode, status)
+	}
+
+	fmt.Printf("\nDefault strategy: %s\n", generator.GetDefaultStrategy())
 
 	return nil
 }
