@@ -79,8 +79,8 @@ func init() {
 func runCodegen(cmd *cobra.Command, args []string) error {
 	ctx := context.Background()
 
-	// Create detection manager
-	manager := detector.NewManager([]detector.IssueDetector{
+	// Create analysis engine
+	codebaseAnalyzer := detector.NewCodebaseAnalyzer([]detector.IssueDetector{
 		issues.NewMissingOTelDetector(),
 	}, map[string]detector.Language{
 		"go":     languages.NewGoDetector(),
@@ -88,7 +88,7 @@ func runCodegen(cmd *cobra.Command, args []string) error {
 	})
 
 	// Initialize generator with existing detector system
-	generator, err := codegen.NewGenerator(manager)
+	generator, err := codegen.NewGenerator(codebaseAnalyzer)
 	if err != nil {
 		return fmt.Errorf("failed to initialize generator: %w", err)
 	}

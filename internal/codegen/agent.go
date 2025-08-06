@@ -11,15 +11,15 @@ import (
 
 // AIGenerationStrategy implements code generation using AI agents
 type AIGenerationStrategy struct {
-	agentMgr    *agents.Detector
-	templateMgr *templates.Manager
+	agentDetector  *agents.Detector
+	templateEngine *templates.TemplateEngine
 }
 
 // NewAIGenerationStrategy creates a new AI-based generation strategy
-func NewAIGenerationStrategy(agentMgr *agents.Detector, templateMgr *templates.Manager) *AIGenerationStrategy {
+func NewAIGenerationStrategy(agentDetector *agents.Detector, templateEngine *templates.TemplateEngine) *AIGenerationStrategy {
 	return &AIGenerationStrategy{
-		agentMgr:    agentMgr,
-		templateMgr: templateMgr,
+		agentDetector:  agentDetector,
+		templateEngine: templateEngine,
 	}
 }
 
@@ -30,7 +30,7 @@ func (s *AIGenerationStrategy) GetName() string {
 
 // IsAvailable checks if AI agents are available on the system
 func (s *AIGenerationStrategy) IsAvailable() bool {
-	availableAgents := s.agentMgr.DetectAvailableAgents()
+	availableAgents := s.agentDetector.DetectAvailableAgents()
 	return len(availableAgents) > 0
 }
 
@@ -70,7 +70,7 @@ func (s *AIGenerationStrategy) GenerateCode(ctx context.Context, opportunities [
 }
 
 func (s *AIGenerationStrategy) verifyAgentAvailability(agentType agents.AgentType) error {
-	availableAgents := s.agentMgr.DetectAvailableAgents()
+	availableAgents := s.agentDetector.DetectAvailableAgents()
 	for _, agent := range availableAgents {
 		if agent.Type == agentType {
 			return nil
@@ -87,7 +87,7 @@ func (s *AIGenerationStrategy) generateInstructionsForLanguages(languageOpportun
 		allInstrumentations := s.collectAllInstrumentations(langOpportunities)
 
 		// Generate comprehensive instructions for this language
-		instructions, err := s.templateMgr.GenerateComprehensiveInstructions(
+		instructions, err := s.templateEngine.GenerateComprehensiveInstructions(
 			language,
 			req.Method,
 			allInstrumentations,
@@ -126,7 +126,7 @@ func (s *AIGenerationStrategy) sendInstructionsToAgent(allInstructions []string,
 	}
 
 	// Execute with selected agent - single call with comprehensive instructions
-	if err := s.agentMgr.ExecuteWithAgent(agents.AgentType(req.Config.AgentType), agentRequest); err != nil {
+	if err := s.agentDetector.ExecuteWithAgent(agents.AgentType(req.Config.AgentType), agentRequest); err != nil {
 		return fmt.Errorf("failed to execute with agent %s: %v", req.Config.AgentType, err)
 	}
 

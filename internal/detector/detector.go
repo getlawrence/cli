@@ -46,22 +46,22 @@ type Analysis struct {
 	AvailableInstrumentations []types.InstrumentationInfo `json:"available_instrumentations"`
 }
 
-// Manager coordinates the detection process
-type Manager struct {
+// CodebaseAnalyzer coordinates the detection process
+type CodebaseAnalyzer struct {
 	detectors         []IssueDetector
 	languageDetectors map[string]Language
 }
 
-// NewManager creates a new detection manager
-func NewManager(detectors []IssueDetector, languages map[string]Language) *Manager {
-	return &Manager{
+// NewCodebaseAnalyzer creates a new analysis engine
+func NewCodebaseAnalyzer(detectors []IssueDetector, languages map[string]Language) *CodebaseAnalyzer {
+	return &CodebaseAnalyzer{
 		detectors:         detectors,
 		languageDetectors: languages,
 	}
 }
 
 // AnalyzeCodebase performs the full analysis
-func (m *Manager) AnalyzeCodebase(ctx context.Context, rootPath string) (*Analysis, []types.Issue, error) {
+func (ca *CodebaseAnalyzer) AnalyzeCodebase(ctx context.Context, rootPath string) (*Analysis, []types.Issue, error) {
 	analysis := &Analysis{
 		RootPath: rootPath,
 	}
@@ -73,19 +73,19 @@ func (m *Manager) AnalyzeCodebase(ctx context.Context, rootPath string) (*Analys
 	}
 
 	// Process languages and collect data
-	err = m.processDirectoryLanguages(ctx, rootPath, directoryLanguages, analysis)
+	err = ca.processDirectoryLanguages(ctx, rootPath, directoryLanguages, analysis)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	// Check for available instrumentations
-	err = m.populateInstrumentations(ctx, analysis)
+	err = ca.populateInstrumentations(ctx, analysis)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	// Run issue detectors
-	allIssues, err := m.runIssueDetectors(ctx, analysis)
+	allIssues, err := ca.runIssueDetectors(ctx, analysis)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -94,20 +94,20 @@ func (m *Manager) AnalyzeCodebase(ctx context.Context, rootPath string) (*Analys
 }
 
 // processDirectoryLanguages processes each directory with its detected language
-func (m *Manager) processDirectoryLanguages(ctx context.Context, rootPath string, directoryLanguages map[string]string, analysis *Analysis) error {
+func (ca *CodebaseAnalyzer) processDirectoryLanguages(ctx context.Context, rootPath string, directoryLanguages map[string]string, analysis *Analysis) error {
 	// Track which languages we've seen to avoid duplicates
 	seenLanguages := make(map[string]bool)
 
 	// Process each directory with its detected language
 	for directory, language := range directoryLanguages {
-		languageDetector := m.findLanguageDetector(language)
+		languageDetector := ca.findLanguageDetector(language)
 		if languageDetector == nil {
 			// Skip if we don't have a detector for this language
 			continue
 		}
 
 		// Calculate the full path for this directory
-		dirPath := m.calculateDirectoryPath(rootPath, directory)
+		dirPath := ca.calculateDirectoryPath(rootPath, directory)
 
 		// Only process each language once, but collect all directories
 		if !seenLanguages[language] {
@@ -115,7 +115,7 @@ func (m *Manager) processDirectoryLanguages(ctx context.Context, rootPath string
 			analysis.DetectedLanguages = append(analysis.DetectedLanguages, language)
 
 			// Get OTel libraries for this language from the specific directory
-			err := m.collectLibrariesAndPackages(ctx, dirPath, language, languageDetector, analysis)
+			err := ca.collectLibrariesAndPackages(ctx, dirPath, language, languageDetector, analysis)
 			if err != nil {
 				return err
 			}
@@ -125,13 +125,13 @@ func (m *Manager) processDirectoryLanguages(ctx context.Context, rootPath string
 }
 
 // findLanguageDetector finds the corresponding language detector for a language name
-func (m *Manager) findLanguageDetector(language string) Language {
+func (ca *CodebaseAnalyzer) findLanguageDetector(language string) Language {
 	language = strings.ToLower(language)
-	return m.languageDetectors[language]
+	return ca.languageDetectors[language]
 }
 
 // calculateDirectoryPath calculates the full path for a directory
-func (m *Manager) calculateDirectoryPath(rootPath, directory string) string {
+func (ca *CodebaseAnalyzer) calculateDirectoryPath(rootPath, directory string) string {
 	if directory == "root" {
 		return rootPath
 	}
@@ -139,7 +139,7 @@ func (m *Manager) calculateDirectoryPath(rootPath, directory string) string {
 }
 
 // collectLibrariesAndPackages collects OTel libraries and packages for a language
-func (m *Manager) collectLibrariesAndPackages(ctx context.Context, dirPath, language string, languageDetector Language, analysis *Analysis) error {
+func (ca *CodebaseAnalyzer) collectLibrariesAndPackages(ctx context.Context, dirPath, language string, languageDetector Language, analysis *Analysis) error {
 	// Get OTel libraries for this language from the specific directory
 	libs, err := languageDetector.GetOTelLibraries(ctx, dirPath)
 	if err != nil {
@@ -158,7 +158,7 @@ func (m *Manager) collectLibrariesAndPackages(ctx context.Context, dirPath, lang
 }
 
 // populateInstrumentations checks for available instrumentations
-func (m *Manager) populateInstrumentations(ctx context.Context, analysis *Analysis) error {
+func (ca *CodebaseAnalyzer) populateInstrumentations(ctx context.Context, analysis *Analysis) error {
 	instrumentationService := NewInstrumentationRegistryService()
 	seenInstrumentations := make(map[string]bool)
 
@@ -182,11 +182,11 @@ func (m *Manager) populateInstrumentations(ctx context.Context, analysis *Analys
 }
 
 // runIssueDetectors runs all registered issue detectors
-func (m *Manager) runIssueDetectors(ctx context.Context, analysis *Analysis) ([]types.Issue, error) {
+func (ca *CodebaseAnalyzer) runIssueDetectors(ctx context.Context, analysis *Analysis) ([]types.Issue, error) {
 	var allIssues []types.Issue
-	for _, detector := range m.detectors {
+	for _, detector := range ca.detectors {
 		// Check if detector applies to detected languages
-		if m.detectorApplies(detector, analysis.DetectedLanguages) {
+		if ca.detectorApplies(detector, analysis.DetectedLanguages) {
 			issues, err := detector.Detect(ctx, analysis)
 			if err != nil {
 				return nil, err
@@ -199,7 +199,7 @@ func (m *Manager) runIssueDetectors(ctx context.Context, analysis *Analysis) ([]
 }
 
 // detectorApplies checks if a detector should run for the detected languages
-func (m *Manager) detectorApplies(detector IssueDetector, detectedLanguages []string) bool {
+func (ca *CodebaseAnalyzer) detectorApplies(detector IssueDetector, detectedLanguages []string) bool {
 	detectorLangs := detector.Languages()
 
 	// If detector doesn't specify languages, it applies to all

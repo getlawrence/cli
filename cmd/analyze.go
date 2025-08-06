@@ -71,8 +71,8 @@ func runAnalyze(cmd *cobra.Command, args []string) error {
 		fmt.Printf("Analyzing codebase at: %s\n", absPath)
 	}
 
-	// Create detection manager
-	manager := detector.NewManager([]detector.IssueDetector{
+	// Create analysis engine
+	codebaseAnalyzer := detector.NewCodebaseAnalyzer([]detector.IssueDetector{
 		issues.NewMissingOTelDetector(),
 	}, map[string]detector.Language{
 		"go":     languages.NewGoDetector(),
@@ -81,7 +81,7 @@ func runAnalyze(cmd *cobra.Command, args []string) error {
 
 	// Run analysis
 	ctx := context.Background()
-	analysis, detectedIssues, err := manager.AnalyzeCodebase(ctx, absPath)
+	analysis, detectedIssues, err := codebaseAnalyzer.AnalyzeCodebase(ctx, absPath)
 	if err != nil {
 		return fmt.Errorf("analysis failed: %w", err)
 	}

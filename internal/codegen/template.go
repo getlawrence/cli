@@ -34,13 +34,13 @@ func (od *OperationsData) isEmpty() bool {
 
 // TemplateGenerationStrategy implements direct code generation using templates
 type TemplateGenerationStrategy struct {
-	templateMgr *templates.Manager
+	templateEngine *templates.TemplateEngine
 }
 
 // NewTemplateGenerationStrategy creates a new template-based generation strategy
-func NewTemplateGenerationStrategy(templateMgr *templates.Manager) *TemplateGenerationStrategy {
+func NewTemplateGenerationStrategy(templateEngine *templates.TemplateEngine) *TemplateGenerationStrategy {
 	return &TemplateGenerationStrategy{
-		templateMgr: templateMgr,
+		templateEngine: templateEngine,
 	}
 }
 
@@ -161,7 +161,7 @@ func (s *TemplateGenerationStrategy) generateGoCodeInstrumentation(operationsDat
 	}
 
 	// Generate code using template
-	code, err := s.templateMgr.GenerateInstructions("go", req.Method, data)
+	code, err := s.templateEngine.GenerateInstructions("go", req.Method, data)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate Go code: %w", err)
 	}
@@ -213,7 +213,7 @@ func (s *TemplateGenerationStrategy) generateGoAutoInstrumentation(operationsDat
 	}
 
 	// Generate code using auto template
-	code, err := s.templateMgr.GenerateInstructions("go", req.Method, data)
+	code, err := s.templateEngine.GenerateInstructions("go", req.Method, data)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate Go auto instrumentation: %w", err)
 	}
@@ -265,7 +265,7 @@ func (s *TemplateGenerationStrategy) generatePythonCode(operationsData *Operatio
 	}
 
 	// Generate code using template
-	code, err := s.templateMgr.GenerateInstructions("python", req.Method, data)
+	code, err := s.templateEngine.GenerateInstructions("python", req.Method, data)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate Python code: %w", err)
 	}

@@ -45,27 +45,27 @@ type AgentPromptData struct {
 	TemplateContent        string   `json:"template_content,omitempty"`
 }
 
-// Manager handles template loading and execution
-type Manager struct {
+// TemplateEngine handles template loading and execution
+type TemplateEngine struct {
 	templates map[string]*template.Template
 }
 
-// NewManager creates a new template manager
-func NewManager() (*Manager, error) {
-	m := &Manager{
+// NewTemplateEngine creates a new template engine
+func NewTemplateEngine() (*TemplateEngine, error) {
+	engine := &TemplateEngine{
 		templates: make(map[string]*template.Template),
 	}
 
-	if err := m.loadTemplates(); err != nil {
+	if err := engine.loadTemplates(); err != nil {
 		return nil, fmt.Errorf("failed to load templates: %w", err)
 	}
 
-	return m, nil
+	return engine, nil
 }
 
 // GenerateAgentPrompt creates a prompt for coding agents
-func (m *Manager) GenerateAgentPrompt(data AgentPromptData) (string, error) {
-	tmpl, exists := m.templates["agent_prompt"]
+func (e *TemplateEngine) GenerateAgentPrompt(data AgentPromptData) (string, error) {
+	tmpl, exists := e.templates["agent_prompt"]
 	if !exists {
 		return "", fmt.Errorf("agent prompt template not found")
 	}
@@ -79,10 +79,10 @@ func (m *Manager) GenerateAgentPrompt(data AgentPromptData) (string, error) {
 }
 
 // GenerateInstructions creates instructions based on language and method
-func (m *Manager) GenerateInstructions(lang string, method InstallationMethod, data TemplateData) (string, error) {
+func (e *TemplateEngine) GenerateInstructions(lang string, method InstallationMethod, data TemplateData) (string, error) {
 	// For template-based code generation, try code generation templates first
 	codeGenKey := fmt.Sprintf("%s_%s_gen", lang, method)
-	if tmpl, exists := m.templates[codeGenKey]; exists {
+	if tmpl, exists := e.templates[codeGenKey]; exists {
 		var buf bytes.Buffer
 		if err := tmpl.Execute(&buf, data); err != nil {
 			return "", fmt.Errorf("code generation template execution failed: %w", err)
@@ -92,7 +92,7 @@ func (m *Manager) GenerateInstructions(lang string, method InstallationMethod, d
 
 	// First try comprehensive template
 	comprehensiveKey := fmt.Sprintf("%s_comprehensive", lang)
-	if tmpl, exists := m.templates[comprehensiveKey]; exists {
+	if tmpl, exists := e.templates[comprehensiveKey]; exists {
 		var buf bytes.Buffer
 		if err := tmpl.Execute(&buf, data); err != nil {
 			return "", fmt.Errorf("comprehensive template execution failed: %w", err)
@@ -102,7 +102,7 @@ func (m *Manager) GenerateInstructions(lang string, method InstallationMethod, d
 
 	// Fallback to method-specific template
 	templateKey := fmt.Sprintf("%s_%s", lang, method)
-	tmpl, exists := m.templates[templateKey]
+	tmpl, exists := e.templates[templateKey]
 	if !exists {
 		return "", fmt.Errorf("template not found for %s with method %s", lang, method)
 	}
@@ -117,10 +117,10 @@ func (m *Manager) GenerateInstructions(lang string, method InstallationMethod, d
 
 // GenerateComprehensiveInstructions creates a single comprehensive instruction
 // that includes all instrumentations for a given language
-func (m *Manager) GenerateComprehensiveInstructions(lang string, method InstallationMethod, allInstrumentations []string, serviceName string) (string, error) {
+func (e *TemplateEngine) GenerateComprehensiveInstructions(lang string, method InstallationMethod, allInstrumentations []string, serviceName string) (string, error) {
 	// Use comprehensive template if available
 	comprehensiveKey := fmt.Sprintf("%s_comprehensive", lang)
-	if tmpl, exists := m.templates[comprehensiveKey]; exists {
+	if tmpl, exists := e.templates[comprehensiveKey]; exists {
 		data := TemplateData{
 			Language:         lang,
 			Method:           method,
@@ -136,7 +136,7 @@ func (m *Manager) GenerateComprehensiveInstructions(lang string, method Installa
 	}
 
 	// Fallback: generate individual instructions and combine them
-	return m.GenerateInstructions(lang, method, TemplateData{
+	return e.GenerateInstructions(lang, method, TemplateData{
 		Language:         lang,
 		Method:           method,
 		Instrumentations: allInstrumentations,
@@ -144,7 +144,7 @@ func (m *Manager) GenerateComprehensiveInstructions(lang string, method Installa
 	})
 }
 
-func (m *Manager) loadTemplates() error {
+func (e *TemplateEngine) loadTemplates() error {
 	// Load embedded templates
 	entries, err := templateFS.ReadDir(".")
 	if err != nil {
@@ -171,7 +171,7 @@ func (m *Manager) loadTemplates() error {
 				return err
 			}
 
-			m.templates[key] = tmpl
+			e.templates[key] = tmpl
 		}
 	}
 
@@ -179,9 +179,9 @@ func (m *Manager) loadTemplates() error {
 }
 
 // GetAvailableTemplates returns all available template keys
-func (m *Manager) GetAvailableTemplates() []string {
+func (e *TemplateEngine) GetAvailableTemplates() []string {
 	var keys []string
-	for key := range m.templates {
+	for key := range e.templates {
 		keys = append(keys, key)
 	}
 	return keys

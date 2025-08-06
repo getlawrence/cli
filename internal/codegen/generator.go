@@ -49,35 +49,35 @@ type GenerationRequest struct {
 
 // Generator extends the detector system for code generation
 type Generator struct {
-	detector        *detector.Manager
-	templateMgr     *templates.Manager
-	agentMgr        *agents.Detector
+	detector        *detector.CodebaseAnalyzer
+	templateEngine  *templates.TemplateEngine
+	agentDetector   *agents.Detector
 	strategies      map[GenerationMode]CodeGenerationStrategy
 	defaultStrategy GenerationMode
 }
 
 // NewGenerator creates a new code generator
-func NewGenerator(detectorMgr *detector.Manager) (*Generator, error) {
-	templateMgr, err := templates.NewManager()
+func NewGenerator(codebaseAnalyzer *detector.CodebaseAnalyzer) (*Generator, error) {
+	templateEngine, err := templates.NewTemplateEngine()
 	if err != nil {
-		return nil, fmt.Errorf("failed to initialize template manager: %w", err)
+		return nil, fmt.Errorf("failed to initialize template engine: %w", err)
 	}
 
-	agentMgr, err := agents.NewDetector()
+	agentDetector, err := agents.NewDetector()
 	if err != nil {
-		return nil, fmt.Errorf("failed to initialize agent manager: %w", err)
+		return nil, fmt.Errorf("failed to initialize agent detector: %w", err)
 	}
 
 	// Initialize strategies
 	strategies := make(map[GenerationMode]CodeGenerationStrategy)
-	strategies[AIMode] = NewAIGenerationStrategy(agentMgr, templateMgr)
-	strategies[TemplateMode] = NewTemplateGenerationStrategy(templateMgr)
+	strategies[AIMode] = NewAIGenerationStrategy(agentDetector, templateEngine)
+	strategies[TemplateMode] = NewTemplateGenerationStrategy(templateEngine)
 	defaultStrategy := TemplateMode
 
 	return &Generator{
-		detector:        detectorMgr,
-		templateMgr:     templateMgr,
-		agentMgr:        agentMgr,
+		detector:        codebaseAnalyzer,
+		templateEngine:  templateEngine,
+		agentDetector:   agentDetector,
 		strategies:      strategies,
 		defaultStrategy: defaultStrategy,
 	}, nil
@@ -134,12 +134,12 @@ func (g *Generator) Generate(ctx context.Context, req GenerationRequest) error {
 
 // ListAvailableAgents returns all detected coding agents
 func (g *Generator) ListAvailableAgents() []agents.Agent {
-	return g.agentMgr.DetectAvailableAgents()
+	return g.agentDetector.DetectAvailableAgents()
 }
 
 // ListAvailableTemplates returns all available templates
 func (g *Generator) ListAvailableTemplates() []string {
-	return g.templateMgr.GetAvailableTemplates()
+	return g.templateEngine.GetAvailableTemplates()
 }
 
 // ListAvailableStrategies returns all available generation strategies

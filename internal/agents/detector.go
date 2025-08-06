@@ -40,15 +40,15 @@ type AgentExecutionRequest struct {
 
 // Detector handles detection of available coding agents
 type Detector struct {
-	agents          []Agent
-	templateManager *templates.Manager
+	agents         []Agent
+	templateEngine *templates.TemplateEngine
 }
 
 // NewDetector creates a new agent detector
 func NewDetector() (*Detector, error) {
-	templateManager, err := templates.NewManager()
+	templateEngine, err := templates.NewTemplateEngine()
 	if err != nil {
-		return nil, fmt.Errorf("failed to create template manager: %w", err)
+		return nil, fmt.Errorf("failed to create template engine: %w", err)
 	}
 
 	return &Detector{
@@ -58,7 +58,7 @@ func NewDetector() (*Detector, error) {
 			{Type: OpenAICodex, Name: "OpenAI Codex", Command: "openai"},
 			{Type: GitHubCLI, Name: "GitHub Copilot CLI", Command: "gh"},
 		},
-		templateManager: templateManager,
+		templateEngine: templateEngine,
 	}, nil
 }
 
@@ -103,7 +103,7 @@ func (d *Detector) ExecuteWithAgent(agentType AgentType, request AgentExecutionR
 	return fmt.Errorf("agent %s not available", agentType)
 }
 
-// GeneratePrompt creates a prompt using the template manager
+// GeneratePrompt creates a prompt using the template engine
 func (d *Detector) GeneratePrompt(request AgentExecutionRequest) (string, error) {
 	promptData := templates.AgentPromptData{
 		Language:               request.Language,
@@ -114,7 +114,7 @@ func (d *Detector) GeneratePrompt(request AgentExecutionRequest) (string, error)
 		TemplateContent:        request.TemplateContent,
 	}
 
-	return d.templateManager.GenerateAgentPrompt(promptData)
+	return d.templateEngine.GenerateAgentPrompt(promptData)
 }
 
 func (d *Detector) executeCommand(agent Agent, request AgentExecutionRequest) error {
