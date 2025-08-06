@@ -51,6 +51,9 @@ func processSourceFile(filePath, rootPath string, directories map[string]map[str
 		return
 	}
 
+	// Normalize language names
+	lang = normalizeLanguageName(lang)
+
 	dir := filepath.Dir(filePath)
 	relDir, _ := filepath.Rel(rootPath, dir)
 
@@ -101,6 +104,16 @@ func normalizeDirectoryKey(dir string) string {
 		return "root"
 	}
 	return dir
+}
+
+// normalizeLanguageName normalizes language names to handle variations
+func normalizeLanguageName(lang string) string {
+	switch lang {
+	case "Go Module":
+		return "Go"
+	default:
+		return lang
+	}
 }
 
 // isProgrammingLanguage filters out configuration, markup, and documentation languages

@@ -1,9 +1,6 @@
 package languages
 
 import (
-	"context"
-	"os"
-	"path/filepath"
 	"reflect"
 	"testing"
 )
@@ -13,79 +10,6 @@ func TestPythonDetectorName(t *testing.T) {
 	expected := "python"
 	if got := d.Name(); got != expected {
 		t.Errorf("PythonDetector.Name() = %v, want %v", got, expected)
-	}
-}
-
-func TestPythonDetectorDetect(t *testing.T) {
-	tempDir, err := os.MkdirTemp("", "python_detector_test")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tempDir)
-
-	detector := NewPythonDetector()
-	ctx := context.Background()
-
-	testCases := []struct {
-		name        string
-		files       map[string]string
-		expected    bool
-		description string
-	}{
-		{
-			name: "requirements_txt",
-			files: map[string]string{
-				"requirements.txt": "requests==2.28.0\nflask==2.0.0\n",
-			},
-			expected:    true,
-			description: "Should detect Python project with requirements.txt",
-		},
-		{
-			name: "pyproject_toml",
-			files: map[string]string{
-				"pyproject.toml": "[tool.poetry]\nname = \"myapp\"\n",
-			},
-			expected:    true,
-			description: "Should detect Python project with pyproject.toml",
-		},
-		{
-			name: "no_python_files",
-			files: map[string]string{
-				"main.go":   "package main\n",
-				"README.md": "# Project\n",
-			},
-			expected:    false,
-			description: "Should not detect Python project without Python files",
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			// Create test directory for this case
-			testDir := filepath.Join(tempDir, tc.name)
-			if err := os.MkdirAll(testDir, 0755); err != nil {
-				t.Fatalf("Failed to create test dir: %v", err)
-			}
-
-			// Create test files
-			for filename, content := range tc.files {
-				filePath := filepath.Join(testDir, filename)
-				if err := os.WriteFile(filePath, []byte(content), 0644); err != nil {
-					t.Fatalf("Failed to create test file %s: %v", filename, err)
-				}
-			}
-
-			// Test detection
-			result, err := detector.Detect(ctx, testDir)
-			if err != nil {
-				t.Errorf("Detect() error = %v", err)
-				return
-			}
-
-			if result != tc.expected {
-				t.Errorf("Detect() = %v, want %v for %s", result, tc.expected, tc.description)
-			}
-		})
 	}
 }
 

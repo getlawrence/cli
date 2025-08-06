@@ -12,12 +12,12 @@ import (
 
 // Opportunity represents a code generation opportunity
 type Opportunity struct {
-	Language         string       `json:"language"`
-	Framework        string       `json:"framework"`
-	Instrumentations []string     `json:"instrumentations"`
-	FilePath         string       `json:"file_path"`
-	Suggestion       string       `json:"suggestion"`
-	Issue            *types.Issue `json:"issue,omitempty"`
+	Language         string          `json:"language"`
+	Framework        string          `json:"framework"`
+	Instrumentations []string        `json:"instrumentations"`
+	FilePath         string          `json:"file_path"`
+	Suggestion       string          `json:"suggestion"`
+	Issue            *detector.Issue `json:"issue,omitempty"`
 }
 
 // GenerationRequest contains parameters for code generation
@@ -159,13 +159,13 @@ func (g *Generator) validateStrategyRequirements(strategy CodeGenerationStrategy
 	return nil
 }
 
-func (g *Generator) convertIssuesToOpportunities(analysis *detector.Analysis, issues []types.Issue) []Opportunity {
+func (g *Generator) convertIssuesToOpportunities(analysis *detector.Analysis, issues []detector.Issue) []Opportunity {
 	var opportunities []Opportunity
 
 	for _, issue := range issues {
 		// Convert specific issue types to opportunities
 		switch issue.Category {
-		case types.CategoryMissingLibrary, types.CategoryInstrumentation:
+		case detector.CategoryMissingLibrary, detector.CategoryInstrumentation:
 			opp := Opportunity{
 				Language:   issue.Language,
 				FilePath:   issue.File,
@@ -204,7 +204,7 @@ func (g *Generator) createOpportunitiesFromInstrumentations(analysis *detector.A
 	return opportunities
 }
 
-func (g *Generator) isAlreadyInstrumented(analysis *detector.Analysis, instr types.InstrumentationInfo) bool {
+func (g *Generator) isAlreadyInstrumented(analysis *detector.Analysis, instr detector.InstrumentationInfo) bool {
 	// Check if the instrumentation library is already in use
 	for _, lib := range analysis.Libraries {
 		if lib.Name == instr.Package.Name ||

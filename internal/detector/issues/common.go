@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/getlawrence/cli/internal/detector"
+	"github.com/getlawrence/cli/internal/detector/types"
 )
 
 // MissingOTelDetector detects when no OpenTelemetry libraries are found
@@ -31,8 +32,8 @@ func (m *MissingOTelDetector) Description() string {
 }
 
 // Category returns the issue category
-func (m *MissingOTelDetector) Category() detector.Category {
-	return detector.CategoryMissingLibrary
+func (m *MissingOTelDetector) Category() types.Category {
+	return types.CategoryMissingLibrary
 }
 
 // Languages returns applicable languages (empty = all languages)
@@ -41,17 +42,17 @@ func (m *MissingOTelDetector) Languages() []string {
 }
 
 // Detect finds missing OTel library issues
-func (m *MissingOTelDetector) Detect(ctx context.Context, analysis *detector.Analysis) ([]detector.Issue, error) {
-	var issues []detector.Issue
+func (m *MissingOTelDetector) Detect(ctx context.Context, analysis *detector.Analysis) ([]types.Issue, error) {
+	var issues []types.Issue
 
 	if len(analysis.Libraries) == 0 && len(analysis.DetectedLanguages) > 0 {
 		langList := fmt.Sprintf("Detected languages: %v", analysis.DetectedLanguages)
 
-		issues = append(issues, detector.Issue{
+		issues = append(issues, types.Issue{
 			ID:          m.ID(),
 			Title:       "No OpenTelemetry libraries detected",
 			Description: fmt.Sprintf("No OpenTelemetry libraries found in this codebase. %s", langList),
-			Severity:    detector.SeverityWarning,
+			Severity:    types.SeverityWarning,
 			Category:    m.Category(),
 			Suggestion:  "Consider adding OpenTelemetry instrumentation to gain observability into your application",
 			References: []string{
@@ -88,8 +89,8 @@ func (i *IncompleteInstrumentationDetector) Description() string {
 }
 
 // Category returns the issue category
-func (i *IncompleteInstrumentationDetector) Category() detector.Category {
-	return detector.CategoryInstrumentation
+func (i *IncompleteInstrumentationDetector) Category() types.Category {
+	return types.CategoryInstrumentation
 }
 
 // Languages returns applicable languages (empty = all languages)
@@ -98,8 +99,8 @@ func (i *IncompleteInstrumentationDetector) Languages() []string {
 }
 
 // Detect finds incomplete instrumentation issues
-func (i *IncompleteInstrumentationDetector) Detect(ctx context.Context, analysis *detector.Analysis) ([]detector.Issue, error) {
-	var issues []detector.Issue
+func (i *IncompleteInstrumentationDetector) Detect(ctx context.Context, analysis *detector.Analysis) ([]types.Issue, error) {
+	var issues []types.Issue
 
 	if len(analysis.Libraries) > 0 {
 		hasTracing := false
@@ -120,11 +121,11 @@ func (i *IncompleteInstrumentationDetector) Detect(ctx context.Context, analysis
 
 		// Generate issues for missing telemetry types
 		if !hasTracing {
-			issues = append(issues, detector.Issue{
+			issues = append(issues, types.Issue{
 				ID:          i.ID() + "_tracing",
 				Title:       "Missing distributed tracing",
 				Description: "OpenTelemetry libraries found but no tracing instrumentation detected",
-				Severity:    detector.SeverityInfo,
+				Severity:    types.SeverityInfo,
 				Category:    i.Category(),
 				Suggestion:  "Add OpenTelemetry tracing to track request flows across services",
 				References: []string{
@@ -134,11 +135,11 @@ func (i *IncompleteInstrumentationDetector) Detect(ctx context.Context, analysis
 		}
 
 		if !hasMetrics {
-			issues = append(issues, detector.Issue{
+			issues = append(issues, types.Issue{
 				ID:          i.ID() + "_metrics",
 				Title:       "Missing metrics collection",
 				Description: "OpenTelemetry libraries found but no metrics instrumentation detected",
-				Severity:    detector.SeverityInfo,
+				Severity:    types.SeverityInfo,
 				Category:    i.Category(),
 				Suggestion:  "Add OpenTelemetry metrics to monitor application performance and health",
 				References: []string{
@@ -148,11 +149,11 @@ func (i *IncompleteInstrumentationDetector) Detect(ctx context.Context, analysis
 		}
 
 		if !hasLogging {
-			issues = append(issues, detector.Issue{
+			issues = append(issues, types.Issue{
 				ID:          i.ID() + "_logging",
 				Title:       "Missing structured logging",
 				Description: "OpenTelemetry libraries found but no logging instrumentation detected",
-				Severity:    detector.SeverityInfo,
+				Severity:    types.SeverityInfo,
 				Category:    i.Category(),
 				Suggestion:  "Add OpenTelemetry logging to correlate logs with traces and metrics",
 				References: []string{
@@ -189,8 +190,8 @@ func (o *OutdatedLibrariesDetector) Description() string {
 }
 
 // Category returns the issue category
-func (o *OutdatedLibrariesDetector) Category() detector.Category {
-	return detector.CategoryDeprecated
+func (o *OutdatedLibrariesDetector) Category() types.Category {
+	return types.CategoryDeprecated
 }
 
 // Languages returns applicable languages (empty = all languages)
@@ -199,17 +200,17 @@ func (o *OutdatedLibrariesDetector) Languages() []string {
 }
 
 // Detect finds outdated library issues
-func (o *OutdatedLibrariesDetector) Detect(ctx context.Context, analysis *detector.Analysis) ([]detector.Issue, error) {
-	var issues []detector.Issue
+func (o *OutdatedLibrariesDetector) Detect(ctx context.Context, analysis *detector.Analysis) ([]types.Issue, error) {
+	var issues []types.Issue
 
 	// Simple version check - in a real implementation, you'd check against latest versions
 	for _, lib := range analysis.Libraries {
 		if lib.Version != "" && isOutdatedVersion(lib.Version) {
-			issues = append(issues, detector.Issue{
+			issues = append(issues, types.Issue{
 				ID:          o.ID() + "_" + lib.Name,
 				Title:       fmt.Sprintf("Outdated %s library", lib.Name),
 				Description: fmt.Sprintf("Library %s version %s may be outdated", lib.Name, lib.Version),
-				Severity:    detector.SeverityWarning,
+				Severity:    types.SeverityWarning,
 				Category:    o.Category(),
 				Language:    lib.Language,
 				File:        lib.PackageFile,

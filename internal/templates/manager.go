@@ -141,7 +141,7 @@ func (m *Manager) GenerateComprehensiveInstructions(lang string, method Installa
 
 func (m *Manager) loadTemplates() error {
 	// Load embedded templates
-	entries, err := templateFS.ReadDir("templates")
+	entries, err := templateFS.ReadDir(".")
 	if err != nil {
 		return err
 	}
@@ -149,9 +149,8 @@ func (m *Manager) loadTemplates() error {
 	for _, entry := range entries {
 		if !entry.IsDir() && entry.Name() != ".gitkeep" {
 			templateName := entry.Name()
-			templatePath := fmt.Sprintf("templates/%s", templateName)
 
-			content, err := templateFS.ReadFile(templatePath)
+			content, err := templateFS.ReadFile(templateName)
 			if err != nil {
 				return err
 			}

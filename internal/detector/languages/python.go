@@ -9,7 +9,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/getlawrence/cli/internal/detector"
+	"github.com/getlawrence/cli/internal/detector/types"
 )
 
 // PythonDetector detects Python projects and OpenTelemetry usage
@@ -25,28 +25,9 @@ func (p *PythonDetector) Name() string {
 	return "python"
 }
 
-// Detect checks if this is a Python project
-func (p *PythonDetector) Detect(ctx context.Context, rootPath string) (bool, error) {
-	// Check for common Python files
-	pythonFiles := []string{"requirements.txt", "pyproject.toml", "setup.py", "Pipfile"}
-	for _, file := range pythonFiles {
-		if _, err := os.Stat(filepath.Join(rootPath, file)); err == nil {
-			return true, nil
-		}
-	}
-
-	// Check for .py files
-	pyFiles, err := filepath.Glob(filepath.Join(rootPath, "**/*.py"))
-	if err != nil {
-		return false, err
-	}
-
-	return len(pyFiles) > 0, nil
-}
-
 // GetOTelLibraries finds OpenTelemetry libraries in Python projects
-func (p *PythonDetector) GetOTelLibraries(ctx context.Context, rootPath string) ([]detector.Library, error) {
-	var libraries []detector.Library
+func (p *PythonDetector) GetOTelLibraries(ctx context.Context, rootPath string) ([]types.Library, error) {
+	var libraries []types.Library
 
 	// Check requirements.txt
 	reqPath := filepath.Join(rootPath, "requirements.txt")
@@ -91,8 +72,8 @@ func (p *PythonDetector) GetFilePatterns() []string {
 }
 
 // GetAllPackages finds all packages/dependencies used in the Python project
-func (p *PythonDetector) GetAllPackages(ctx context.Context, rootPath string) ([]detector.Package, error) {
-	var packages []detector.Package
+func (p *PythonDetector) GetAllPackages(ctx context.Context, rootPath string) ([]types.Package, error) {
+	var packages []types.Package
 
 	// Check requirements.txt
 	reqPath := filepath.Join(rootPath, "requirements.txt")
@@ -132,14 +113,14 @@ func (p *PythonDetector) GetAllPackages(ctx context.Context, rootPath string) ([
 }
 
 // parseRequirements extracts OTel dependencies from requirements.txt
-func (p *PythonDetector) parseRequirements(reqPath string) ([]detector.Library, error) {
+func (p *PythonDetector) parseRequirements(reqPath string) ([]types.Library, error) {
 	file, err := os.Open(reqPath)
 	if err != nil {
 		return nil, err
 	}
 	defer file.Close()
 
-	var libraries []detector.Library
+	var libraries []types.Library
 	scanner := bufio.NewScanner(file)
 
 	// Regex for matching OTel packages
@@ -154,7 +135,7 @@ func (p *PythonDetector) parseRequirements(reqPath string) ([]detector.Library, 
 
 		matches := otelRegex.FindStringSubmatch(line)
 		if len(matches) >= 4 {
-			libraries = append(libraries, detector.Library{
+			libraries = append(libraries, types.Library{
 				Name:        matches[1],
 				Version:     matches[3],
 				Language:    "python",
@@ -168,14 +149,14 @@ func (p *PythonDetector) parseRequirements(reqPath string) ([]detector.Library, 
 }
 
 // parsePyproject extracts OTel dependencies from pyproject.toml
-func (p *PythonDetector) parsePyproject(pyprojectPath string) ([]detector.Library, error) {
+func (p *PythonDetector) parsePyproject(pyprojectPath string) ([]types.Library, error) {
 	file, err := os.Open(pyprojectPath)
 	if err != nil {
 		return nil, err
 	}
 	defer file.Close()
 
-	var libraries []detector.Library
+	var libraries []types.Library
 	scanner := bufio.NewScanner(file)
 	inDependencies := false
 
@@ -198,7 +179,7 @@ func (p *PythonDetector) parsePyproject(pyprojectPath string) ([]detector.Librar
 		if inDependencies {
 			matches := otelRegex.FindStringSubmatch(line)
 			if len(matches) >= 2 {
-				libraries = append(libraries, detector.Library{
+				libraries = append(libraries, types.Library{
 					Name:        matches[1],
 					Language:    "python",
 					ImportPath:  matches[1],
@@ -212,14 +193,14 @@ func (p *PythonDetector) parsePyproject(pyprojectPath string) ([]detector.Librar
 }
 
 // parsePythonImports extracts OTel imports from Python source files
-func (p *PythonDetector) parsePythonImports(filePath string) ([]detector.Library, error) {
+func (p *PythonDetector) parsePythonImports(filePath string) ([]types.Library, error) {
 	file, err := os.Open(filePath)
 	if err != nil {
 		return nil, err
 	}
 	defer file.Close()
 
-	var libraries []detector.Library
+	var libraries []types.Library
 	scanner := bufio.NewScanner(file)
 
 	// Regex for matching OTel imports
@@ -230,7 +211,7 @@ func (p *PythonDetector) parsePythonImports(filePath string) ([]detector.Library
 
 		matches := importRegex.FindStringSubmatch(line)
 		if len(matches) >= 2 {
-			libraries = append(libraries, detector.Library{
+			libraries = append(libraries, types.Library{
 				Name:       matches[1],
 				Language:   "python",
 				ImportPath: matches[1],
@@ -267,9 +248,9 @@ func (p *PythonDetector) findPythonFiles(rootPath string) ([]string, error) {
 }
 
 // deduplicateLibraries removes duplicate library entries
-func (p *PythonDetector) deduplicateLibraries(libraries []detector.Library) []detector.Library {
+func (p *PythonDetector) deduplicateLibraries(libraries []types.Library) []types.Library {
 	seen := make(map[string]bool)
-	var result []detector.Library
+	var result []types.Library
 
 	for _, lib := range libraries {
 		key := fmt.Sprintf("%s:%s", lib.Name, lib.Version)
@@ -283,14 +264,14 @@ func (p *PythonDetector) deduplicateLibraries(libraries []detector.Library) []de
 }
 
 // parseAllRequirements extracts all dependencies from requirements.txt
-func (p *PythonDetector) parseAllRequirements(reqPath string) ([]detector.Package, error) {
+func (p *PythonDetector) parseAllRequirements(reqPath string) ([]types.Package, error) {
 	file, err := os.Open(reqPath)
 	if err != nil {
 		return nil, err
 	}
 	defer file.Close()
 
-	var packages []detector.Package
+	var packages []types.Package
 	scanner := bufio.NewScanner(file)
 
 	// Regex for matching package requirements
@@ -311,7 +292,7 @@ func (p *PythonDetector) parseAllRequirements(reqPath string) ([]detector.Packag
 				version = matches[2]
 			}
 
-			packages = append(packages, detector.Package{
+			packages = append(packages, types.Package{
 				Name:        matches[1],
 				Version:     version,
 				Language:    "python",
@@ -325,14 +306,14 @@ func (p *PythonDetector) parseAllRequirements(reqPath string) ([]detector.Packag
 }
 
 // parseAllPyproject extracts all dependencies from pyproject.toml
-func (p *PythonDetector) parseAllPyproject(pyprojectPath string) ([]detector.Package, error) {
+func (p *PythonDetector) parseAllPyproject(pyprojectPath string) ([]types.Package, error) {
 	file, err := os.Open(pyprojectPath)
 	if err != nil {
 		return nil, err
 	}
 	defer file.Close()
 
-	var packages []detector.Package
+	var packages []types.Package
 	scanner := bufio.NewScanner(file)
 	inDependencies := false
 
@@ -358,14 +339,14 @@ func (p *PythonDetector) parseAllPyproject(pyprojectPath string) ([]detector.Pac
 		if inDependencies {
 			// Handle TOML dependency format
 			if matches := depRegex.FindStringSubmatch(line); len(matches) >= 2 {
-				packages = append(packages, detector.Package{
+				packages = append(packages, types.Package{
 					Name:        matches[1],
 					Language:    "python",
 					ImportPath:  matches[1],
 					PackageFile: pyprojectPath,
 				})
 			} else if matches := depArrayRegex.FindStringSubmatch(line); len(matches) >= 2 {
-				packages = append(packages, detector.Package{
+				packages = append(packages, types.Package{
 					Name:        matches[1],
 					Language:    "python",
 					ImportPath:  matches[1],
@@ -379,14 +360,14 @@ func (p *PythonDetector) parseAllPyproject(pyprojectPath string) ([]detector.Pac
 }
 
 // parseAllPythonImports extracts all imports from Python source files
-func (p *PythonDetector) parseAllPythonImports(filePath string) ([]detector.Package, error) {
+func (p *PythonDetector) parseAllPythonImports(filePath string) ([]types.Package, error) {
 	file, err := os.Open(filePath)
 	if err != nil {
 		return nil, err
 	}
 	defer file.Close()
 
-	var packages []detector.Package
+	var packages []types.Package
 	scanner := bufio.NewScanner(file)
 
 	// Regex for matching Python imports
@@ -418,7 +399,7 @@ func (p *PythonDetector) parseAllPythonImports(filePath string) ([]detector.Pack
 			// Get root package name (e.g., "requests.auth" -> "requests")
 			rootPackage := strings.Split(packageName, ".")[0]
 
-			packages = append(packages, detector.Package{
+			packages = append(packages, types.Package{
 				Name:       rootPackage,
 				Language:   "python",
 				ImportPath: packageName,
@@ -455,9 +436,9 @@ func (p *PythonDetector) isThirdPartyPythonPackage(packageName string) bool {
 }
 
 // deduplicatePackages removes duplicate package entries
-func (p *PythonDetector) deduplicatePackages(packages []detector.Package) []detector.Package {
+func (p *PythonDetector) deduplicatePackages(packages []types.Package) []types.Package {
 	seen := make(map[string]bool)
-	var result []detector.Package
+	var result []types.Package
 
 	for _, pkg := range packages {
 		key := fmt.Sprintf("%s:%s", pkg.Name, pkg.Version)
