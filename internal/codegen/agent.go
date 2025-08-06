@@ -168,17 +168,11 @@ func (s *AIGenerationStrategy) groupOpportunitiesByLanguage(opportunities []Oppo
 
 // collectAllInstrumentations extracts unique instrumentations from all opportunities
 func (s *AIGenerationStrategy) collectAllInstrumentations(opportunities []Opportunity) []string {
-	seen := make(map[string]bool)
 	var instrumentations []string
-
 	for _, opp := range opportunities {
-		for _, instr := range opp.Instrumentations {
-			if !seen[instr] {
-				seen[instr] = true
-				instrumentations = append(instrumentations, instr)
-			}
+		if opp.ComponentType == ComponentTypeInstrumentation {
+			instrumentations = append(instrumentations, string(opp.Component))
 		}
 	}
-
 	return instrumentations
 }

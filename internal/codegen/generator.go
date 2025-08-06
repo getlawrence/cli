@@ -10,14 +10,29 @@ import (
 	"github.com/getlawrence/cli/internal/templates"
 )
 
-// Opportunity represents a code generation opportunity
+type OpportunityType string
+
+const (
+	OpportunityInstallOTEL      OpportunityType = "install_otel"
+	OpportunityInstallComponent OpportunityType = "install_component"
+	OpportunityRemoveComponent  OpportunityType = "remove_component"
+)
+
+type ComponentType string
+
+const (
+	ComponentTypeInstrumentation ComponentType = "instrumentation"
+)
+
 type Opportunity struct {
-	Language         string       `json:"language"`
-	Framework        string       `json:"framework"`
-	Instrumentations []string     `json:"instrumentations"`
-	FilePath         string       `json:"file_path"`
-	Suggestion       string       `json:"suggestion"`
-	Issue            *types.Issue `json:"issue,omitempty"`
+	Type          OpportunityType `json:"type"`
+	Language      string          `json:"language"`
+	Framework     string          `json:"framework"`
+	ComponentType ComponentType   `json:"componentType"`
+	Component     string          `json:"component"`
+	FilePath      string          `json:"file_path"`
+	Suggestion    string          `json:"suggestion"`
+	Issue         *types.Issue    `json:"issue,omitempty"`
 }
 
 // GenerationRequest contains parameters for code generation
@@ -66,7 +81,7 @@ func NewGenerator(detectorMgr *detector.Manager) (*Generator, error) {
 }
 
 // GenerateInstrumentation analyzes and generates code
-func (g *Generator) GenerateInstrumentation(ctx context.Context, req GenerationRequest) error {
+func (g *Generator) Generate(ctx context.Context, req GenerationRequest) error {
 	// Use existing detector for analysis
 	analysis, issues, err := g.detector.AnalyzeCodebase(ctx, req.CodebasePath)
 	if err != nil {
@@ -82,7 +97,7 @@ func (g *Generator) GenerateInstrumentation(ctx context.Context, req GenerationR
 	}
 
 	if len(opportunities) == 0 {
-		fmt.Println("GenerateInstrumentation: No code generation opportunities found")
+		fmt.Println("Generate: No code generation opportunities found")
 		return nil
 	}
 
@@ -162,20 +177,14 @@ func (g *Generator) validateStrategyRequirements(strategy CodeGenerationStrategy
 func (g *Generator) convertIssuesToOpportunities(analysis *detector.Analysis, issues []types.Issue) []Opportunity {
 	var opportunities []Opportunity
 
+	// Convert issues to opportunities based on their type
 	for _, issue := range issues {
-		// Convert specific issue types to opportunities
 		switch issue.Category {
-		case types.CategoryMissingLibrary:
-		case types.CategoryInstrumentation:
-			opp := Opportunity{
-				Language:   issue.Language,
-				FilePath:   issue.File,
-				Suggestion: issue.Suggestion,
-				Issue:      &issue,
-			}
-			// Extract instrumentations from available instrumentations
-			opp.Instrumentations = g.extractRelevantInstrumentations(analysis, issue.Language)
-			opportunities = append(opportunities, opp)
+		case types.CategoryMissingOtel:
+			opportunities = append(opportunities, Opportunity{
+				Type:     OpportunityInstallOTEL,
+				Language: issue.Language,
+			})
 		}
 	}
 
@@ -191,10 +200,11 @@ func (g *Generator) createOpportunitiesFromInstrumentations(analysis *detector.A
 	for _, instr := range analysis.AvailableInstrumentations {
 		if instr.IsAvailable && !g.isAlreadyInstrumented(analysis, instr) {
 			opp := Opportunity{
-				Language:         instr.Language,
-				Framework:        instr.Package.Name,
-				Instrumentations: []string{instr.Package.Name},
-				Suggestion:       fmt.Sprintf("Add OpenTelemetry instrumentation for %s", instr.Package.Name),
+				Language:      instr.Language,
+				Framework:     instr.Package.Name,
+				Component:     instr.Package.Name,
+				ComponentType: ComponentTypeInstrumentation,
+				Suggestion:    fmt.Sprintf("Add OpenTelemetry instrumentation for %s", instr.Package.Name),
 			}
 			opportunities = append(opportunities, opp)
 		}

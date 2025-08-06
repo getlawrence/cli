@@ -33,7 +33,7 @@ func (m *MissingOTelDetector) Description() string {
 
 // Category returns the issue category
 func (m *MissingOTelDetector) Category() types.Category {
-	return types.CategoryMissingLibrary
+	return types.CategoryMissingOtel
 }
 
 // Languages returns applicable languages (empty = all languages)

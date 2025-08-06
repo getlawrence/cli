@@ -142,7 +142,7 @@ func runCodegen(cmd *cobra.Command, args []string) error {
 		},
 	}
 
-	return generator.GenerateInstrumentation(ctx, req)
+	return generator.Generate(ctx, req)
 }
 
 func listAvailableAgents(generator *codegen.Generator) error {

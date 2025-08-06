@@ -69,7 +69,7 @@ var listCategoriesCmd = &cobra.Command{
 			examples    []string
 		}{
 			{
-				name:        types.CategoryMissingLibrary,
+				name:        types.CategoryMissingOtel,
 				description: "Missing OpenTelemetry libraries or dependencies",
 				examples:    []string{"No OTel libraries found", "Missing core instrumentation"},
 			},
@@ -132,7 +132,7 @@ var listDetectorsCmd = &cobra.Command{
 				id:          "missing_otel_libraries",
 				name:        "Missing OpenTelemetry Libraries",
 				description: "Detects when no OpenTelemetry libraries are found in the codebase",
-				category:    types.CategoryMissingLibrary,
+				category:    types.CategoryMissingOtel,
 				languages:   []string{"all"},
 			},
 			{

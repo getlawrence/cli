@@ -46,7 +46,7 @@ func (s *TemplateGenerationStrategy) GetRequiredFlags() []string {
 // GenerateCode generates code directly using templates
 func (s *TemplateGenerationStrategy) GenerateCode(ctx context.Context, opportunities []Opportunity, req GenerationRequest) error {
 	if len(opportunities) == 0 {
-		fmt.Println("GenerateCode: No code generation opportunities found")
+		fmt.Println("No code generation opportunities found")
 		return nil
 	}
 
@@ -286,17 +286,11 @@ func (s *TemplateGenerationStrategy) groupOpportunitiesByLanguage(opportunities 
 
 // collectAllInstrumentations extracts unique instrumentations from all opportunities
 func (s *TemplateGenerationStrategy) collectAllInstrumentations(opportunities []Opportunity) []string {
-	seen := make(map[string]bool)
 	var instrumentations []string
-
 	for _, opp := range opportunities {
-		for _, instr := range opp.Instrumentations {
-			if !seen[instr] {
-				seen[instr] = true
-				instrumentations = append(instrumentations, instr)
-			}
+		if opp.ComponentType == ComponentTypeInstrumentation {
+			instrumentations = append(instrumentations, string(opp.Component))
 		}
 	}
-
 	return instrumentations
 }

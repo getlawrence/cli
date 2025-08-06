@@ -73,7 +73,7 @@ const (
 type Category string
 
 const (
-	CategoryMissingLibrary  Category = "missing_library"
+	CategoryMissingOtel     Category = "missing_otel"
 	CategoryConfiguration   Category = "configuration"
 	CategoryInstrumentation Category = "instrumentation"
 	CategoryPerformance     Category = "performance"
