@@ -64,8 +64,6 @@ func runAnalyze(cmd *cobra.Command, args []string) error {
 	verbose, _ := cmd.Flags().GetBool("verbose")
 	detailed, _ := cmd.Flags().GetBool("detailed")
 	outputFormat, _ := cmd.Flags().GetString("output")
-	languageFilter, _ := cmd.Flags().GetStringSlice("languages")
-	categoryFilter, _ := cmd.Flags().GetStringSlice("categories")
 
 	if verbose {
 		fmt.Printf("Analyzing codebase at: %s\n", absPath)
@@ -81,33 +79,23 @@ func runAnalyze(cmd *cobra.Command, args []string) error {
 
 	// Run analysis
 	ctx := context.Background()
-	analysis, detectedIssues, err := codebaseAnalyzer.AnalyzeCodebase(ctx, absPath)
+	analysis, err := codebaseAnalyzer.AnalyzeCodebase(ctx, absPath)
 	if err != nil {
 		return fmt.Errorf("analysis failed: %w", err)
-	}
-
-	// Filter results if requested
-	if len(languageFilter) > 0 {
-		analysis = filterAnalysisByLanguages(analysis, languageFilter)
-		detectedIssues = filterIssuesByLanguages(detectedIssues, languageFilter)
-	}
-
-	if len(categoryFilter) > 0 {
-		detectedIssues = filterIssuesByCategories(detectedIssues, categoryFilter)
 	}
 
 	// Output results
 	switch outputFormat {
 	case "json":
-		return outputJSON(analysis, detectedIssues)
+		return outputJSON(analysis)
 	case "yaml":
-		return outputYAML(analysis, detectedIssues)
+		return outputYAML(analysis)
 	default:
-		return outputText(analysis, detectedIssues, detailed, verbose)
+		return outputText(analysis, detailed, verbose)
 	}
 }
 
-func outputText(analysis *detector.Analysis, issues []types.Issue, detailed, verbose bool) error {
+func outputText(analysis *detector.Analysis, detailed, verbose bool) error {
 	fmt.Printf("📊 OpenTelemetry Analysis Results\n")
 	fmt.Printf("=================================\n\n")
 
@@ -210,7 +198,7 @@ func printIssuesByCategory(title string, issues []types.Issue, detailed bool) {
 	}
 }
 
-func outputJSON(analysis *detector.Analysis, issues []types.Issue) error {
+func outputJSON(analysis *detector.Analysis) error {
 	result := map[string]interface{}{
 		"analysis": analysis,
 		"issues":   issues,
@@ -221,7 +209,7 @@ func outputJSON(analysis *detector.Analysis, issues []types.Issue) error {
 	return encoder.Encode(result)
 }
 
-func outputYAML(analysis *detector.Analysis, issues []types.Issue) error {
+func outputYAML(analysis *detector.Analysis) error {
 	// For simplicity, output as JSON for now
 	// In a real implementation, you'd use a YAML library
 	return outputJSON(analysis, issues)
