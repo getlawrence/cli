@@ -16,6 +16,22 @@ const (
 	defaultServiceName  = "my-service"
 )
 
+// OperationsData contains the analysis of opportunities organized by operation type
+type OperationsData struct {
+	InstallOTEL             bool                // Whether OTEL needs to be installed
+	InstallInstrumentations []string            // Instrumentations to install
+	InstallComponents       map[string][]string // Components to install by type (sdk, propagator, exporter)
+	RemoveComponents        map[string][]string // Components to remove by type
+}
+
+// isEmpty checks if there are any operations to perform
+func (od *OperationsData) isEmpty() bool {
+	return !od.InstallOTEL &&
+		len(od.InstallInstrumentations) == 0 &&
+		len(od.InstallComponents) == 0 &&
+		len(od.RemoveComponents) == 0
+}
+
 // TemplateGenerationStrategy implements direct code generation using templates
 type TemplateGenerationStrategy struct {
 	templateMgr *templates.Manager
@@ -55,7 +71,13 @@ func (s *TemplateGenerationStrategy) GenerateCode(ctx context.Context, opportuni
 
 	// Generate code for each language
 	var generatedFiles []string
+	var operationsSummary []string
+
 	for language, langOpportunities := range languageOpportunities {
+		// Analyze what operations will be performed
+		operationsData := s.analyzeOpportunities(langOpportunities)
+		operationsSummary = append(operationsSummary, s.createOperationsSummary(language, operationsData)...)
+
 		files, err := s.generateCodeForLanguage(language, langOpportunities, req)
 		if err != nil {
 			fmt.Printf("Warning: failed to generate code for %s: %v\n", language, err)
@@ -70,46 +92,53 @@ func (s *TemplateGenerationStrategy) GenerateCode(ctx context.Context, opportuni
 	}
 
 	// Report results
-	fmt.Printf("Successfully generated %d instrumentation files:\n", len(generatedFiles))
+	fmt.Printf("Successfully generated %d files:\n", len(generatedFiles))
 	for _, file := range generatedFiles {
 		fmt.Printf("  - %s\n", file)
+	}
+
+	if len(operationsSummary) > 0 {
+		fmt.Println("\nOperations performed:")
+		for _, summary := range operationsSummary {
+			fmt.Printf("  %s\n", summary)
+		}
 	}
 
 	return nil
 }
 
 func (s *TemplateGenerationStrategy) generateCodeForLanguage(language string, opportunities []Opportunity, req GenerationRequest) ([]string, error) {
-	// Collect all instrumentations for this language
-	allInstrumentations := s.collectAllInstrumentations(opportunities)
+	// Analyze opportunities to determine what operations to perform
+	operationsData := s.analyzeOpportunities(opportunities)
 
-	if len(allInstrumentations) == 0 {
-		return nil, fmt.Errorf("no instrumentations found for %s", language)
+	if operationsData.isEmpty() {
+		return nil, fmt.Errorf("no operations to perform for %s", language)
 	}
 
 	// Generate code based on the method and language
 	switch strings.ToLower(language) {
 	case "go":
-		return s.generateGoCode(allInstrumentations, req)
+		return s.generateGoCode(operationsData, req)
 	case "python":
-		return s.generatePythonCode(allInstrumentations, req)
+		return s.generatePythonCode(operationsData, req)
 	default:
 		return nil, fmt.Errorf("template-based code generation not supported for language: %s", language)
 	}
 }
 
-func (s *TemplateGenerationStrategy) generateGoCode(instrumentations []string, req GenerationRequest) ([]string, error) {
+func (s *TemplateGenerationStrategy) generateGoCode(operationsData *OperationsData, req GenerationRequest) ([]string, error) {
 	// Generate based on method
 	switch req.Method {
 	case templates.CodeInstrumentation:
-		return s.generateGoCodeInstrumentation(instrumentations, req)
+		return s.generateGoCodeInstrumentation(operationsData, req)
 	case templates.AutoInstrumentation:
-		return s.generateGoAutoInstrumentation(instrumentations, req)
+		return s.generateGoAutoInstrumentation(operationsData, req)
 	default:
 		return nil, fmt.Errorf("unsupported method %s for Go", req.Method)
 	}
 }
 
-func (s *TemplateGenerationStrategy) generateGoCodeInstrumentation(instrumentations []string, req GenerationRequest) ([]string, error) {
+func (s *TemplateGenerationStrategy) generateGoCodeInstrumentation(operationsData *OperationsData, req GenerationRequest) ([]string, error) {
 	serviceName := filepath.Base(req.CodebasePath)
 	if serviceName == "." {
 		// Get current directory name when path is "."
@@ -122,10 +151,13 @@ func (s *TemplateGenerationStrategy) generateGoCodeInstrumentation(instrumentati
 
 	// Create template data
 	data := templates.TemplateData{
-		Language:         "go",
-		Method:           req.Method,
-		Instrumentations: instrumentations,
-		ServiceName:      serviceName,
+		Language:          "go",
+		Method:            req.Method,
+		Instrumentations:  operationsData.InstallInstrumentations,
+		ServiceName:       serviceName,
+		InstallOTEL:       operationsData.InstallOTEL,
+		InstallComponents: operationsData.InstallComponents,
+		RemoveComponents:  operationsData.RemoveComponents,
 	}
 
 	// Generate code using template
@@ -158,7 +190,7 @@ func (s *TemplateGenerationStrategy) generateGoCodeInstrumentation(instrumentati
 	return []string{outputPath}, nil
 }
 
-func (s *TemplateGenerationStrategy) generateGoAutoInstrumentation(instrumentations []string, req GenerationRequest) ([]string, error) {
+func (s *TemplateGenerationStrategy) generateGoAutoInstrumentation(operationsData *OperationsData, req GenerationRequest) ([]string, error) {
 	serviceName := filepath.Base(req.CodebasePath)
 	if serviceName == "." {
 		// Get current directory name when path is "."
@@ -171,10 +203,13 @@ func (s *TemplateGenerationStrategy) generateGoAutoInstrumentation(instrumentati
 
 	// Create template data
 	data := templates.TemplateData{
-		Language:         "go",
-		Method:           req.Method,
-		Instrumentations: instrumentations,
-		ServiceName:      serviceName,
+		Language:          "go",
+		Method:            req.Method,
+		Instrumentations:  operationsData.InstallInstrumentations,
+		ServiceName:       serviceName,
+		InstallOTEL:       operationsData.InstallOTEL,
+		InstallComponents: operationsData.InstallComponents,
+		RemoveComponents:  operationsData.RemoveComponents,
 	}
 
 	// Generate code using auto template
@@ -207,7 +242,7 @@ func (s *TemplateGenerationStrategy) generateGoAutoInstrumentation(instrumentati
 	return []string{outputPath}, nil
 }
 
-func (s *TemplateGenerationStrategy) generatePythonCode(instrumentations []string, req GenerationRequest) ([]string, error) {
+func (s *TemplateGenerationStrategy) generatePythonCode(operationsData *OperationsData, req GenerationRequest) ([]string, error) {
 	serviceName := filepath.Base(req.CodebasePath)
 	if serviceName == "." {
 		// Get current directory name when path is "."
@@ -220,10 +255,13 @@ func (s *TemplateGenerationStrategy) generatePythonCode(instrumentations []strin
 
 	// Create template data
 	data := templates.TemplateData{
-		Language:         "python",
-		Method:           req.Method,
-		Instrumentations: instrumentations,
-		ServiceName:      serviceName,
+		Language:          "python",
+		Method:            req.Method,
+		Instrumentations:  operationsData.InstallInstrumentations,
+		ServiceName:       serviceName,
+		InstallOTEL:       operationsData.InstallOTEL,
+		InstallComponents: operationsData.InstallComponents,
+		RemoveComponents:  operationsData.RemoveComponents,
 	}
 
 	// Generate code using template
@@ -271,6 +309,62 @@ func (s *TemplateGenerationStrategy) writeCodeToFile(filePath, content string) e
 	return nil
 }
 
+// analyzeOpportunities processes opportunities and organizes them by operation type
+func (s *TemplateGenerationStrategy) analyzeOpportunities(opportunities []Opportunity) *OperationsData {
+	data := &OperationsData{
+		InstallComponents: make(map[string][]string),
+		RemoveComponents:  make(map[string][]string),
+	}
+
+	for _, opp := range opportunities {
+		switch opp.Type {
+		case OpportunityInstallOTEL:
+			data.InstallOTEL = true
+
+		case OpportunityInstallComponent:
+			if opp.ComponentType == ComponentTypeInstrumentation {
+				data.InstallInstrumentations = append(data.InstallInstrumentations, opp.Component)
+			} else {
+				componentType := string(opp.ComponentType)
+				data.InstallComponents[componentType] = append(data.InstallComponents[componentType], opp.Component)
+			}
+
+		case OpportunityRemoveComponent:
+			componentType := string(opp.ComponentType)
+			data.RemoveComponents[componentType] = append(data.RemoveComponents[componentType], opp.Component)
+		}
+	}
+
+	return data
+}
+
+// createOperationsSummary generates a human-readable summary of operations for a language
+func (s *TemplateGenerationStrategy) createOperationsSummary(language string, data *OperationsData) []string {
+	var summary []string
+
+	if data.InstallOTEL {
+		summary = append(summary, fmt.Sprintf("[%s] Install OpenTelemetry SDK", language))
+	}
+
+	if len(data.InstallInstrumentations) > 0 {
+		summary = append(summary, fmt.Sprintf("[%s] Install instrumentations: %s", language, strings.Join(data.InstallInstrumentations, ", ")))
+	}
+
+	for componentType, components := range data.InstallComponents {
+		if len(components) > 0 {
+			summary = append(summary, fmt.Sprintf("[%s] Install %s components: %s", language, componentType, strings.Join(components, ", ")))
+		}
+	}
+
+	for componentType, components := range data.RemoveComponents {
+		if len(components) > 0 {
+			summary = append(summary, fmt.Sprintf("[%s] Remove %s components: %s", language, componentType, strings.Join(components, ", ")))
+		}
+	}
+
+	return summary
+}
+
 // groupOpportunitiesByLanguage groups opportunities by programming language
 func (s *TemplateGenerationStrategy) groupOpportunitiesByLanguage(opportunities []Opportunity) map[string][]Opportunity {
 	grouped := make(map[string][]Opportunity)
@@ -282,15 +376,4 @@ func (s *TemplateGenerationStrategy) groupOpportunitiesByLanguage(opportunities 
 	}
 
 	return grouped
-}
-
-// collectAllInstrumentations extracts unique instrumentations from all opportunities
-func (s *TemplateGenerationStrategy) collectAllInstrumentations(opportunities []Opportunity) []string {
-	var instrumentations []string
-	for _, opp := range opportunities {
-		if opp.ComponentType == ComponentTypeInstrumentation {
-			instrumentations = append(instrumentations, string(opp.Component))
-		}
-	}
-	return instrumentations
 }

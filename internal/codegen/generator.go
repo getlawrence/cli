@@ -22,6 +22,9 @@ type ComponentType string
 
 const (
 	ComponentTypeInstrumentation ComponentType = "instrumentation"
+	ComponentTypeSDK             ComponentType = "sdk"
+	ComponentTypePropagator      ComponentType = "propagator"
+	ComponentTypeExporter        ComponentType = "exporter"
 )
 
 type Opportunity struct {

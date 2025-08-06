@@ -28,6 +28,11 @@ type TemplateData struct {
 	Samplers         []string           `json:"samplers,omitempty"`
 	ContextProps     []string           `json:"context_props,omitempty"`
 	SpanProcessors   []string           `json:"span_processors,omitempty"`
+
+	// New fields for extended operations
+	InstallOTEL       bool                `json:"install_otel,omitempty"`
+	InstallComponents map[string][]string `json:"install_components,omitempty"`
+	RemoveComponents  map[string][]string `json:"remove_components,omitempty"`
 }
 
 // AgentPromptData contains all data needed for agent prompt generation
