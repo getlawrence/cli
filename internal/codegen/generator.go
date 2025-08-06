@@ -3,21 +3,39 @@ package codegen
 import (
 	"context"
 	"fmt"
-	"path/filepath"
 
 	"github.com/getlawrence/cli/internal/agents"
 	"github.com/getlawrence/cli/internal/detector"
+	"github.com/getlawrence/cli/internal/detector/types"
 	"github.com/getlawrence/cli/internal/templates"
 )
 
-// Opportunity represents a code generation opportunity
+type OpportunityType string
+
+const (
+	OpportunityInstallOTEL      OpportunityType = "install_otel"
+	OpportunityInstallComponent OpportunityType = "install_component"
+	OpportunityRemoveComponent  OpportunityType = "remove_component"
+)
+
+type ComponentType string
+
+const (
+	ComponentTypeInstrumentation ComponentType = "instrumentation"
+	ComponentTypeSDK             ComponentType = "sdk"
+	ComponentTypePropagator      ComponentType = "propagator"
+	ComponentTypeExporter        ComponentType = "exporter"
+)
+
 type Opportunity struct {
-	Language         string          `json:"language"`
-	Framework        string          `json:"framework"`
-	Instrumentations []string        `json:"instrumentations"`
-	FilePath         string          `json:"file_path"`
-	Suggestion       string          `json:"suggestion"`
-	Issue            *detector.Issue `json:"issue,omitempty"`
+	Type          OpportunityType `json:"type"`
+	Language      string          `json:"language"`
+	Framework     string          `json:"framework"`
+	ComponentType ComponentType   `json:"componentType"`
+	Component     string          `json:"component"`
+	FilePath      string          `json:"file_path"`
+	Suggestion    string          `json:"suggestion"`
+	Issue         *types.Issue    `json:"issue,omitempty"`
 }
 
 // GenerationRequest contains parameters for code generation
@@ -25,37 +43,48 @@ type GenerationRequest struct {
 	CodebasePath string                       `json:"codebase_path"`
 	Language     string                       `json:"language,omitempty"`
 	Method       templates.InstallationMethod `json:"method"`
-	AgentType    agents.AgentType             `json:"agent_type"`
+	AgentType    agents.AgentType             `json:"agent_type"` // Deprecated: use Config.AgentType
+	Config       StrategyConfig               `json:"config"`
 }
 
 // Generator extends the detector system for code generation
 type Generator struct {
-	detector    *detector.Manager
-	templateMgr *templates.Manager
-	agentMgr    *agents.Detector
+	detector        *detector.CodebaseAnalyzer
+	templateEngine  *templates.TemplateEngine
+	agentDetector   *agents.Detector
+	strategies      map[GenerationMode]CodeGenerationStrategy
+	defaultStrategy GenerationMode
 }
 
 // NewGenerator creates a new code generator
-func NewGenerator(detectorMgr *detector.Manager) (*Generator, error) {
-	templateMgr, err := templates.NewManager()
+func NewGenerator(codebaseAnalyzer *detector.CodebaseAnalyzer) (*Generator, error) {
+	templateEngine, err := templates.NewTemplateEngine()
 	if err != nil {
-		return nil, fmt.Errorf("failed to initialize template manager: %w", err)
+		return nil, fmt.Errorf("failed to initialize template engine: %w", err)
 	}
 
-	agentMgr, err := agents.NewDetector()
+	agentDetector, err := agents.NewDetector()
 	if err != nil {
-		return nil, fmt.Errorf("failed to initialize agent manager: %w", err)
+		return nil, fmt.Errorf("failed to initialize agent detector: %w", err)
 	}
+
+	// Initialize strategies
+	strategies := make(map[GenerationMode]CodeGenerationStrategy)
+	strategies[AIMode] = NewAIGenerationStrategy(agentDetector, templateEngine)
+	strategies[TemplateMode] = NewTemplateGenerationStrategy(templateEngine)
+	defaultStrategy := TemplateMode
 
 	return &Generator{
-		detector:    detectorMgr,
-		templateMgr: templateMgr,
-		agentMgr:    agentMgr,
+		detector:        codebaseAnalyzer,
+		templateEngine:  templateEngine,
+		agentDetector:   agentDetector,
+		strategies:      strategies,
+		defaultStrategy: defaultStrategy,
 	}, nil
 }
 
 // GenerateInstrumentation analyzes and generates code
-func (g *Generator) GenerateInstrumentation(ctx context.Context, req GenerationRequest) error {
+func (g *Generator) Generate(ctx context.Context, req GenerationRequest) error {
 	// Use existing detector for analysis
 	analysis, issues, err := g.detector.AnalyzeCodebase(ctx, req.CodebasePath)
 	if err != nil {
@@ -71,42 +100,94 @@ func (g *Generator) GenerateInstrumentation(ctx context.Context, req GenerationR
 	}
 
 	if len(opportunities) == 0 {
-		fmt.Println("No code generation opportunities found")
+		fmt.Println("Generate: No code generation opportunities found")
 		return nil
 	}
 
-	// Generate and execute for each opportunity
-	return g.executeOpportunities(ctx, opportunities, req)
+	// Select generation mode
+	mode := req.Config.Mode
+	if mode == "" {
+		mode = g.defaultStrategy
+	}
+
+	// Get the appropriate strategy
+	strategy, exists := g.strategies[mode]
+	if !exists {
+		return fmt.Errorf("unsupported generation mode: %s", mode)
+	}
+
+	// Check if strategy is available
+	if !strategy.IsAvailable() {
+		return fmt.Errorf("generation mode %s is not available on this system", mode)
+	}
+
+	// Validate required flags for the strategy
+	if err := g.validateStrategyRequirements(strategy, req); err != nil {
+		return err
+	}
+
+	fmt.Printf("Using %s generation strategy\n", strategy.GetName())
+
+	// Execute generation using the selected strategy
+	return strategy.GenerateCode(ctx, opportunities, req)
 }
 
 // ListAvailableAgents returns all detected coding agents
 func (g *Generator) ListAvailableAgents() []agents.Agent {
-	return g.agentMgr.DetectAvailableAgents()
+	return g.agentDetector.DetectAvailableAgents()
 }
 
 // ListAvailableTemplates returns all available templates
 func (g *Generator) ListAvailableTemplates() []string {
-	return g.templateMgr.GetAvailableTemplates()
+	return g.templateEngine.GetAvailableTemplates()
 }
 
-func (g *Generator) convertIssuesToOpportunities(analysis *detector.Analysis, issues []detector.Issue) []Opportunity {
+// ListAvailableStrategies returns all available generation strategies
+func (g *Generator) ListAvailableStrategies() map[GenerationMode]bool {
+	strategies := make(map[GenerationMode]bool)
+	for mode, strategy := range g.strategies {
+		strategies[mode] = strategy.IsAvailable()
+	}
+	return strategies
+}
+
+// GetDefaultStrategy returns the default generation strategy
+func (g *Generator) GetDefaultStrategy() GenerationMode {
+	return g.defaultStrategy
+}
+
+// validateStrategyRequirements checks if all required flags are provided for a strategy
+func (g *Generator) validateStrategyRequirements(strategy CodeGenerationStrategy, req GenerationRequest) error {
+	requiredFlags := strategy.GetRequiredFlags()
+
+	for _, flag := range requiredFlags {
+		switch flag {
+		case "agent":
+			if req.Config.AgentType == "" {
+				// Fallback to deprecated field
+				if req.AgentType == "" {
+					return fmt.Errorf("agent type is required for AI generation. Use --list-agents to see available options")
+				}
+				// Copy from deprecated field
+				req.Config.AgentType = string(req.AgentType)
+			}
+		}
+	}
+
+	return nil
+}
+
+func (g *Generator) convertIssuesToOpportunities(analysis *detector.Analysis, issues []types.Issue) []Opportunity {
 	var opportunities []Opportunity
 
+	// Convert issues to opportunities based on their type
 	for _, issue := range issues {
-		// Convert specific issue types to opportunities
 		switch issue.Category {
-		case detector.CategoryMissingLibrary, detector.CategoryInstrumentation:
-			opp := Opportunity{
-				Language:   issue.Language,
-				FilePath:   issue.File,
-				Suggestion: issue.Suggestion,
-				Issue:      &issue,
-			}
-
-			// Extract instrumentations from available instrumentations
-			opp.Instrumentations = g.extractRelevantInstrumentations(analysis, issue.Language)
-
-			opportunities = append(opportunities, opp)
+		case types.CategoryMissingOtel:
+			opportunities = append(opportunities, Opportunity{
+				Type:     OpportunityInstallOTEL,
+				Language: issue.Language,
+			})
 		}
 	}
 
@@ -122,10 +203,11 @@ func (g *Generator) createOpportunitiesFromInstrumentations(analysis *detector.A
 	for _, instr := range analysis.AvailableInstrumentations {
 		if instr.IsAvailable && !g.isAlreadyInstrumented(analysis, instr) {
 			opp := Opportunity{
-				Language:         instr.Language,
-				Framework:        instr.Package.Name,
-				Instrumentations: []string{instr.Package.Name},
-				Suggestion:       fmt.Sprintf("Add OpenTelemetry instrumentation for %s", instr.Package.Name),
+				Language:      instr.Language,
+				Framework:     instr.Package.Name,
+				Component:     instr.Package.Name,
+				ComponentType: ComponentTypeInstrumentation,
+				Suggestion:    fmt.Sprintf("Add OpenTelemetry instrumentation for %s", instr.Package.Name),
 			}
 			opportunities = append(opportunities, opp)
 		}
@@ -134,7 +216,7 @@ func (g *Generator) createOpportunitiesFromInstrumentations(analysis *detector.A
 	return opportunities
 }
 
-func (g *Generator) isAlreadyInstrumented(analysis *detector.Analysis, instr detector.InstrumentationInfo) bool {
+func (g *Generator) isAlreadyInstrumented(analysis *detector.Analysis, instr types.InstrumentationInfo) bool {
 	// Check if the instrumentation library is already in use
 	for _, lib := range analysis.Libraries {
 		if lib.Name == instr.Package.Name ||
@@ -167,147 +249,4 @@ func (g *Generator) filterByLanguage(opportunities []Opportunity, language strin
 	}
 
 	return filtered
-}
-
-func (g *Generator) executeOpportunities(ctx context.Context, opportunities []Opportunity, req GenerationRequest) error {
-	// Verify requested agent is available
-	if err := g.verifyAgentAvailability(req.AgentType); err != nil {
-		return err
-	}
-
-	// Group opportunities by language to create comprehensive instructions
-	languageOpportunities := g.groupOpportunitiesByLanguage(opportunities)
-
-	if len(languageOpportunities) == 0 {
-		fmt.Println("No opportunities to process")
-		return nil
-	}
-
-	// Generate comprehensive instructions
-	allInstructions, err := g.generateInstructionsForLanguages(languageOpportunities, req)
-	if err != nil {
-		return err
-	}
-
-	if len(allInstructions) == 0 {
-		fmt.Println("No instructions generated")
-		return nil
-	}
-
-	// Combine and send to agent
-	return g.sendInstructionsToAgent(allInstructions, req)
-}
-
-func (g *Generator) verifyAgentAvailability(agentType agents.AgentType) error {
-	availableAgents := g.agentMgr.DetectAvailableAgents()
-	for _, agent := range availableAgents {
-		if agent.Type == agentType {
-			return nil
-		}
-	}
-	return fmt.Errorf("requested agent %s is not available", agentType)
-}
-
-func (g *Generator) generateInstructionsForLanguages(languageOpportunities map[string][]Opportunity, req GenerationRequest) ([]string, error) {
-	var allInstructions []string
-
-	for language, langOpportunities := range languageOpportunities {
-		// Collect all instrumentations for this language
-		allInstrumentations := g.collectAllInstrumentations(langOpportunities)
-
-		// Generate comprehensive instructions for this language
-		instructions, err := g.templateMgr.GenerateComprehensiveInstructions(
-			language,
-			req.Method,
-			allInstrumentations,
-			filepath.Base(req.CodebasePath),
-		)
-		if err != nil {
-			fmt.Printf("Warning: failed to generate comprehensive instructions for %s: %v\n", language, err)
-			continue
-		}
-
-		fmt.Printf("Generated comprehensive instrumentation instructions for %s\n", language)
-		allInstructions = append(allInstructions, instructions)
-	}
-
-	return allInstructions, nil
-}
-
-func (g *Generator) sendInstructionsToAgent(allInstructions []string, req GenerationRequest) error {
-	// Combine all language instructions into a single comprehensive guide
-	combinedInstructions := g.combineInstructions(allInstructions, req.CodebasePath)
-
-	fmt.Printf("Generated comprehensive instrumentation guide\n")
-
-	// Determine the primary language or use "multi-language" if multiple
-	language := req.Language
-	if language == "" {
-		language = "multi-language" // Default for comprehensive guides
-	}
-
-	// Create agent execution request
-	agentRequest := agents.AgentExecutionRequest{
-		Language:     language,
-		Instructions: combinedInstructions,
-		TargetDir:    req.CodebasePath,
-		ServiceName:  filepath.Base(req.CodebasePath), // Use directory name as default service name
-	}
-
-	// Execute with selected agent - single call with comprehensive instructions
-	if err := g.agentMgr.ExecuteWithAgent(req.AgentType, agentRequest); err != nil {
-		return fmt.Errorf("failed to execute with agent %s: %v", req.AgentType, err)
-	}
-
-	fmt.Printf("Successfully sent comprehensive instrumentation guide to %s agent\n", req.AgentType)
-	return nil
-}
-
-func (g *Generator) combineInstructions(allInstructions []string, codebasePath string) string {
-	if len(allInstructions) == 1 {
-		return allInstructions[0]
-	}
-
-	// Multiple languages - create a multi-language guide
-	combinedInstructions := fmt.Sprintf("# OpenTelemetry Instrumentation Guide for %s\n\n", filepath.Base(codebasePath))
-	combinedInstructions += "This guide provides comprehensive OpenTelemetry instrumentation for multiple languages detected in your project.\n\n"
-
-	for i, instructions := range allInstructions {
-		if i > 0 {
-			combinedInstructions += "\n\n---\n\n"
-		}
-		combinedInstructions += instructions
-	}
-
-	return combinedInstructions
-}
-
-// groupOpportunitiesByLanguage groups opportunities by programming language
-func (g *Generator) groupOpportunitiesByLanguage(opportunities []Opportunity) map[string][]Opportunity {
-	grouped := make(map[string][]Opportunity)
-
-	for _, opp := range opportunities {
-		if opp.Language != "" {
-			grouped[opp.Language] = append(grouped[opp.Language], opp)
-		}
-	}
-
-	return grouped
-}
-
-// collectAllInstrumentations extracts unique instrumentations from all opportunities
-func (g *Generator) collectAllInstrumentations(opportunities []Opportunity) []string {
-	seen := make(map[string]bool)
-	var instrumentations []string
-
-	for _, opp := range opportunities {
-		for _, instr := range opp.Instrumentations {
-			if !seen[instr] {
-				seen[instr] = true
-				instrumentations = append(instrumentations, instr)
-			}
-		}
-	}
-
-	return instrumentations
 }

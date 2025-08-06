@@ -3,7 +3,7 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/getlawrence/cli/internal/detector"
+	"github.com/getlawrence/cli/internal/detector/types"
 	"github.com/spf13/cobra"
 )
 
@@ -64,42 +64,42 @@ var listCategoriesCmd = &cobra.Command{
 		fmt.Printf("===================\n\n")
 
 		categories := []struct {
-			name        detector.Category
+			name        types.Category
 			description string
 			examples    []string
 		}{
 			{
-				name:        detector.CategoryMissingLibrary,
+				name:        types.CategoryMissingOtel,
 				description: "Missing OpenTelemetry libraries or dependencies",
 				examples:    []string{"No OTel libraries found", "Missing core instrumentation"},
 			},
 			{
-				name:        detector.CategoryConfiguration,
+				name:        types.CategoryConfiguration,
 				description: "Configuration issues and misconfigurations",
 				examples:    []string{"Invalid endpoint URLs", "Missing environment variables"},
 			},
 			{
-				name:        detector.CategoryInstrumentation,
+				name:        types.CategoryInstrumentation,
 				description: "Instrumentation coverage and completeness",
 				examples:    []string{"Missing traces", "Incomplete metrics", "No logging correlation"},
 			},
 			{
-				name:        detector.CategoryPerformance,
+				name:        types.CategoryPerformance,
 				description: "Performance-related issues and optimizations",
 				examples:    []string{"High sampling rates", "Excessive metric cardinality"},
 			},
 			{
-				name:        detector.CategorySecurity,
+				name:        types.CategorySecurity,
 				description: "Security concerns and vulnerabilities",
 				examples:    []string{"Exposed sensitive data", "Insecure endpoints"},
 			},
 			{
-				name:        detector.CategoryBestPractice,
+				name:        types.CategoryBestPractice,
 				description: "Best practice violations and recommendations",
 				examples:    []string{"Inconsistent naming", "Missing resource attributes"},
 			},
 			{
-				name:        detector.CategoryDeprecated,
+				name:        types.CategoryDeprecated,
 				description: "Deprecated features and outdated libraries",
 				examples:    []string{"Old library versions", "Deprecated APIs"},
 			},
@@ -125,28 +125,28 @@ var listDetectorsCmd = &cobra.Command{
 			id          string
 			name        string
 			description string
-			category    detector.Category
+			category    types.Category
 			languages   []string
 		}{
 			{
 				id:          "missing_otel_libraries",
 				name:        "Missing OpenTelemetry Libraries",
 				description: "Detects when no OpenTelemetry libraries are found in the codebase",
-				category:    detector.CategoryMissingLibrary,
+				category:    types.CategoryMissingOtel,
 				languages:   []string{"all"},
 			},
 			{
 				id:          "incomplete_instrumentation",
 				name:        "Incomplete Instrumentation",
 				description: "Detects when only partial OpenTelemetry instrumentation is present",
-				category:    detector.CategoryInstrumentation,
+				category:    types.CategoryInstrumentation,
 				languages:   []string{"all"},
 			},
 			{
 				id:          "outdated_libraries",
 				name:        "Outdated Libraries",
 				description: "Detects outdated OpenTelemetry library versions",
-				category:    detector.CategoryDeprecated,
+				category:    types.CategoryDeprecated,
 				languages:   []string{"all"},
 			},
 		}

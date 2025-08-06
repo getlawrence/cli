@@ -1,0 +1,44 @@
+# E2E Testing Framework for Lawrence CLI
+
+FROM golang:1.21-alpine AS builder
+
+# Install dependencies for testing
+RUN apk add --no-cache git py3-pip python3
+
+# Set working directory
+WORKDIR /app
+
+# Copy the CLI source code
+COPY . .
+
+# Build the CLI
+RUN go build -o lawrence .
+
+# Create the test image
+FROM alpine:3.19
+
+# Install Python and Go for testing examples
+RUN apk add --no-cache \
+    bash \
+    curl \
+    git \
+    go \
+    jq \
+    py3-pip \
+    python3
+
+# Copy the built CLI
+COPY --from=builder /app/lawrence /usr/local/bin/lawrence
+
+# Copy examples and test files
+COPY examples/ /test/examples/
+COPY e2e/ /test/e2e/
+
+# Set working directory
+WORKDIR /test
+
+# Make the CLI executable
+RUN chmod +x /usr/local/bin/lawrence
+
+# Set entrypoint to test runner
+ENTRYPOINT ["/test/e2e/run-tests.sh"]

@@ -11,6 +11,7 @@ import (
 	"github.com/getlawrence/cli/internal/detector"
 	"github.com/getlawrence/cli/internal/detector/issues"
 	"github.com/getlawrence/cli/internal/detector/languages"
+	"github.com/getlawrence/cli/internal/detector/types"
 	"github.com/spf13/cobra"
 )
 
@@ -70,22 +71,17 @@ func runAnalyze(cmd *cobra.Command, args []string) error {
 		fmt.Printf("Analyzing codebase at: %s\n", absPath)
 	}
 
-	// Create detection manager and register detectors
-	manager := detector.NewManager()
-
-	// Register language detectors
-	manager.RegisterLanguage(languages.NewGoDetector())
-	manager.RegisterLanguage(languages.NewPythonDetector())
-
-	// Register issue detectors
-	manager.RegisterDetector(issues.NewMissingOTelDetector())
-	manager.RegisterDetector(issues.NewIncompleteInstrumentationDetector())
-	manager.RegisterDetector(issues.NewOutdatedLibrariesDetector())
-	manager.RegisterDetector(issues.NewMissingInstrumentationDetector())
+	// Create analysis engine
+	codebaseAnalyzer := detector.NewCodebaseAnalyzer([]detector.IssueDetector{
+		issues.NewMissingOTelDetector(),
+	}, map[string]detector.Language{
+		"go":     languages.NewGoDetector(),
+		"python": languages.NewPythonDetector(),
+	})
 
 	// Run analysis
 	ctx := context.Background()
-	analysis, detectedIssues, err := manager.AnalyzeCodebase(ctx, absPath)
+	analysis, detectedIssues, err := codebaseAnalyzer.AnalyzeCodebase(ctx, absPath)
 	if err != nil {
 		return fmt.Errorf("analysis failed: %w", err)
 	}
@@ -111,7 +107,7 @@ func runAnalyze(cmd *cobra.Command, args []string) error {
 	}
 }
 
-func outputText(analysis *detector.Analysis, issues []detector.Issue, detailed, verbose bool) error {
+func outputText(analysis *detector.Analysis, issues []types.Issue, detailed, verbose bool) error {
 	fmt.Printf("📊 OpenTelemetry Analysis Results\n")
 	fmt.Printf("=================================\n\n")
 
@@ -170,9 +166,9 @@ func outputText(analysis *detector.Analysis, issues []detector.Issue, detailed, 
 		fmt.Printf("-------------------------------\n")
 
 		// Group issues by severity
-		errors := filterIssuesBySeverity(issues, detector.SeverityError)
-		warnings := filterIssuesBySeverity(issues, detector.SeverityWarning)
-		infos := filterIssuesBySeverity(issues, detector.SeverityInfo)
+		errors := filterIssuesBySeverity(issues, types.SeverityError)
+		warnings := filterIssuesBySeverity(issues, types.SeverityWarning)
+		infos := filterIssuesBySeverity(issues, types.SeverityInfo)
 
 		printIssuesByCategory("🚨 Errors", errors, detailed)
 		printIssuesByCategory("⚠️  Warnings", warnings, detailed)
@@ -184,7 +180,7 @@ func outputText(analysis *detector.Analysis, issues []detector.Issue, detailed, 
 	return nil
 }
 
-func printIssuesByCategory(title string, issues []detector.Issue, detailed bool) {
+func printIssuesByCategory(title string, issues []types.Issue, detailed bool) {
 	if len(issues) == 0 {
 		return
 	}
@@ -214,7 +210,7 @@ func printIssuesByCategory(title string, issues []detector.Issue, detailed bool)
 	}
 }
 
-func outputJSON(analysis *detector.Analysis, issues []detector.Issue) error {
+func outputJSON(analysis *detector.Analysis, issues []types.Issue) error {
 	result := map[string]interface{}{
 		"analysis": analysis,
 		"issues":   issues,
@@ -225,7 +221,7 @@ func outputJSON(analysis *detector.Analysis, issues []detector.Issue) error {
 	return encoder.Encode(result)
 }
 
-func outputYAML(analysis *detector.Analysis, issues []detector.Issue) error {
+func outputYAML(analysis *detector.Analysis, issues []types.Issue) error {
 	// For simplicity, output as JSON for now
 	// In a real implementation, you'd use a YAML library
 	return outputJSON(analysis, issues)
@@ -237,7 +233,7 @@ func filterAnalysisByLanguages(analysis *detector.Analysis, languages []string) 
 	filtered := *analysis
 	filtered.DetectedLanguages = filterStringSlice(analysis.DetectedLanguages, languages)
 
-	var filteredLibs []detector.Library
+	var filteredLibs []types.Library
 	for _, lib := range analysis.Libraries {
 		if containsString(languages, lib.Language) {
 			filteredLibs = append(filteredLibs, lib)
@@ -248,8 +244,8 @@ func filterAnalysisByLanguages(analysis *detector.Analysis, languages []string) 
 	return &filtered
 }
 
-func filterIssuesByLanguages(issues []detector.Issue, languages []string) []detector.Issue {
-	var filtered []detector.Issue
+func filterIssuesByLanguages(issues []types.Issue, languages []string) []types.Issue {
+	var filtered []types.Issue
 	for _, issue := range issues {
 		// Include issues with no language specified (general issues)
 		if issue.Language == "" || containsString(languages, issue.Language) {
@@ -259,8 +255,8 @@ func filterIssuesByLanguages(issues []detector.Issue, languages []string) []dete
 	return filtered
 }
 
-func filterIssuesByCategories(issues []detector.Issue, categories []string) []detector.Issue {
-	var filtered []detector.Issue
+func filterIssuesByCategories(issues []types.Issue, categories []string) []types.Issue {
+	var filtered []types.Issue
 	for _, issue := range issues {
 		if containsString(categories, string(issue.Category)) {
 			filtered = append(filtered, issue)
@@ -269,8 +265,8 @@ func filterIssuesByCategories(issues []detector.Issue, categories []string) []de
 	return filtered
 }
 
-func filterIssuesBySeverity(issues []detector.Issue, severity detector.Severity) []detector.Issue {
-	var filtered []detector.Issue
+func filterIssuesBySeverity(issues []types.Issue, severity types.Severity) []types.Issue {
+	var filtered []types.Issue
 	for _, issue := range issues {
 		if issue.Severity == severity {
 			filtered = append(filtered, issue)

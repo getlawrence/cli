@@ -4,103 +4,22 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"strings"
+
+	"github.com/getlawrence/cli/internal/detector/types"
 )
 
 // Language represents a programming language detector
 type Language interface {
 	// Name returns the language name
 	Name() string
-	// Detect checks if files in the path use this language
-	Detect(ctx context.Context, rootPath string) (bool, error)
 	// GetOTelLibraries finds OpenTelemetry libraries used in the codebase
-	GetOTelLibraries(ctx context.Context, rootPath string) ([]Library, error)
+	GetOTelLibraries(ctx context.Context, rootPath string) ([]types.Library, error)
 	// GetAllPackages finds all packages/dependencies used in the codebase
-	GetAllPackages(ctx context.Context, rootPath string) ([]Package, error)
+	GetAllPackages(ctx context.Context, rootPath string) ([]types.Package, error)
 	// GetFilePatterns returns file patterns this language detector should scan
 	GetFilePatterns() []string
 }
-
-// Library represents an OpenTelemetry library or package
-type Library struct {
-	Name        string `json:"name"`
-	Version     string `json:"version,omitempty"`
-	Language    string `json:"language"`
-	ImportPath  string `json:"import_path,omitempty"`
-	PackageFile string `json:"package_file,omitempty"`
-}
-
-// Package represents a regular package/dependency
-type Package struct {
-	Name        string `json:"name"`
-	Version     string `json:"version,omitempty"`
-	Language    string `json:"language"`
-	ImportPath  string `json:"import_path,omitempty"`
-	PackageFile string `json:"package_file,omitempty"`
-}
-
-// InstrumentationInfo represents available instrumentation for a package
-type InstrumentationInfo struct {
-	Package      Package  `json:"package"`
-	Title        string   `json:"title"`
-	Description  string   `json:"description"`
-	RegistryType string   `json:"registry_type"`
-	Language     string   `json:"language"`
-	Tags         []string `json:"tags,omitempty"`
-	License      string   `json:"license,omitempty"`
-	Authors      []Author `json:"authors,omitempty"`
-	URLs         URLs     `json:"urls,omitempty"`
-	CreatedAt    string   `json:"created_at,omitempty"`
-	IsFirstParty bool     `json:"is_first_party"`
-	IsAvailable  bool     `json:"is_available"`
-	RegistryURL  string   `json:"registry_url,omitempty"`
-}
-
-// Author represents an author in instrumentation metadata
-type Author struct {
-	Name string `json:"name"`
-}
-
-// URLs represents URLs in instrumentation metadata
-type URLs struct {
-	Repo string `json:"repo,omitempty"`
-}
-
-// Issue represents a detected problem or recommendation
-type Issue struct {
-	ID          string   `json:"id"`
-	Title       string   `json:"title"`
-	Description string   `json:"description"`
-	Severity    Severity `json:"severity"`
-	Category    Category `json:"category"`
-	Language    string   `json:"language,omitempty"`
-	File        string   `json:"file,omitempty"`
-	Line        int      `json:"line,omitempty"`
-	Column      int      `json:"column,omitempty"`
-	Suggestion  string   `json:"suggestion,omitempty"`
-	References  []string `json:"references,omitempty"`
-}
-
-// Severity levels for issues
-type Severity string
-
-const (
-	SeverityError   Severity = "error"
-	SeverityWarning Severity = "warning"
-	SeverityInfo    Severity = "info"
-)
-
-// Category represents the type of issue
-type Category string
-
-const (
-	CategoryMissingLibrary  Category = "missing_library"
-	CategoryConfiguration   Category = "configuration"
-	CategoryInstrumentation Category = "instrumentation"
-	CategoryPerformance     Category = "performance"
-	CategorySecurity        Category = "security"
-	CategoryBestPractice    Category = "best_practice"
-	CategoryDeprecated      Category = "deprecated"
-)
 
 // IssueDetector defines how to detect specific issues
 type IssueDetector interface {
@@ -111,87 +30,135 @@ type IssueDetector interface {
 	// Description returns what this detector looks for
 	Description() string
 	// Category returns the issue category
-	Category() Category
+	Category() types.Category
 	// Languages returns which languages this detector applies to (empty = all)
 	Languages() []string
 	// Detect finds issues in the given context
-	Detect(ctx context.Context, analysis *Analysis) ([]Issue, error)
+	Detect(ctx context.Context, analysis *Analysis) ([]types.Issue, error)
 }
 
 // Analysis contains the results of language detection and library discovery
 type Analysis struct {
-	RootPath                  string                `json:"root_path"`
-	DetectedLanguages         []string              `json:"detected_languages"`
-	Libraries                 []Library             `json:"libraries"`
-	Packages                  []Package             `json:"packages"`
-	AvailableInstrumentations []InstrumentationInfo `json:"available_instrumentations"`
-	FilesByLanguage           map[string][]string   `json:"files_by_language"`
+	RootPath                  string                      `json:"root_path"`
+	DetectedLanguages         []string                    `json:"detected_languages"`
+	Libraries                 []types.Library             `json:"libraries"`
+	Packages                  []types.Package             `json:"packages"`
+	AvailableInstrumentations []types.InstrumentationInfo `json:"available_instrumentations"`
 }
 
-// Manager coordinates the detection process
-type Manager struct {
-	languages []Language
-	detectors []IssueDetector
+// CodebaseAnalyzer coordinates the detection process
+type CodebaseAnalyzer struct {
+	detectors         []IssueDetector
+	languageDetectors map[string]Language
 }
 
-// NewManager creates a new detection manager
-func NewManager() *Manager {
-	return &Manager{
-		languages: make([]Language, 0),
-		detectors: make([]IssueDetector, 0),
+// NewCodebaseAnalyzer creates a new analysis engine
+func NewCodebaseAnalyzer(detectors []IssueDetector, languages map[string]Language) *CodebaseAnalyzer {
+	return &CodebaseAnalyzer{
+		detectors:         detectors,
+		languageDetectors: languages,
 	}
-}
-
-// RegisterLanguage adds a language detector
-func (m *Manager) RegisterLanguage(lang Language) {
-	m.languages = append(m.languages, lang)
-}
-
-// RegisterDetector adds an issue detector
-func (m *Manager) RegisterDetector(detector IssueDetector) {
-	m.detectors = append(m.detectors, detector)
 }
 
 // AnalyzeCodebase performs the full analysis
-func (m *Manager) AnalyzeCodebase(ctx context.Context, rootPath string) (*Analysis, []Issue, error) {
+func (ca *CodebaseAnalyzer) AnalyzeCodebase(ctx context.Context, rootPath string) (*Analysis, []types.Issue, error) {
 	analysis := &Analysis{
-		RootPath:        rootPath,
-		FilesByLanguage: make(map[string][]string),
+		RootPath: rootPath,
 	}
 
-	// Detect languages
-	for _, lang := range m.languages {
-		detected, err := lang.Detect(ctx, rootPath)
-		if err != nil {
-			return nil, nil, err
-		}
-		if detected {
-			analysis.DetectedLanguages = append(analysis.DetectedLanguages, lang.Name())
+	// Use the enhanced language detection to get directory-specific languages
+	directoryLanguages, err := DetectLanguages(rootPath)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to detect languages: %w", err)
+	}
 
-			// Get OTel libraries for this language
-			libs, err := lang.GetOTelLibraries(ctx, rootPath)
-			if err != nil {
-				return nil, nil, err
-			}
-			analysis.Libraries = append(analysis.Libraries, libs...)
-
-			// Get all packages for this language
-			packages, err := lang.GetAllPackages(ctx, rootPath)
-			if err != nil {
-				return nil, nil, err
-			}
-			analysis.Packages = append(analysis.Packages, packages...)
-
-			// Collect files for this language
-			files, err := m.getFilesForLanguage(rootPath, lang)
-			if err != nil {
-				return nil, nil, err
-			}
-			analysis.FilesByLanguage[lang.Name()] = files
-		}
+	// Process languages and collect data
+	err = ca.processDirectoryLanguages(ctx, rootPath, directoryLanguages, analysis)
+	if err != nil {
+		return nil, nil, err
 	}
 
 	// Check for available instrumentations
+	err = ca.populateInstrumentations(ctx, analysis)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// Run issue detectors
+	allIssues, err := ca.runIssueDetectors(ctx, analysis)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return analysis, allIssues, nil
+}
+
+// processDirectoryLanguages processes each directory with its detected language
+func (ca *CodebaseAnalyzer) processDirectoryLanguages(ctx context.Context, rootPath string, directoryLanguages map[string]string, analysis *Analysis) error {
+	// Track which languages we've seen to avoid duplicates
+	seenLanguages := make(map[string]bool)
+
+	// Process each directory with its detected language
+	for directory, language := range directoryLanguages {
+		languageDetector := ca.findLanguageDetector(language)
+		if languageDetector == nil {
+			// Skip if we don't have a detector for this language
+			continue
+		}
+
+		// Calculate the full path for this directory
+		dirPath := ca.calculateDirectoryPath(rootPath, directory)
+
+		// Only process each language once, but collect all directories
+		if !seenLanguages[language] {
+			seenLanguages[language] = true
+			analysis.DetectedLanguages = append(analysis.DetectedLanguages, language)
+
+			// Get OTel libraries for this language from the specific directory
+			err := ca.collectLibrariesAndPackages(ctx, dirPath, language, languageDetector, analysis)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// findLanguageDetector finds the corresponding language detector for a language name
+func (ca *CodebaseAnalyzer) findLanguageDetector(language string) Language {
+	language = strings.ToLower(language)
+	return ca.languageDetectors[language]
+}
+
+// calculateDirectoryPath calculates the full path for a directory
+func (ca *CodebaseAnalyzer) calculateDirectoryPath(rootPath, directory string) string {
+	if directory == "root" {
+		return rootPath
+	}
+	return filepath.Join(rootPath, directory)
+}
+
+// collectLibrariesAndPackages collects OTel libraries and packages for a language
+func (ca *CodebaseAnalyzer) collectLibrariesAndPackages(ctx context.Context, dirPath, language string, languageDetector Language, analysis *Analysis) error {
+	// Get OTel libraries for this language from the specific directory
+	libs, err := languageDetector.GetOTelLibraries(ctx, dirPath)
+	if err != nil {
+		return fmt.Errorf("failed to get OTel libraries for %s in %s: %w", language, dirPath, err)
+	}
+	analysis.Libraries = append(analysis.Libraries, libs...)
+
+	// Get all packages for this language from the specific directory
+	packages, err := languageDetector.GetAllPackages(ctx, dirPath)
+	if err != nil {
+		return fmt.Errorf("failed to get packages for %s in %s: %w", language, dirPath, err)
+	}
+	analysis.Packages = append(analysis.Packages, packages...)
+
+	return nil
+}
+
+// populateInstrumentations checks for available instrumentations
+func (ca *CodebaseAnalyzer) populateInstrumentations(ctx context.Context, analysis *Analysis) error {
 	instrumentationService := NewInstrumentationRegistryService()
 	seenInstrumentations := make(map[string]bool)
 
@@ -211,40 +178,28 @@ func (m *Manager) AnalyzeCodebase(ctx context.Context, rootPath string) (*Analys
 		}
 	}
 
-	// Run issue detectors
-	var allIssues []Issue
-	for _, detector := range m.detectors {
+	return nil
+}
+
+// runIssueDetectors runs all registered issue detectors
+func (ca *CodebaseAnalyzer) runIssueDetectors(ctx context.Context, analysis *Analysis) ([]types.Issue, error) {
+	var allIssues []types.Issue
+	for _, detector := range ca.detectors {
 		// Check if detector applies to detected languages
-		if m.detectorApplies(detector, analysis.DetectedLanguages) {
+		if ca.detectorApplies(detector, analysis.DetectedLanguages) {
 			issues, err := detector.Detect(ctx, analysis)
 			if err != nil {
-				return nil, nil, err
+				return nil, err
 			}
 			allIssues = append(allIssues, issues...)
 		}
 	}
 
-	return analysis, allIssues, nil
-}
-
-// getFilesForLanguage collects files that match the language patterns
-func (m *Manager) getFilesForLanguage(rootPath string, lang Language) ([]string, error) {
-	var files []string
-	patterns := lang.GetFilePatterns()
-
-	for _, pattern := range patterns {
-		matches, err := filepath.Glob(filepath.Join(rootPath, pattern))
-		if err != nil {
-			return nil, err
-		}
-		files = append(files, matches...)
-	}
-
-	return files, nil
+	return allIssues, nil
 }
 
 // detectorApplies checks if a detector should run for the detected languages
-func (m *Manager) detectorApplies(detector IssueDetector, detectedLanguages []string) bool {
+func (ca *CodebaseAnalyzer) detectorApplies(detector IssueDetector, detectedLanguages []string) bool {
 	detectorLangs := detector.Languages()
 
 	// If detector doesn't specify languages, it applies to all

@@ -1,0 +1,210 @@
+package main
+
+import (
+	"context"
+	"log"
+	"os"
+	"time"
+
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
+	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/resource"
+	"go.opentelemetry.io/otel/sdk/trace"
+	semconv "go.opentelemetry.io/otel/semconv/v1.21.0"
+{{range .Instrumentations}}
+{{if eq . "otelhttp"}}	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"{{end}}
+{{if eq . "otelgin"}}	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"{{end}}
+{{if eq . "otelmux"}}	"go.opentelemetry.io/contrib/instrumentation/github.com/gorilla/mux/otelmux"{{end}}
+{{if eq . "otelsql"}}	"go.opentelemetry.io/contrib/instrumentation/database/sql/otelsql"{{end}}
+{{if eq . "otelgrpc"}}	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"{{end}}
+{{if eq . "otelredis"}}	"go.opentelemetry.io/contrib/instrumentation/github.com/go-redis/redis/v8/otelredis"{{end}}
+{{end}}
+)
+
+// OTELConfig holds the configuration for OpenTelemetry
+type OTELConfig struct {
+	ServiceName     string
+	ServiceVersion  string
+	Environment     string
+	ExporterURL     string
+	SamplingRatio   float64
+}
+
+// NewOTELConfig creates a new OTEL configuration with defaults
+func NewOTELConfig() *OTELConfig {
+	return &OTELConfig{
+		ServiceName:     getEnvOrDefault("OTEL_SERVICE_NAME", "{{.ServiceName}}"),
+		ServiceVersion:  getEnvOrDefault("OTEL_SERVICE_VERSION", "1.0.0"),
+		Environment:     getEnvOrDefault("OTEL_ENVIRONMENT", "development"),
+		ExporterURL:     getEnvOrDefault("OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4318"),
+		SamplingRatio:   1.0, // Sample all traces by default
+	}
+}
+
+// InitializeOTEL sets up OpenTelemetry tracing
+func InitializeOTEL(config *OTELConfig) (*trace.TracerProvider, error) {
+	// Create resource with service information
+	res, err := resource.Merge(
+		resource.Default(),
+		resource.NewWithAttributes(
+			semconv.SchemaURL,
+			semconv.ServiceNameKey.String(config.ServiceName),
+			semconv.ServiceVersionKey.String(config.ServiceVersion),
+			semconv.DeploymentEnvironmentKey.String(config.Environment),
+		),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	// Create OTLP HTTP exporter
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	exporter, err := otlptracehttp.New(ctx,
+		otlptracehttp.WithEndpoint(config.ExporterURL),
+		otlptracehttp.WithInsecure(), // Use secure connection in production
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	// Create tracer provider
+	tp := trace.NewTracerProvider(
+		trace.WithBatcher(exporter),
+		trace.WithResource(res),
+		trace.WithSampler(trace.TraceIDRatioBased(config.SamplingRatio)),
+	)
+
+	// Set global tracer provider
+	otel.SetTracerProvider(tp)
+
+	// Set global text map propagator
+	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
+		propagation.TraceContext{},
+		propagation.Baggage{},
+	))
+
+	return tp, nil
+}
+
+// ShutdownOTEL gracefully shuts down the tracer provider
+func ShutdownOTEL(tp *trace.TracerProvider) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	return tp.Shutdown(ctx)
+}
+
+{{if .InstallOTEL}}
+// SetupOTEL initializes OpenTelemetry for the {{.ServiceName}} service
+func SetupOTEL() (*trace.TracerProvider, error) {
+	config := NewOTELConfig()
+	tp, err := InitializeOTEL(config)
+	if err != nil {
+		log.Printf("Failed to initialize OpenTelemetry: %v", err)
+		return nil, err
+	}
+
+	log.Printf("OpenTelemetry initialized for service: %s", config.ServiceName)
+	return tp, nil
+}
+{{end}}
+
+{{range .Instrumentations}}
+{{if eq . "otelhttp"}}
+// WrapHTTPHandler wraps an HTTP handler with OpenTelemetry instrumentation
+func WrapHTTPHandler(handler http.Handler, operationName string) http.Handler {
+	return otelhttp.NewHandler(handler, operationName)
+}
+
+// WrapHTTPHandlerFunc wraps an HTTP handler function with OpenTelemetry instrumentation
+func WrapHTTPHandlerFunc(handlerFunc http.HandlerFunc, operationName string) http.Handler {
+	return otelhttp.NewHandler(handlerFunc, operationName)
+}
+{{end}}
+
+{{if eq . "otelgin"}}
+// SetupGinMiddleware configures Gin middleware for OpenTelemetry
+func SetupGinMiddleware(router *gin.Engine) {
+	router.Use(otelgin.Middleware("{{$.ServiceName}}"))
+}
+{{end}}
+
+{{if eq . "otelmux"}}
+// SetupMuxMiddleware configures Gorilla Mux middleware for OpenTelemetry
+func SetupMuxMiddleware(router *mux.Router) {
+	router.Use(otelmux.Middleware("{{$.ServiceName}}"))
+}
+{{end}}
+
+{{if eq . "otelsql"}}
+// WrapSQLDriver wraps a SQL driver with OpenTelemetry instrumentation
+func WrapSQLDriver(driverName, dataSourceName string) (*sql.DB, error) {
+	return otelsql.Open(driverName, dataSourceName, otelsql.WithAttributes(
+		semconv.DBSystemKey.String(driverName),
+	))
+}
+{{end}}
+
+{{if eq . "otelgrpc"}}
+// SetupGRPCClientInterceptors returns gRPC client interceptors with OpenTelemetry
+func SetupGRPCClientInterceptors() []grpc.DialOption {
+	return []grpc.DialOption{
+		grpc.WithUnaryInterceptor(otelgrpc.UnaryClientInterceptor()),
+		grpc.WithStreamInterceptor(otelgrpc.StreamClientInterceptor()),
+	}
+}
+
+// SetupGRPCServerInterceptors returns gRPC server interceptors with OpenTelemetry
+func SetupGRPCServerInterceptors() []grpc.ServerOption {
+	return []grpc.ServerOption{
+		grpc.UnaryInterceptor(otelgrpc.UnaryServerInterceptor()),
+		grpc.StreamInterceptor(otelgrpc.StreamServerInterceptor()),
+	}
+}
+{{end}}
+
+{{if eq . "otelredis"}}
+// WrapRedisClient wraps a Redis client with OpenTelemetry instrumentation
+func WrapRedisClient(client *redis.Client) *redis.Client {
+	client.AddHook(otelredis.NewTracingHook())
+	return client
+}
+{{end}}
+{{end}}
+
+// getEnvOrDefault returns the value of an environment variable or a default value
+func getEnvOrDefault(key, defaultValue string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return defaultValue
+}
+
+{{if .InstallOTEL}}
+// Example usage:
+//
+// func main() {
+//     // Initialize OpenTelemetry
+//     tp, err := SetupOTEL()
+//     if err != nil {
+//         log.Fatal("Failed to setup OpenTelemetry:", err)
+//     }
+//     defer func() {
+//         if err := ShutdownOTEL(tp); err != nil {
+//             log.Printf("Error shutting down OpenTelemetry: %v", err)
+//         }
+//     }()
+//
+//     // Your application code here
+//     {{range .Instrumentations}}
+//     {{if eq . "otelhttp"}}// Use WrapHTTPHandler or WrapHTTPHandlerFunc for HTTP instrumentation{{end}}
+//     {{if eq . "otelgin"}}// Use SetupGinMiddleware for Gin instrumentation{{end}}
+//     {{if eq . "otelmux"}}// Use SetupMuxMiddleware for Gorilla Mux instrumentation{{end}}
+//     {{if eq . "otelsql"}}// Use WrapSQLDriver for SQL instrumentation{{end}}
+//     {{if eq . "otelgrpc"}}// Use SetupGRPCClientInterceptors/SetupGRPCServerInterceptors for gRPC instrumentation{{end}}
+//     {{if eq . "otelredis"}}// Use WrapRedisClient for Redis instrumentation{{end}}
+//     {{end}}
+// }
+{{end}}
