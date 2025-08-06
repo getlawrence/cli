@@ -82,7 +82,7 @@ func (g *Generator) GenerateInstrumentation(ctx context.Context, req GenerationR
 	}
 
 	if len(opportunities) == 0 {
-		fmt.Println("No code generation opportunities found")
+		fmt.Println("GenerateInstrumentation: No code generation opportunities found")
 		return nil
 	}
 
@@ -165,17 +165,16 @@ func (g *Generator) convertIssuesToOpportunities(analysis *detector.Analysis, is
 	for _, issue := range issues {
 		// Convert specific issue types to opportunities
 		switch issue.Category {
-		case types.CategoryMissingLibrary, types.CategoryInstrumentation:
+		case types.CategoryMissingLibrary:
+		case types.CategoryInstrumentation:
 			opp := Opportunity{
 				Language:   issue.Language,
 				FilePath:   issue.File,
 				Suggestion: issue.Suggestion,
 				Issue:      &issue,
 			}
-
 			// Extract instrumentations from available instrumentations
 			opp.Instrumentations = g.extractRelevantInstrumentations(analysis, issue.Language)
-
 			opportunities = append(opportunities, opp)
 		}
 	}

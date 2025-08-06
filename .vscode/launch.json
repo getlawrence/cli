@@ -34,7 +34,7 @@
             "args": [
                 "codegen",
                 "--path",
-                "${workspaceFolder}/examples/python-sample",
+                "${workspaceFolder}/examples/go-sample",
             ],
             "env": {
                 "GO111MODULE": "on"

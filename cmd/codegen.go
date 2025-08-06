@@ -81,7 +81,6 @@ func runCodegen(cmd *cobra.Command, args []string) error {
 
 	// Create detection manager
 	manager := detector.NewManager([]detector.IssueDetector{
-		detector.NewCodeGenDetector(),
 		issues.NewMissingOTelDetector(),
 	}, map[string]detector.Language{
 		"go":     languages.NewGoDetector(),

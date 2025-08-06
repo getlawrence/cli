@@ -55,6 +55,7 @@ func (m *MissingOTelDetector) Detect(ctx context.Context, analysis *detector.Ana
 			Severity:    types.SeverityWarning,
 			Category:    m.Category(),
 			Suggestion:  "Consider adding OpenTelemetry instrumentation to gain observability into your application",
+			Language:    analysis.DetectedLanguages[0],
 			References: []string{
 				"https://opentelemetry.io/docs/instrumentation/",
 				"https://opentelemetry.io/docs/getting-started/",

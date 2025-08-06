@@ -44,7 +44,6 @@ type Analysis struct {
 	Libraries                 []types.Library             `json:"libraries"`
 	Packages                  []types.Package             `json:"packages"`
 	AvailableInstrumentations []types.InstrumentationInfo `json:"available_instrumentations"`
-	FilesByLanguage           map[string][]string         `json:"files_by_language"`
 }
 
 // Manager coordinates the detection process
@@ -64,8 +63,7 @@ func NewManager(detectors []IssueDetector, languages map[string]Language) *Manag
 // AnalyzeCodebase performs the full analysis
 func (m *Manager) AnalyzeCodebase(ctx context.Context, rootPath string) (*Analysis, []types.Issue, error) {
 	analysis := &Analysis{
-		RootPath:        rootPath,
-		FilesByLanguage: make(map[string][]string),
+		RootPath: rootPath,
 	}
 
 	// Use the enhanced language detection to get directory-specific languages
@@ -122,12 +120,6 @@ func (m *Manager) processDirectoryLanguages(ctx context.Context, rootPath string
 				return err
 			}
 		}
-
-		// Always collect files for each directory, regardless of whether we've seen the language
-		err := m.collectFilesForLanguage(dirPath, language, languageDetector, analysis)
-		if err != nil {
-			return err
-		}
 	}
 	return nil
 }
@@ -161,22 +153,6 @@ func (m *Manager) collectLibrariesAndPackages(ctx context.Context, dirPath, lang
 		return fmt.Errorf("failed to get packages for %s in %s: %w", language, dirPath, err)
 	}
 	analysis.Packages = append(analysis.Packages, packages...)
-
-	return nil
-}
-
-// collectFilesForLanguage collects files for a specific language and directory
-func (m *Manager) collectFilesForLanguage(dirPath, language string, languageDetector Language, analysis *Analysis) error {
-	files, err := m.getFilesForLanguage(dirPath, languageDetector)
-	if err != nil {
-		return fmt.Errorf("failed to get files for %s in %s: %w", language, dirPath, err)
-	}
-
-	// Append to existing files for this language
-	if analysis.FilesByLanguage[language] == nil {
-		analysis.FilesByLanguage[language] = make([]string, 0)
-	}
-	analysis.FilesByLanguage[language] = append(analysis.FilesByLanguage[language], files...)
 
 	return nil
 }
@@ -220,22 +196,6 @@ func (m *Manager) runIssueDetectors(ctx context.Context, analysis *Analysis) ([]
 	}
 
 	return allIssues, nil
-}
-
-// getFilesForLanguage collects files that match the language patterns
-func (m *Manager) getFilesForLanguage(rootPath string, lang Language) ([]string, error) {
-	var files []string
-	patterns := lang.GetFilePatterns()
-
-	for _, pattern := range patterns {
-		matches, err := filepath.Glob(filepath.Join(rootPath, pattern))
-		if err != nil {
-			return nil, err
-		}
-		files = append(files, matches...)
-	}
-
-	return files, nil
 }
 
 // detectorApplies checks if a detector should run for the detected languages

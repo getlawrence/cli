@@ -46,7 +46,7 @@ func (s *TemplateGenerationStrategy) GetRequiredFlags() []string {
 // GenerateCode generates code directly using templates
 func (s *TemplateGenerationStrategy) GenerateCode(ctx context.Context, opportunities []Opportunity, req GenerationRequest) error {
 	if len(opportunities) == 0 {
-		fmt.Println("No code generation opportunities found")
+		fmt.Println("GenerateCode: No code generation opportunities found")
 		return nil
 	}
 
