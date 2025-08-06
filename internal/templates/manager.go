@@ -25,10 +25,9 @@ type TemplateData struct {
 	Method           InstallationMethod `json:"method"`
 	Instrumentations []string           `json:"instrumentations"`
 	ServiceName      string             `json:"service_name"`
-	// Future expansion fields
-	Samplers       []string `json:"samplers,omitempty"`
-	ContextProps   []string `json:"context_props,omitempty"`
-	SpanProcessors []string `json:"span_processors,omitempty"`
+	Samplers         []string           `json:"samplers,omitempty"`
+	ContextProps     []string           `json:"context_props,omitempty"`
+	SpanProcessors   []string           `json:"span_processors,omitempty"`
 }
 
 // AgentPromptData contains all data needed for agent prompt generation

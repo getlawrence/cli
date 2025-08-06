@@ -70,12 +70,32 @@ func runAnalyze(cmd *cobra.Command, args []string) error {
 		fmt.Printf("Analyzing codebase at: %s\n", absPath)
 	}
 
-	// Create detection manager and register detectors
+	// Create detection manager
 	manager := detector.NewManager()
 
-	// Register language detectors
-	manager.RegisterLanguage(languages.NewGoDetector())
-	manager.RegisterLanguage(languages.NewPythonDetector())
+	// Detect languages first to determine which detectors to register
+	detectedLanguages, err := detector.DetectLanguages(absPath)
+	if err != nil {
+		return fmt.Errorf("failed to detect languages: %w", err)
+	}
+
+	fmt.Printf("Detected languages: %v\n", detectedLanguages)
+
+	// Register language detectors based on detected languages
+	languageSet := make(map[string]bool)
+	for _, lang := range detectedLanguages {
+		languageSet[strings.ToLower(lang)] = true
+	}
+
+	// Register appropriate language detectors
+	if languageSet["go"] {
+		manager.RegisterLanguage(languages.NewGoDetector())
+		fmt.Println("Registered Go detector")
+	}
+	if languageSet["python"] {
+		manager.RegisterLanguage(languages.NewPythonDetector())
+		fmt.Println("Registered Python detector")
+	}
 
 	// Register issue detectors
 	manager.RegisterDetector(issues.NewMissingOTelDetector())

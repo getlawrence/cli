@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	"github.com/getlawrence/cli/internal/agents"
@@ -56,12 +57,44 @@ func init() {
 func runCodegen(cmd *cobra.Command, args []string) error {
 	ctx := context.Background()
 
-	// Initialize detector manager with all detectors including codegen
+	// Get target path
+	targetPath := "."
+	if len(args) > 0 {
+		targetPath = args[0]
+	}
+
+	// Convert to absolute path
+	absPath, err := filepath.Abs(targetPath)
+	if err != nil {
+		return fmt.Errorf("failed to resolve path: %w", err)
+	}
+
+	// Initialize detector manager
 	detectorMgr := detector.NewManager()
 
-	// Register language detectors
-	detectorMgr.RegisterLanguage(languages.NewGoDetector())
-	detectorMgr.RegisterLanguage(languages.NewPythonDetector())
+	// Detect languages first to determine which detectors to register
+	detectedLanguages, err := detector.DetectLanguages(absPath)
+	if err != nil {
+		return fmt.Errorf("failed to detect languages: %w", err)
+	}
+
+	fmt.Printf("Detected languages: %v\n", detectedLanguages)
+
+	// Register language detectors based on detected languages
+	languageSet := make(map[string]bool)
+	for _, lang := range detectedLanguages {
+		languageSet[strings.ToLower(lang)] = true
+	}
+
+	// Register appropriate language detectors
+	if languageSet["go"] {
+		detectorMgr.RegisterLanguage(languages.NewGoDetector())
+		fmt.Println("Registered Go detector")
+	}
+	if languageSet["python"] {
+		detectorMgr.RegisterLanguage(languages.NewPythonDetector())
+		fmt.Println("Registered Python detector")
+	}
 
 	// Register the codegen detector
 	detectorMgr.RegisterDetector(detector.NewCodeGenDetector())
