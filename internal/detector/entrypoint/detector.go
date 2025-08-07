@@ -53,6 +53,7 @@ func NewTreeSitterEntryDetector() *TreeSitterEntryDetector {
 }
 
 // DetectEntryPoints finds entry points in the specified language
+// Returns one entry point per directory to keep things simple
 func (d *TreeSitterEntryDetector) DetectEntryPoints(projectPath, language string) ([]domain.EntryPoint, error) {
 	lang, exists := d.languages[language]
 	if !exists {
@@ -64,7 +65,17 @@ func (d *TreeSitterEntryDetector) DetectEntryPoints(projectPath, language string
 		return nil, fmt.Errorf("no query defined for language: %s", language)
 	}
 
-	var entryPoints []domain.EntryPoint
+	dirEntryPoints, err := d.collectEntryPointsByDirectory(projectPath, lang, query, language)
+	if err != nil {
+		return nil, err
+	}
+
+	return d.convertMapToSlice(dirEntryPoints), nil
+}
+
+// collectEntryPointsByDirectory walks through the project and collects the best entry point per directory
+func (d *TreeSitterEntryDetector) collectEntryPointsByDirectory(projectPath string, lang *sitter.Language, query, language string) (map[string]domain.EntryPoint, error) {
+	dirEntryPoints := make(map[string]domain.EntryPoint)
 	fileExtensions := d.getFileExtensions(language)
 
 	err := filepath.Walk(projectPath, func(path string, info os.FileInfo, err error) error {
@@ -76,18 +87,43 @@ func (d *TreeSitterEntryDetector) DetectEntryPoints(projectPath, language string
 			return nil
 		}
 
-		entries, err := d.analyzeFile(path, lang, query, language)
-		if err != nil {
-			// Log error but continue with other files
-			fmt.Printf("Warning: Could not analyze %s: %v\n", path, err)
-			return nil
-		}
-
-		entryPoints = append(entryPoints, entries...)
-		return nil
+		return d.processFileForEntryPoints(path, lang, query, language, dirEntryPoints)
 	})
 
-	return entryPoints, err
+	return dirEntryPoints, err
+}
+
+// processFileForEntryPoints analyzes a file and updates the directory entry points map
+func (d *TreeSitterEntryDetector) processFileForEntryPoints(path string, lang *sitter.Language, query, language string, dirEntryPoints map[string]domain.EntryPoint) error {
+	entries, err := d.analyzeFile(path, lang, query, language)
+	if err != nil {
+		fmt.Printf("Warning: Could not analyze %s: %v\n", path, err)
+		return nil
+	}
+
+	for _, entry := range entries {
+		d.updateBestEntryPointForDirectory(entry, dirEntryPoints)
+	}
+
+	return nil
+}
+
+// updateBestEntryPointForDirectory updates the entry point for a directory if the new one has higher confidence
+func (d *TreeSitterEntryDetector) updateBestEntryPointForDirectory(entry domain.EntryPoint, dirEntryPoints map[string]domain.EntryPoint) {
+	dir := filepath.Dir(entry.FilePath)
+
+	if existing, exists := dirEntryPoints[dir]; !exists || entry.Confidence > existing.Confidence {
+		dirEntryPoints[dir] = entry
+	}
+}
+
+// convertMapToSlice converts the directory entry points map to a slice
+func (d *TreeSitterEntryDetector) convertMapToSlice(dirEntryPoints map[string]domain.EntryPoint) []domain.EntryPoint {
+	var entryPoints []domain.EntryPoint
+	for _, entryPoint := range dirEntryPoints {
+		entryPoints = append(entryPoints, entryPoint)
+	}
+	return entryPoints
 }
 
 // analyzeFile parses a single file and extracts entry points
