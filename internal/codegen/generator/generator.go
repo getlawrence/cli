@@ -5,6 +5,8 @@ import (
 	"fmt"
 
 	"github.com/getlawrence/cli/internal/agents"
+	"github.com/getlawrence/cli/internal/codegen/generator/agent"
+	"github.com/getlawrence/cli/internal/codegen/generator/template"
 	"github.com/getlawrence/cli/internal/codegen/types"
 	"github.com/getlawrence/cli/internal/detector"
 	"github.com/getlawrence/cli/internal/domain"
@@ -34,8 +36,8 @@ func NewGenerator(codebaseAnalyzer *detector.CodebaseAnalyzer) (*Generator, erro
 
 	// Initialize strategies
 	strategies := make(map[types.GenerationMode]types.CodeGenerationStrategy)
-	strategies[types.AIMode] = NewAIGenerationStrategy(agentDetector, templateEngine)
-	strategies[types.TemplateMode] = NewTemplateGenerationStrategy(templateEngine)
+	strategies[types.AIMode] = agent.NewAIGenerationStrategy(agentDetector, templateEngine)
+	strategies[types.TemplateMode] = template.NewTemplateGenerationStrategy(templateEngine)
 	defaultStrategy := types.TemplateMode
 
 	return &Generator{
