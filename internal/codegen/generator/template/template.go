@@ -207,6 +207,12 @@ func (s *TemplateGenerationStrategy) determineOutputDirectory(req types.Generati
 	if req.Config.OutputDirectory != "" {
 		outputDir = req.Config.OutputDirectory
 	}
+
+	// Handle the "root" directory case - don't append it as a subdirectory
+	if directory == "root" {
+		return outputDir
+	}
+
 	return filepath.Join(outputDir, directory)
 }
 
