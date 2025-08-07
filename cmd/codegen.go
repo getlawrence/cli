@@ -5,12 +5,11 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/getlawrence/cli/internal/agents"
 	"github.com/getlawrence/cli/internal/codegen/generator"
+	"github.com/getlawrence/cli/internal/codegen/types"
 	"github.com/getlawrence/cli/internal/detector"
 	"github.com/getlawrence/cli/internal/detector/issues"
 	"github.com/getlawrence/cli/internal/detector/languages"
-	"github.com/getlawrence/cli/internal/templates"
 	"github.com/spf13/cobra"
 )
 
@@ -107,9 +106,9 @@ func runCodegen(cmd *cobra.Command, args []string) error {
 	}
 
 	// Determine generation mode
-	mode := generator.GenerationMode(generationMode)
+	mode := types.GenerationMode(generationMode)
 	if mode == "" {
-		mode = types.GetDefaultStrategy()
+		mode = codeGenerator.GetDefaultStrategy()
 	}
 
 	// Validate mode
@@ -132,8 +131,8 @@ func runCodegen(cmd *cobra.Command, args []string) error {
 	req := types.GenerationRequest{
 		CodebasePath: codebasePath,
 		Language:     language,
-		Method:       templates.InstallationMethod(method),
-		AgentType:    agents.AgentType(agentType), // Deprecated field for backward compatibility
+		Method:       method,
+		AgentType:    agentType, // Deprecated field for backward compatibility
 		Config: types.StrategyConfig{
 			Mode:            mode,
 			AgentType:       agentType,
@@ -142,11 +141,11 @@ func runCodegen(cmd *cobra.Command, args []string) error {
 		},
 	}
 
-	return codetypes.Generate(ctx, req)
+	return codeGenerator.Generate(ctx, req)
 }
 
-func listAvailableAgents(generator *g.Generator) error {
-	agents := types.ListAvailableAgents()
+func listAvailableAgents(generator *generator.Generator) error {
+	agents := generator.ListAvailableAgents()
 
 	if len(agents) == 0 {
 		fmt.Println("No coding agents detected on your system")
@@ -166,8 +165,8 @@ func listAvailableAgents(generator *g.Generator) error {
 	return nil
 }
 
-func listAvailableTemplates(generator *types.Generator) error {
-	templates := types.ListAvailableTemplates()
+func listAvailableTemplates(generator *generator.Generator) error {
+	templates := generator.ListAvailableTemplates()
 
 	fmt.Println("Available templates:")
 	for _, template := range templates {
@@ -177,8 +176,8 @@ func listAvailableTemplates(generator *types.Generator) error {
 	return nil
 }
 
-func listAvailableStrategies(generator *types.Generator) error {
-	strategies := types.ListAvailableStrategies()
+func listAvailableStrategies(generator *generator.Generator) error {
+	strategies := generator.ListAvailableStrategies()
 
 	fmt.Println("Available generation strategies:")
 	for mode, available := range strategies {
@@ -189,7 +188,7 @@ func listAvailableStrategies(generator *types.Generator) error {
 		fmt.Printf("  %s - %s\n", mode, status)
 	}
 
-	fmt.Printf("\nDefault strategy: %s\n", types.GetDefaultStrategy())
+	fmt.Printf("\nDefault strategy: %s\n", generator.GetDefaultStrategy())
 
 	return nil
 }

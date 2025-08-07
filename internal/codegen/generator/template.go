@@ -125,8 +125,11 @@ func (s *TemplateGenerationStrategy) generateCodeForLanguage(language string, op
 }
 
 func (s *TemplateGenerationStrategy) generateGoCode(operationsData *types.OperationsData, req types.GenerationRequest, directory string) ([]string, error) {
+	// Convert string method to InstallationMethod
+	method := templates.InstallationMethod(req.Method)
+
 	// Generate based on method
-	switch req.Method {
+	switch method {
 	case templates.CodeInstrumentation:
 		return s.generateGoCodeInstrumentation(operationsData, req, directory)
 	case templates.AutoInstrumentation:
@@ -150,7 +153,7 @@ func (s *TemplateGenerationStrategy) generateGoCodeInstrumentation(operationsDat
 	// Create template data
 	data := templates.TemplateData{
 		Language:          "go",
-		Method:            req.Method,
+		Method:            templates.InstallationMethod(req.Method),
 		Instrumentations:  operationsData.InstallInstrumentations,
 		ServiceName:       serviceName,
 		InstallOTEL:       operationsData.InstallOTEL,
@@ -159,7 +162,7 @@ func (s *TemplateGenerationStrategy) generateGoCodeInstrumentation(operationsDat
 	}
 
 	// Generate code using template
-	code, err := s.templateEngine.GenerateInstructions("go", req.Method, data)
+	code, err := s.templateEngine.GenerateInstructions("go", templates.InstallationMethod(req.Method), data)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate Go code: %w", err)
 	}
@@ -204,7 +207,7 @@ func (s *TemplateGenerationStrategy) generateGoAutoInstrumentation(operationsDat
 	// Create template data
 	data := templates.TemplateData{
 		Language:          "go",
-		Method:            req.Method,
+		Method:            templates.InstallationMethod(req.Method),
 		Instrumentations:  operationsData.InstallInstrumentations,
 		ServiceName:       serviceName,
 		InstallOTEL:       operationsData.InstallOTEL,
@@ -213,7 +216,7 @@ func (s *TemplateGenerationStrategy) generateGoAutoInstrumentation(operationsDat
 	}
 
 	// Generate code using auto template
-	code, err := s.templateEngine.GenerateInstructions("go", req.Method, data)
+	code, err := s.templateEngine.GenerateInstructions("go", templates.InstallationMethod(req.Method), data)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate Go auto instrumentation: %w", err)
 	}
@@ -256,7 +259,7 @@ func (s *TemplateGenerationStrategy) generatePythonCode(operationsData *types.Op
 	// Create template data
 	data := templates.TemplateData{
 		Language:          "python",
-		Method:            req.Method,
+		Method:            templates.InstallationMethod(req.Method),
 		Instrumentations:  operationsData.InstallInstrumentations,
 		ServiceName:       serviceName,
 		InstallOTEL:       operationsData.InstallOTEL,
@@ -265,7 +268,7 @@ func (s *TemplateGenerationStrategy) generatePythonCode(operationsData *types.Op
 	}
 
 	// Generate code using template
-	code, err := s.templateEngine.GenerateInstructions("python", req.Method, data)
+	code, err := s.templateEngine.GenerateInstructions("python", templates.InstallationMethod(req.Method), data)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate Python code: %w", err)
 	}
