@@ -26,11 +26,11 @@ func (g *GoCodeGenerator) GetSupportedMethods() []templates.InstallationMethod {
 func (g *GoCodeGenerator) GetOutputFilename(method templates.InstallationMethod) string {
 	switch method {
 	case templates.CodeInstrumentation:
-		return "otel_instrumentation.go"
+		return "otel.go"
 	case templates.AutoInstrumentation:
 		return "otel_auto.go"
 	default:
-		return "otel_instrumentation.go"
+		return "otel.go"
 	}
 }
 
