@@ -364,39 +364,11 @@ func (ci *CodeInjector) getRequiredImports(operationsData *types.OperationsData,
 
 	switch config.Language {
 	case "Go":
-		imports = append(imports,
-			"context",
-			"log",
-			"go.opentelemetry.io/otel",
-			"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp",
-			"go.opentelemetry.io/otel/sdk/trace",
-		)
-
-		// Add instrumentation-specific imports
-		for _, instr := range operationsData.InstallInstrumentations {
-			switch instr {
-			case "otelhttp":
-				imports = append(imports, "go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp")
-			case "otelgin":
-				imports = append(imports, "go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin")
-			}
-		}
-
+		imports = append(imports, GetRequiredGoImports()...)
+		imports = append(imports, operationsData.InstallInstrumentations...)
 	case "Python":
-		imports = append(imports,
-			"opentelemetry.sdk.trace",
-			"opentelemetry.exporter.otlp.proto.http.trace_exporter",
-		)
-
-		// Add instrumentation-specific imports
-		for _, instr := range operationsData.InstallInstrumentations {
-			switch instr {
-			case "flask":
-				imports = append(imports, "opentelemetry.instrumentation.flask")
-			case "django":
-				imports = append(imports, "opentelemetry.instrumentation.django")
-			}
-		}
+		imports = append(imports, GetRequiredPythonImports()...)
+		imports = append(imports, operationsData.InstallInstrumentations...)
 	}
 
 	return imports

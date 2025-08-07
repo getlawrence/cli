@@ -56,3 +56,11 @@ func InitializePythonConfig() *types.LanguageConfig {
 		CleanupTemplate: `tp.shutdown()`,
 	}
 }
+
+func GetRequiredPythonImports() []string {
+	return []string{
+		"opentelemetry.sdk.trace",
+		"opentelemetry.exporter.otlp.proto.http.trace_exporter",
+	}
+
+}

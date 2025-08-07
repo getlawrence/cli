@@ -52,3 +52,14 @@ func InitializeGoConfig() *types.LanguageConfig {
 		CleanupTemplate: `defer tp.Shutdown(context.Background())`,
 	}
 }
+
+func GetRequiredGoImports() []string {
+	return []string{
+		"context",
+		"log",
+		"go.opentelemetry.io/otel",
+		"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp",
+		"go.opentelemetry.io/otel/sdk/trace",
+	}
+
+}

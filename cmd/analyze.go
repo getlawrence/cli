@@ -88,8 +88,6 @@ func runAnalyze(cmd *cobra.Command, args []string) error {
 	switch outputFormat {
 	case "json":
 		return outputJSON(analysis)
-	case "yaml":
-		return outputYAML(analysis)
 	default:
 		return outputText(analysis, detailed, verbose)
 	}
@@ -207,36 +205,6 @@ func outputText(analysis *detector.Analysis, detailed, verbose bool) error {
 	return nil
 }
 
-func printIssuesByCategory(title string, issues []domain.Issue, detailed bool) {
-	if len(issues) == 0 {
-		return
-	}
-
-	fmt.Printf("%s (%d):\n", title, len(issues))
-	for i, issue := range issues {
-		fmt.Printf("  %d. %s\n", i+1, issue.Title)
-		fmt.Printf("     %s\n", issue.Description)
-
-		if issue.Suggestion != "" {
-			fmt.Printf("     💡 %s\n", issue.Suggestion)
-		}
-
-		if detailed {
-			if issue.File != "" {
-				location := issue.File
-				if issue.Line > 0 {
-					location = fmt.Sprintf("%s:%d", location, issue.Line)
-				}
-				fmt.Printf("     📍 %s\n", location)
-			}
-			if len(issue.References) > 0 {
-				fmt.Printf("     🔗 References: %v\n", issue.References)
-			}
-		}
-		fmt.Println()
-	}
-}
-
 func outputJSON(analysis *detector.Analysis) error {
 	// Aggregate data from all directories for backward compatibility
 	var allIssues []domain.Issue
@@ -277,10 +245,4 @@ func outputJSON(analysis *detector.Analysis) error {
 	encoder := json.NewEncoder(os.Stdout)
 	encoder.SetIndent("", "  ")
 	return encoder.Encode(result)
-}
-
-func outputYAML(analysis *detector.Analysis) error {
-	// For simplicity, output as JSON for now
-	// In a real implementation, you'd use a YAML library
-	return outputJSON(analysis)
 }
