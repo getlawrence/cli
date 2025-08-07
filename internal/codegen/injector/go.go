@@ -17,7 +17,68 @@ type GoHandler struct {
 // NewGoHandler creates a new Go language handler
 func NewGoHandler() *GoHandler {
 	return &GoHandler{
-		config: InitializeGoConfig(),
+		config: &types.LanguageConfig{
+			Language:       "Go",
+			FileExtensions: []string{".go"},
+			ImportQueries: map[string]string{
+				"existing_imports": `
+				(import_declaration 
+					(import_spec 
+						path: (interpreted_string_literal) @import_path
+					) @import_spec
+				) @import_declaration
+				(import_declaration 
+					(interpreted_string_literal) @import_path
+				) @import_declaration
+			`,
+			},
+			FunctionQueries: map[string]string{
+				"main_function": `
+				(function_declaration
+					name: (identifier) @function_name
+					body: (block) @function_body
+					(#eq? @function_name "main")
+				)
+				(function_declaration
+					name: (identifier) @function_name
+					body: (block) @init_function
+					(#eq? @function_name "init")
+				)
+			`,
+			},
+			InsertionQueries: map[string]string{
+				"optimal_insertion": `
+				(block
+					(var_declaration) @after_variables
+				)
+				(block
+					(short_var_declaration) @after_variables
+				)
+				(block
+					(assignment_statement) @after_variables
+				)
+				(block
+					(expression_statement 
+						(call_expression)) @before_function_calls
+				)
+				(block) @function_start
+			`,
+			},
+			ImportTemplate: `"go.opentelemetry.io/%s"`,
+			InitializationTemplate: `
+	// Initialize OpenTelemetry
+	tp, err := initOTEL()
+	if err != nil {
+		log.Fatalf("Failed to initialize OTEL: %v", err)
+	}
+	defer func() {
+		if err := tp.Shutdown(context.Background()); err != nil {
+			log.Printf("Failed to shutdown tracer provider: %v", err)
+		}
+	}()
+`,
+			CleanupTemplate: `tp.Shutdown(context.Background())`,
+		},
 	}
 }
 
@@ -33,7 +94,14 @@ func (h *GoHandler) GetConfig() *types.LanguageConfig {
 
 // GetRequiredImports returns the list of imports needed for OTEL in Go
 func (h *GoHandler) GetRequiredImports() []string {
-	return GetRequiredGoImports()
+	return []string{
+		"go.opentelemetry.io/otel",
+		"go.opentelemetry.io/otel/trace",
+		"go.opentelemetry.io/otel/sdk/trace",
+		"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp",
+		"context",
+		"log",
+	}
 }
 
 // FormatImports formats Go import statements
@@ -227,82 +295,4 @@ func (h *GoHandler) detectExistingOTELSetup(bodyNode *sitter.Node, content []byt
 		strings.Contains(bodyContent, "otel.SetTracerProvider") ||
 		strings.Contains(bodyContent, "initOTEL") ||
 		strings.Contains(bodyContent, "setupTracing")
-}
-
-// InitializeGoConfig creates the configuration for Go language handling
-func InitializeGoConfig() *types.LanguageConfig {
-	return &types.LanguageConfig{
-		Language:       "Go",
-		FileExtensions: []string{".go"},
-		ImportQueries: map[string]string{
-			"existing_imports": `
-				(import_declaration 
-					(import_spec 
-						path: (interpreted_string_literal) @import_path
-					) @import_spec
-				) @import_declaration
-				(import_declaration 
-					(interpreted_string_literal) @import_path
-				) @import_declaration
-			`,
-		},
-		FunctionQueries: map[string]string{
-			"main_function": `
-				(function_declaration
-					name: (identifier) @function_name
-					body: (block) @function_body
-					(#eq? @function_name "main")
-				)
-				(function_declaration
-					name: (identifier) @function_name
-					body: (block) @init_function
-					(#eq? @function_name "init")
-				)
-			`,
-		},
-		InsertionQueries: map[string]string{
-			"optimal_insertion": `
-				(block
-					(var_declaration) @after_variables
-				)
-				(block
-					(short_var_declaration) @after_variables
-				)
-				(block
-					(assignment_statement) @after_variables
-				)
-				(block
-					(expression_statement 
-						(call_expression)) @before_function_calls
-				)
-				(block) @function_start
-			`,
-		},
-		ImportTemplate: `"go.opentelemetry.io/%s"`,
-		InitializationTemplate: `
-	// Initialize OpenTelemetry
-	tp, err := initOTEL()
-	if err != nil {
-		log.Fatalf("Failed to initialize OTEL: %v", err)
-	}
-	defer func() {
-		if err := tp.Shutdown(context.Background()); err != nil {
-			log.Printf("Failed to shutdown tracer provider: %v", err)
-		}
-	}()
-`,
-		CleanupTemplate: `tp.Shutdown(context.Background())`,
-	}
-}
-
-// GetRequiredGoImports returns the list of imports needed for OTEL in Go
-func GetRequiredGoImports() []string {
-	return []string{
-		"go.opentelemetry.io/otel",
-		"go.opentelemetry.io/otel/trace",
-		"go.opentelemetry.io/otel/sdk/trace",
-		"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp",
-		"context",
-		"log",
-	}
 }
