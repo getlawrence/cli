@@ -13,12 +13,8 @@ from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.semconv.resource import ResourceAttributes
 {{range .Instrumentations}}
-{{if eq . "flask"}}from opentelemetry.instrumentation.flask import FlaskInstrumentor
-{{end}}{{if eq . "django"}}from opentelemetry.instrumentation.django import DjangoInstrumentor
-{{end}}{{if eq . "requests"}}from opentelemetry.instrumentation.requests import RequestsInstrumentor
-{{end}}{{if eq . "sqlalchemy"}}from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
-{{end}}{{if eq . "psycopg2"}}from opentelemetry.instrumentation.psycopg2 import Psycopg2Instrumentor
-{{end}}{{end}}
+from opentelemetry.instrumentation.{{.}} import {{.}}Instrumentor
+{{end}}
 
 logger = logging.getLogger(__name__)
 
@@ -52,12 +48,7 @@ def init_tracer() -> Optional[TracerProvider]:
     # Initialize instrumentations
     try:
         {{range .Instrumentations}}
-        {{if eq . "flask"}}FlaskInstrumentor().instrument()
-        {{end}}{{if eq . "django"}}DjangoInstrumentor().instrument()
-        {{end}}{{if eq . "requests"}}RequestsInstrumentor().instrument()
-        {{end}}{{if eq . "sqlalchemy"}}SQLAlchemyInstrumentor().instrument()
-        {{end}}{{if eq . "psycopg2"}}Psycopg2Instrumentor().instrument()
-        {{end}}{{end}}
+        {{end}}
         logger.info("Successfully initialized OpenTelemetry instrumentations")
     except Exception as e:
         logger.error(f"Failed to initialize instrumentations: {e}")

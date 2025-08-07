@@ -8,7 +8,7 @@ Lawrence is a CLI tool for analyzing codebases to detect OpenTelemetry deploymen
 📦 **Library Detection**: Automatically detect OpenTelemetry libraries and versions
 ⚠️ **Issue Detection**: Find common problems and get actionable recommendations
 🔧 **Extensible**: Add custom detectors and language support
-📊 **Multiple Output Formats**: Text, JSON, and YAML output options
+📊 **Multiple Output Formats**: Text, JSON output options
 ⚙️ **Configurable**: Customize analysis behavior with configuration files
 
 ## Installation

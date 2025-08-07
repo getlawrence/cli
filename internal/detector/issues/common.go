@@ -3,6 +3,7 @@ package issues
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/getlawrence/cli/internal/detector"
 	"github.com/getlawrence/cli/internal/domain"
@@ -45,6 +46,7 @@ func (m *MissingOTelDetector) Languages() []string {
 func (m *MissingOTelDetector) Detect(ctx context.Context, directory *detector.DirectoryAnalysis) ([]domain.Issue, error) {
 	var issues []domain.Issue
 
+	// Case 1: No OpenTelemetry libraries found at all
 	if len(directory.Libraries) == 0 && len(directory.Language) > 0 {
 		langList := fmt.Sprintf("Detected languages: %v", directory.Language)
 
@@ -63,5 +65,41 @@ func (m *MissingOTelDetector) Detect(ctx context.Context, directory *detector.Di
 		})
 	}
 
+	// Case 2: OpenTelemetry libraries exist but entry points are not instrumented
+	if len(directory.Libraries) > 0 && len(directory.EntryPoints) > 0 {
+		for _, entryPoint := range directory.EntryPoints {
+			if entryPoint.Confidence >= 0.8 && !m.hasOTELInitialization(entryPoint) {
+				issues = append(issues, domain.Issue{
+					ID:          fmt.Sprintf("%s_uninstrumented_entrypoint_%s", m.ID(), entryPoint.FunctionName),
+					Title:       "Entry point not instrumented with OpenTelemetry",
+					Description: fmt.Sprintf("Entry point '%s' in %s does not have OpenTelemetry initialization code", entryPoint.FunctionName, entryPoint.FilePath),
+					Severity:    domain.SeverityInfo,
+					Category:    m.Category(),
+					Suggestion:  "Add OpenTelemetry initialization code to instrument this entry point",
+					Language:    directory.Language,
+					File:        entryPoint.FilePath,
+					Line:        int(entryPoint.LineNumber),
+					References: []string{
+						"https://opentelemetry.io/docs/instrumentation/",
+						"https://opentelemetry.io/docs/getting-started/",
+					},
+				})
+			}
+		}
+	}
+
 	return issues, nil
+}
+
+// hasOTELInitialization checks if an entry point contains OpenTelemetry initialization code
+func (m *MissingOTelDetector) hasOTELInitialization(entryPoint domain.EntryPoint) bool {
+	context := entryPoint.Context
+	// Look for common OTEL initialization patterns
+	return strings.Contains(context, "TracerProvider") ||
+		strings.Contains(context, "set_tracer_provider") ||
+		strings.Contains(context, "initialize_otel") ||
+		strings.Contains(context, "init_tracer") ||
+		strings.Contains(context, "otel") ||
+		strings.Contains(context, "trace.set_tracer_provider") ||
+		strings.Contains(context, "opentelemetry")
 }
