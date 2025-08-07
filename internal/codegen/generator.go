@@ -16,6 +16,7 @@ const (
 	OpportunityInstallOTEL      OpportunityType = "install_otel"
 	OpportunityInstallComponent OpportunityType = "install_component"
 	OpportunityRemoveComponent  OpportunityType = "remove_component"
+	OpportunityModifyEntryPoint OpportunityType = "modify_entry_point"
 )
 
 type ComponentType string
@@ -28,14 +29,15 @@ const (
 )
 
 type Opportunity struct {
-	Type          OpportunityType `json:"type"`
-	Language      string          `json:"language"`
-	Framework     string          `json:"framework"`
-	ComponentType ComponentType   `json:"componentType"`
-	Component     string          `json:"component"`
-	FilePath      string          `json:"file_path"`
-	Suggestion    string          `json:"suggestion"`
-	Issue         *types.Issue    `json:"issue,omitempty"`
+	Type          OpportunityType   `json:"type"`
+	Language      string            `json:"language"`
+	Framework     string            `json:"framework"`
+	ComponentType ComponentType     `json:"componentType"`
+	Component     string            `json:"component"`
+	FilePath      string            `json:"file_path"`
+	Suggestion    string            `json:"suggestion"`
+	Issue         *types.Issue      `json:"issue,omitempty"`
+	EntryPoint    *types.EntryPoint `json:"entry_point,omitempty"`
 }
 
 // GenerationRequest contains parameters for code generation
@@ -183,6 +185,7 @@ func (g *Generator) convertIssuesToOpportunities(analysis *detector.Analysis) []
 	// Extract issues from the analysis
 	for _, dirAnalysis := range analysis.DirectoryAnalyses {
 		opportunities = append(opportunities, g.createOpportunitiesFromInstrumentations(dirAnalysis)...)
+		opportunities = append(opportunities, g.createEntryPointModificationOpportunities(dirAnalysis)...)
 		for _, issue := range dirAnalysis.Issues {
 			switch issue.Category {
 			case types.CategoryMissingOtel:
@@ -210,6 +213,27 @@ func (g *Generator) createOpportunitiesFromInstrumentations(analysis *detector.D
 				Type:          OpportunityInstallComponent,
 				Suggestion:    fmt.Sprintf("Add OpenTelemetry instrumentation for %s", instr.Package.Name),
 				FilePath:      analysis.Directory,
+			}
+			opportunities = append(opportunities, opp)
+		}
+	}
+
+	return opportunities
+}
+
+func (g *Generator) createEntryPointModificationOpportunities(analysis *detector.DirectoryAnalysis) []Opportunity {
+	var opportunities []Opportunity
+
+	// Create entry point modification opportunities for each detected entry point
+	for _, entryPoint := range analysis.EntryPoints {
+		// Only create opportunities for languages we support and high-confidence entry points
+		if entryPoint.Confidence >= 0.8 && (entryPoint.Language == "Go" || entryPoint.Language == "Python") {
+			opp := Opportunity{
+				Type:       OpportunityModifyEntryPoint,
+				Language:   entryPoint.Language,
+				FilePath:   analysis.Directory,
+				EntryPoint: &entryPoint,
+				Suggestion: fmt.Sprintf("Modify entry point in %s to initialize OpenTelemetry", entryPoint.FilePath),
 			}
 			opportunities = append(opportunities, opp)
 		}

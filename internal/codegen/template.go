@@ -34,13 +34,15 @@ func (od *OperationsData) isEmpty() bool {
 
 // TemplateGenerationStrategy implements direct code generation using templates
 type TemplateGenerationStrategy struct {
-	templateEngine *templates.TemplateEngine
+	templateEngine  *templates.TemplateEngine
+	genericModifier *GenericCodeModifier
 }
 
 // NewTemplateGenerationStrategy creates a new template-based generation strategy
 func NewTemplateGenerationStrategy(templateEngine *templates.TemplateEngine) *TemplateGenerationStrategy {
 	return &TemplateGenerationStrategy{
-		templateEngine: templateEngine,
+		templateEngine:  templateEngine,
+		genericModifier: NewGenericCodeModifier(),
 	}
 }
 
@@ -82,6 +84,15 @@ func (s *TemplateGenerationStrategy) GenerateCode(ctx context.Context, opportuni
 			operationsData := s.analyzeOpportunities(langOpportunities)
 			operationsSummary = append(operationsSummary, s.createOperationsSummary(language, operationsData)...)
 
+			// Handle entry point modifications
+			entryPointFiles, err := s.handleEntryPointModifications(langOpportunities, req, operationsData)
+			if err != nil {
+				fmt.Printf("Warning: failed to modify entry points for %s: %v\n", language, err)
+			} else {
+				generatedFiles = append(generatedFiles, entryPointFiles...)
+			}
+
+			// Handle regular file generation
 			files, err := s.generateCodeForLanguage(language, langOpportunities, req, directory)
 			if err != nil {
 				fmt.Printf("Warning: failed to generate code for %s: %v\n", language, err)
@@ -396,4 +407,30 @@ func (s *TemplateGenerationStrategy) groupOpportunitiesByLanguage(opportunities 
 	}
 
 	return grouped
+}
+
+// handleEntryPointModifications processes entry point modification opportunities
+func (s *TemplateGenerationStrategy) handleEntryPointModifications(
+	opportunities []Opportunity,
+	req GenerationRequest,
+	operationsData *OperationsData,
+) ([]string, error) {
+	var modifiedFiles []string
+
+	for _, opp := range opportunities {
+		if opp.Type == OpportunityModifyEntryPoint && opp.EntryPoint != nil {
+			files, err := s.genericModifier.ModifyEntryPoint(
+				context.Background(),
+				opp.EntryPoint,
+				operationsData,
+				req,
+			)
+			if err != nil {
+				return nil, fmt.Errorf("failed to modify entry point %s: %w", opp.EntryPoint.FilePath, err)
+			}
+			modifiedFiles = append(modifiedFiles, files...)
+		}
+	}
+
+	return modifiedFiles, nil
 }
