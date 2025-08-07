@@ -10,31 +10,19 @@ import (
 	"github.com/getlawrence/cli/internal/codegen/types"
 	"github.com/getlawrence/cli/internal/domain"
 	sitter "github.com/smacker/go-tree-sitter"
-	"github.com/smacker/go-tree-sitter/golang"
-	"github.com/smacker/go-tree-sitter/python"
-)
-
-const (
-	goImportFormat = "\t\"%s\"\n"
 )
 
 type CodeInjector struct {
-	languages map[string]*sitter.Language
-	configs   map[string]*types.LanguageConfig
+	handlers map[string]LanguageInjector
 }
 
 func NewCodeInjector() *CodeInjector {
-	injector := &CodeInjector{
-		languages: map[string]*sitter.Language{
-			"Go":     golang.GetLanguage(),
-			"Python": python.GetLanguage(),
-		},
-		configs: map[string]*types.LanguageConfig{
-			"go":     InitializeGoConfig(),
-			"python": InitializePythonConfig(),
+	return &CodeInjector{
+		handlers: map[string]LanguageInjector{
+			"go":     NewGoHandler(),
+			"python": NewPythonHandler(),
 		},
 	}
-	return injector
 }
 
 func (ci *CodeInjector) InjectOtelInitialization(ctx context.Context,
@@ -42,19 +30,19 @@ func (ci *CodeInjector) InjectOtelInitialization(ctx context.Context,
 	operationsData *types.OperationsData,
 	req types.GenerationRequest) ([]string, error) {
 
-	config, exists := ci.configs[strings.ToLower(entryPoint.Language)]
+	handler, exists := ci.handlers[strings.ToLower(entryPoint.Language)]
 	if !exists {
 		return nil, fmt.Errorf("unsupported language for modification: %s", entryPoint.Language)
 	}
 
 	// Analyze the current file
-	analysis, err := ci.analyzeFile(entryPoint.FilePath, entryPoint.Language, config)
+	analysis, err := ci.analyzeFile(entryPoint.FilePath, handler)
 	if err != nil {
 		return nil, fmt.Errorf("failed to analyze file %s: %w", entryPoint.FilePath, err)
 	}
 
 	// Generate modifications
-	modifications, err := ci.generateModifications(analysis, operationsData, config, req)
+	modifications, err := ci.generateModifications(analysis, operationsData, handler, req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate modifications: %w", err)
 	}
@@ -68,13 +56,14 @@ func (ci *CodeInjector) InjectOtelInitialization(ctx context.Context,
 }
 
 // analyzeFile analyzes a source file to understand its structure
-func (ci *CodeInjector) analyzeFile(filePath, language string, config *types.LanguageConfig) (*types.FileAnalysis, error) {
+func (ci *CodeInjector) analyzeFile(filePath string, handler LanguageInjector) (*types.FileAnalysis, error) {
 	content, err := os.ReadFile(filePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read file: %w", err)
 	}
 
-	lang := ci.languages[language]
+	lang := handler.GetLanguage()
+	config := handler.GetConfig()
 	parser := sitter.NewParser()
 	parser.SetLanguage(lang)
 
@@ -85,19 +74,19 @@ func (ci *CodeInjector) analyzeFile(filePath, language string, config *types.Lan
 	defer tree.Close()
 
 	analysis := &types.FileAnalysis{
-		Language:        language,
+		Language:        config.Language,
 		FilePath:        filePath,
 		ExistingImports: make(map[string]bool),
 		FunctionBodies:  make(map[string]types.InsertionPoint),
 	}
 
 	// Analyze imports
-	if err := ci.analyzeImports(tree, content, config, analysis); err != nil {
+	if err := ci.analyzeImports(tree, content, handler, analysis); err != nil {
 		return nil, fmt.Errorf("failed to analyze imports: %w", err)
 	}
 
 	// Analyze entry points
-	if err := ci.analyzeEntryPoints(tree, content, config, analysis); err != nil {
+	if err := ci.analyzeEntryPoints(tree, content, handler, analysis); err != nil {
 		return nil, fmt.Errorf("failed to analyze entry points: %w", err)
 	}
 
@@ -105,9 +94,10 @@ func (ci *CodeInjector) analyzeFile(filePath, language string, config *types.Lan
 }
 
 // analyzeImports analyzes existing imports and finds import insertion points
-func (ci *CodeInjector) analyzeImports(tree *sitter.Tree, content []byte, config *types.LanguageConfig, analysis *types.FileAnalysis) error {
+func (ci *CodeInjector) analyzeImports(tree *sitter.Tree, content []byte, handler LanguageInjector, analysis *types.FileAnalysis) error {
+	config := handler.GetConfig()
 	if importQuery, exists := config.ImportQueries["existing_imports"]; exists {
-		query, err := sitter.NewQuery([]byte(importQuery), ci.languages[config.Language])
+		query, err := sitter.NewQuery([]byte(importQuery), handler.GetLanguage())
 		if err != nil {
 			return fmt.Errorf("failed to create import query: %w", err)
 		}
@@ -128,29 +118,8 @@ func (ci *CodeInjector) analyzeImports(tree *sitter.Tree, content []byte, config
 				captureName := query.CaptureNameForId(capture.Index)
 				node := capture.Node
 
-				switch captureName {
-				case "import_path":
-					importPath := strings.Trim(node.Content(content), `"'`)
-					analysis.ExistingImports[importPath] = true
-					if strings.Contains(importPath, "opentelemetry") || strings.Contains(importPath, "otel") {
-						analysis.HasOTELImports = true
-					}
-				case "import_location":
-					analysis.ImportLocations = append(analysis.ImportLocations, types.InsertionPoint{
-						LineNumber: node.EndPoint().Row + 1,
-						Column:     node.EndPoint().Column + 1,
-						Context:    node.Content(content),
-						Priority:   1,
-					})
-				case "import_block":
-					// This is a multi-line import block - we want to insert before the closing )
-					analysis.ImportLocations = append(analysis.ImportLocations, types.InsertionPoint{
-						LineNumber: node.EndPoint().Row,    // Insert before the closing )
-						Column:     node.EndPoint().Column, // At the beginning of the line
-						Context:    node.Content(content),
-						Priority:   2, // Higher priority for import blocks
-					})
-				}
+				// Use the handler's analyze method instead of the hardcoded switch
+				handler.AnalyzeImportCapture(captureName, node, content, analysis)
 			}
 		}
 	}
@@ -159,9 +128,10 @@ func (ci *CodeInjector) analyzeImports(tree *sitter.Tree, content []byte, config
 }
 
 // analyzeEntryPoints analyzes entry points and function bodies
-func (ci *CodeInjector) analyzeEntryPoints(tree *sitter.Tree, content []byte, config *types.LanguageConfig, analysis *types.FileAnalysis) error {
+func (ci *CodeInjector) analyzeEntryPoints(tree *sitter.Tree, content []byte, handler LanguageInjector, analysis *types.FileAnalysis) error {
+	config := handler.GetConfig()
 	if functionQuery, exists := config.FunctionQueries["main_function"]; exists {
-		query, err := sitter.NewQuery([]byte(functionQuery), ci.languages[config.Language])
+		query, err := sitter.NewQuery([]byte(functionQuery), handler.GetLanguage())
 		if err != nil {
 			return fmt.Errorf("failed to create function query: %w", err)
 		}
@@ -182,31 +152,8 @@ func (ci *CodeInjector) analyzeEntryPoints(tree *sitter.Tree, content []byte, co
 				captureName := query.CaptureNameForId(capture.Index)
 				node := capture.Node
 
-				switch captureName {
-				case "function_name":
-					functionName := node.Content(content)
-					analysis.EntryPoints = append(analysis.EntryPoints, types.EntryPointInfo{
-						Name:       string(functionName),
-						LineNumber: node.StartPoint().Row + 1,
-						Column:     node.StartPoint().Column + 1,
-					})
-				case "function_body":
-					// Find the best insertion point within the function body
-					// bodyStart := node.StartPoint() // Keep for potential future use
-					bodyContent := node.Content(content)
-
-					// Check if OTEL setup already exists
-					hasOTELSetup := strings.Contains(string(bodyContent), "opentelemetry") ||
-						strings.Contains(string(bodyContent), "InitializeOTEL") ||
-						strings.Contains(string(bodyContent), "otel")
-
-					insertionPoint := ci.findBestInsertionPoint(node, content, config)
-
-					if len(analysis.EntryPoints) > 0 {
-						analysis.EntryPoints[len(analysis.EntryPoints)-1].BodyStart = insertionPoint
-						analysis.EntryPoints[len(analysis.EntryPoints)-1].HasOTELSetup = hasOTELSetup
-					}
-				}
+				// Use the handler's analyze method instead of the hardcoded switch
+				handler.AnalyzeFunctionCapture(captureName, node, content, analysis, config)
 			}
 		}
 	}
@@ -215,7 +162,8 @@ func (ci *CodeInjector) analyzeEntryPoints(tree *sitter.Tree, content []byte, co
 }
 
 // findBestInsertionPoint finds the optimal location to insert OTEL initialization code
-func (ci *CodeInjector) findBestInsertionPoint(bodyNode *sitter.Node, content []byte, config *types.LanguageConfig) types.InsertionPoint {
+func (ci *CodeInjector) findBestInsertionPoint(bodyNode *sitter.Node, content []byte, handler LanguageInjector) types.InsertionPoint {
+	config := handler.GetConfig()
 	// Default to the beginning of the function body
 	defaultPoint := types.InsertionPoint{
 		LineNumber: bodyNode.StartPoint().Row + 1,
@@ -225,7 +173,7 @@ func (ci *CodeInjector) findBestInsertionPoint(bodyNode *sitter.Node, content []
 
 	// Use language-specific insertion query if available
 	if insertQuery, exists := config.InsertionQueries["optimal_insertion"]; exists {
-		query, err := sitter.NewQuery([]byte(insertQuery), ci.languages[config.Language])
+		query, err := sitter.NewQuery([]byte(insertQuery), handler.GetLanguage())
 		if err != nil {
 			return defaultPoint
 		}
@@ -278,14 +226,15 @@ func (ci *CodeInjector) findBestInsertionPoint(bodyNode *sitter.Node, content []
 func (ci *CodeInjector) generateModifications(
 	analysis *types.FileAnalysis,
 	operationsData *types.OperationsData,
-	config *types.LanguageConfig,
+	handler LanguageInjector,
 	req types.GenerationRequest,
 ) ([]types.CodeModification, error) {
 	var modifications []types.CodeModification
+	config := handler.GetConfig()
 
 	// Generate import modifications
 	if !analysis.HasOTELImports && operationsData.InstallOTEL {
-		importMods := ci.generateImportModifications(analysis, operationsData, config)
+		importMods := ci.generateImportModifications(analysis, operationsData, handler)
 		modifications = append(modifications, importMods...)
 	}
 
@@ -304,11 +253,12 @@ func (ci *CodeInjector) generateModifications(
 func (ci *CodeInjector) generateImportModifications(
 	analysis *types.FileAnalysis,
 	operationsData *types.OperationsData,
-	config *types.LanguageConfig,
+	handler LanguageInjector,
 ) []types.CodeModification {
 	var modifications []types.CodeModification
 
-	requiredImports := ci.getRequiredImports(operationsData, config)
+	requiredImports := handler.GetRequiredImports()
+	requiredImports = append(requiredImports, operationsData.InstallInstrumentations...)
 	newImports := make([]string, 0)
 
 	// Collect imports that need to be added
@@ -337,16 +287,9 @@ func (ci *CodeInjector) generateImportModifications(
 		insertionPoint = types.InsertionPoint{LineNumber: 3, Column: 1, Priority: 1}
 	}
 
-	// Generate import code based on language
-	var importCode string
-	if config.Language == "Go" {
-		importCode = ci.formatGoImports(newImports, len(analysis.ImportLocations) > 0)
-	} else {
-		// For other languages, use the existing single import format
-		for _, importPath := range newImports {
-			importCode += ci.formatImport(importPath, config)
-		}
-	}
+	// Generate import code using the handler
+	hasExistingImports := len(analysis.ImportLocations) > 0
+	importCode := handler.FormatImports(newImports, hasExistingImports)
 
 	if importCode != "" {
 		modifications = append(modifications, types.CodeModification{
@@ -388,73 +331,6 @@ func (ci *CodeInjector) generateInitializationModification(
 		InsertAfter:  true,
 		Content:      initCode,
 	}
-}
-
-// getRequiredImports returns the list of imports needed for the given operations
-func (ci *CodeInjector) getRequiredImports(operationsData *types.OperationsData, config *types.LanguageConfig) []string {
-	var imports []string
-
-	if !operationsData.InstallOTEL {
-		return imports
-	}
-
-	switch config.Language {
-	case "Go":
-		imports = append(imports, GetRequiredGoImports()...)
-		imports = append(imports, operationsData.InstallInstrumentations...)
-	case "Python":
-		imports = append(imports, GetRequiredPythonImports()...)
-		imports = append(imports, operationsData.InstallInstrumentations...)
-	}
-
-	return imports
-}
-
-// formatImport formats an import statement according to the language style
-func (ci *CodeInjector) formatImport(importPath string, config *types.LanguageConfig) string {
-	switch config.Language {
-	case "Go":
-		return fmt.Sprintf(goImportFormat, importPath)
-	case "Python":
-		if strings.Contains(importPath, ".") {
-			parts := strings.Split(importPath, ".")
-			return fmt.Sprintf("from %s import %s\n", strings.Join(parts[:len(parts)-1], "."), parts[len(parts)-1])
-		}
-		return fmt.Sprintf("import %s\n", importPath)
-	}
-	return fmt.Sprintf(config.ImportTemplate+"\n", importPath)
-}
-
-// formatGoImports formats Go import statements as a single import block
-func (ci *CodeInjector) formatGoImports(imports []string, hasExistingImports bool) string {
-	if len(imports) == 0 {
-		return ""
-	}
-
-	var result strings.Builder
-
-	if hasExistingImports {
-		// If there are existing imports, add them to the existing import block
-		// The insertion point should be before the closing ) of an import block
-		for _, importPath := range imports {
-			result.WriteString(fmt.Sprintf(goImportFormat, importPath))
-		}
-	} else {
-		// Create a new import block
-		if len(imports) == 1 {
-			// Single import - use single line format
-			result.WriteString(fmt.Sprintf("import \"%s\"\n\n", imports[0]))
-		} else {
-			// Multiple imports - use multi-line format
-			result.WriteString("import (\n")
-			for _, importPath := range imports {
-				result.WriteString(fmt.Sprintf(goImportFormat, importPath))
-			}
-			result.WriteString(")\n\n")
-		}
-	}
-
-	return result.String()
 }
 
 // generateFromTemplate generates code from a template with data
