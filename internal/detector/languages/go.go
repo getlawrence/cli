@@ -9,7 +9,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/getlawrence/cli/internal/detector/types"
+	"github.com/getlawrence/cli/internal/domain"
 )
 
 // GoDetector detects Go projects and OpenTelemetry usage
@@ -26,8 +26,8 @@ func (g *GoDetector) Name() string {
 }
 
 // GetOTelLibraries finds OpenTelemetry libraries in Go projects
-func (g *GoDetector) GetOTelLibraries(ctx context.Context, rootPath string) ([]types.Library, error) {
-	var libraries []types.Library
+func (g *GoDetector) GetOTelLibraries(ctx context.Context, rootPath string) ([]domain.Library, error) {
+	var libraries []domain.Library
 
 	// Check go.mod for OTel dependencies
 	goModPath := filepath.Join(rootPath, "go.mod")
@@ -62,8 +62,8 @@ func (g *GoDetector) GetFilePatterns() []string {
 }
 
 // GetAllPackages finds all packages/dependencies used in the Go project
-func (g *GoDetector) GetAllPackages(ctx context.Context, rootPath string) ([]types.Package, error) {
-	var packages []types.Package
+func (g *GoDetector) GetAllPackages(ctx context.Context, rootPath string) ([]domain.Package, error) {
+	var packages []domain.Package
 
 	// Check go.mod for all dependencies
 	goModPath := filepath.Join(rootPath, "go.mod")
@@ -93,14 +93,14 @@ func (g *GoDetector) GetAllPackages(ctx context.Context, rootPath string) ([]typ
 }
 
 // parseGoMod extracts OTel dependencies from go.mod
-func (g *GoDetector) parseGoMod(goModPath string) ([]types.Library, error) {
+func (g *GoDetector) parseGoMod(goModPath string) ([]domain.Library, error) {
 	file, err := os.Open(goModPath)
 	if err != nil {
 		return nil, err
 	}
 	defer file.Close()
 
-	var libraries []types.Library
+	var libraries []domain.Library
 	scanner := bufio.NewScanner(file)
 
 	// Regex for matching OTel dependencies
@@ -110,7 +110,7 @@ func (g *GoDetector) parseGoMod(goModPath string) ([]types.Library, error) {
 		line := strings.TrimSpace(scanner.Text())
 		matches := otelRegex.FindStringSubmatch(line)
 		if len(matches) >= 3 {
-			libraries = append(libraries, types.Library{
+			libraries = append(libraries, domain.Library{
 				Name:        matches[1],
 				Version:     matches[2],
 				Language:    "go",
@@ -124,14 +124,14 @@ func (g *GoDetector) parseGoMod(goModPath string) ([]types.Library, error) {
 }
 
 // parseGoImports extracts OTel imports from Go source files
-func (g *GoDetector) parseGoImports(filePath string) ([]types.Library, error) {
+func (g *GoDetector) parseGoImports(filePath string) ([]domain.Library, error) {
 	file, err := os.Open(filePath)
 	if err != nil {
 		return nil, err
 	}
 	defer file.Close()
 
-	var libraries []types.Library
+	var libraries []domain.Library
 	scanner := bufio.NewScanner(file)
 	inImportBlock := false
 
@@ -144,7 +144,7 @@ func (g *GoDetector) parseGoImports(filePath string) ([]types.Library, error) {
 
 		// Handle single-line imports
 		if matches := singleImportRegex.FindStringSubmatch(line); len(matches) >= 2 {
-			libraries = append(libraries, types.Library{
+			libraries = append(libraries, domain.Library{
 				Name:       matches[1],
 				Language:   "go",
 				ImportPath: matches[1],
@@ -165,7 +165,7 @@ func (g *GoDetector) parseGoImports(filePath string) ([]types.Library, error) {
 
 		if inImportBlock {
 			if matches := otelImportRegex.FindStringSubmatch(line); len(matches) >= 2 {
-				libraries = append(libraries, types.Library{
+				libraries = append(libraries, domain.Library{
 					Name:       matches[1],
 					Language:   "go",
 					ImportPath: matches[1],
@@ -202,9 +202,9 @@ func (g *GoDetector) findGoFiles(rootPath string) ([]string, error) {
 }
 
 // deduplicateLibraries removes duplicate library entries
-func (g *GoDetector) deduplicateLibraries(libraries []types.Library) []types.Library {
+func (g *GoDetector) deduplicateLibraries(libraries []domain.Library) []domain.Library {
 	seen := make(map[string]bool)
-	var result []types.Library
+	var result []domain.Library
 
 	for _, lib := range libraries {
 		key := fmt.Sprintf("%s:%s", lib.Name, lib.Version)
@@ -218,14 +218,14 @@ func (g *GoDetector) deduplicateLibraries(libraries []types.Library) []types.Lib
 }
 
 // parseAllDependencies extracts all dependencies from go.mod
-func (g *GoDetector) parseAllDependencies(goModPath string) ([]types.Package, error) {
+func (g *GoDetector) parseAllDependencies(goModPath string) ([]domain.Package, error) {
 	file, err := os.Open(goModPath)
 	if err != nil {
 		return nil, err
 	}
 	defer file.Close()
 
-	var packages []types.Package
+	var packages []domain.Package
 	scanner := bufio.NewScanner(file)
 
 	// Regex for matching dependencies (including version)
@@ -261,7 +261,7 @@ func (g *GoDetector) parseAllDependencies(goModPath string) ([]types.Package, er
 					continue
 				}
 
-				packages = append(packages, types.Package{
+				packages = append(packages, domain.Package{
 					Name:        packageName,
 					Version:     strings.TrimSuffix(matches[2], " // indirect"),
 					Language:    "go",
@@ -276,14 +276,14 @@ func (g *GoDetector) parseAllDependencies(goModPath string) ([]types.Package, er
 }
 
 // parseAllImports extracts all imports from Go source files
-func (g *GoDetector) parseAllImports(filePath string) ([]types.Package, error) {
+func (g *GoDetector) parseAllImports(filePath string) ([]domain.Package, error) {
 	file, err := os.Open(filePath)
 	if err != nil {
 		return nil, err
 	}
 	defer file.Close()
 
-	var packages []types.Package
+	var packages []domain.Package
 	scanner := bufio.NewScanner(file)
 	inImportBlock := false
 
@@ -298,7 +298,7 @@ func (g *GoDetector) parseAllImports(filePath string) ([]types.Package, error) {
 		if matches := singleImportRegex.FindStringSubmatch(line); len(matches) >= 2 {
 			packageName := matches[1]
 			if g.isThirdPartyPackage(packageName) {
-				packages = append(packages, types.Package{
+				packages = append(packages, domain.Package{
 					Name:       packageName,
 					Language:   "go",
 					ImportPath: packageName,
@@ -322,7 +322,7 @@ func (g *GoDetector) parseAllImports(filePath string) ([]types.Package, error) {
 			if matches := importRegex.FindStringSubmatch(line); len(matches) >= 2 {
 				packageName := matches[1]
 				if g.isThirdPartyPackage(packageName) {
-					packages = append(packages, types.Package{
+					packages = append(packages, domain.Package{
 						Name:       packageName,
 						Language:   "go",
 						ImportPath: packageName,
@@ -363,9 +363,9 @@ func (g *GoDetector) isThirdPartyPackage(packageName string) bool {
 }
 
 // deduplicatePackages removes duplicate package entries
-func (g *GoDetector) deduplicatePackages(packages []types.Package) []types.Package {
+func (g *GoDetector) deduplicatePackages(packages []domain.Package) []domain.Package {
 	seen := make(map[string]bool)
-	var result []types.Package
+	var result []domain.Package
 
 	for _, pkg := range packages {
 		key := fmt.Sprintf("%s:%s", pkg.Name, pkg.Version)

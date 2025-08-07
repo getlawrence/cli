@@ -6,7 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/getlawrence/cli/internal/detector/types"
+	"github.com/getlawrence/cli/internal/detector/entrypoint"
+	"github.com/getlawrence/cli/internal/domain"
 )
 
 // Language represents a programming language detector
@@ -14,9 +15,9 @@ type Language interface {
 	// Name returns the language name
 	Name() string
 	// GetOTelLibraries finds OpenTelemetry libraries used in the codebase
-	GetOTelLibraries(ctx context.Context, rootPath string) ([]types.Library, error)
+	GetOTelLibraries(ctx context.Context, rootPath string) ([]domain.Library, error)
 	// GetAllPackages finds all packages/dependencies used in the codebase
-	GetAllPackages(ctx context.Context, rootPath string) ([]types.Package, error)
+	GetAllPackages(ctx context.Context, rootPath string) ([]domain.Package, error)
 	// GetFilePatterns returns file patterns this language detector should scan
 	GetFilePatterns() []string
 }
@@ -30,44 +31,43 @@ type IssueDetector interface {
 	// Description returns what this detector looks for
 	Description() string
 	// Category returns the issue category
-	Category() types.Category
+	Category() domain.Category
 	// Languages returns which languages this detector applies to (empty = all)
 	Languages() []string
 	// Detect finds issues in the given context
-	Detect(ctx context.Context, analysis *Analysis) ([]types.Issue, error)
+	Detect(ctx context.Context, analysis *DirectoryAnalysis) ([]domain.Issue, error)
 }
 
 // Analysis contains the results of language detection and library discovery
 type Analysis struct {
-	RootPath                  string                        `json:"root_path"`
-	DetectedLanguages         []string                      `json:"detected_languages"`
-	Libraries                 []types.Library               `json:"libraries"`
-	Packages                  []types.Package               `json:"packages"`
-	AvailableInstrumentations []types.InstrumentationInfo   `json:"available_instrumentations"`
-	DirectoryAnalyses         map[string]*DirectoryAnalysis `json:"directory_analyses"`
+	RootPath          string                        `json:"root_path"`
+	DirectoryAnalyses map[string]*DirectoryAnalysis `json:"directory_analyses"`
 }
 
 // DirectoryAnalysis contains analysis results for a specific directory
 type DirectoryAnalysis struct {
-	Directory                 string                      `json:"directory"`
-	Language                  string                      `json:"language"`
-	Libraries                 []types.Library             `json:"libraries"`
-	Packages                  []types.Package             `json:"packages"`
-	AvailableInstrumentations []types.InstrumentationInfo `json:"available_instrumentations"`
-	Issues                    []types.Issue               `json:"issues"`
+	Directory                 string                       `json:"directory"`
+	Language                  string                       `json:"language"`
+	Libraries                 []domain.Library             `json:"libraries"`
+	Packages                  []domain.Package             `json:"packages"`
+	AvailableInstrumentations []domain.InstrumentationInfo `json:"available_instrumentations"`
+	Issues                    []domain.Issue               `json:"issues"`
+	EntryPoints               []domain.EntryPoint          `json:"entry_points"`
 }
 
 // CodebaseAnalyzer coordinates the detection process
 type CodebaseAnalyzer struct {
-	detectors         []IssueDetector
-	languageDetectors map[string]Language
+	detectors          []IssueDetector
+	languageDetectors  map[string]Language
+	entrypointDetector *entrypoint.TreeSitterEntryDetector
 }
 
 // NewCodebaseAnalyzer creates a new analysis engine
 func NewCodebaseAnalyzer(detectors []IssueDetector, languages map[string]Language) *CodebaseAnalyzer {
 	return &CodebaseAnalyzer{
-		detectors:         detectors,
-		languageDetectors: languages,
+		detectors:          detectors,
+		languageDetectors:  languages,
+		entrypointDetector: entrypoint.NewTreeSitterEntryDetector(),
 	}
 }
 
@@ -108,18 +108,7 @@ func (ca *CodebaseAnalyzer) AnalyzeCodebase(ctx context.Context, rootPath string
 			return nil, fmt.Errorf("failed to process directory %s: %w", directory, err)
 		}
 		analysis.DirectoryAnalyses[directory] = dirAnalysis
-
-		// Aggregate results to main analysis
-		analysis.Libraries = append(analysis.Libraries, dirAnalysis.Libraries...)
-		analysis.Packages = append(analysis.Packages, dirAnalysis.Packages...)
-		analysis.AvailableInstrumentations = append(analysis.AvailableInstrumentations, dirAnalysis.AvailableInstrumentations...)
 	}
-
-	// Set detected languages from seen languages
-	for language := range seenLanguages {
-		analysis.DetectedLanguages = append(analysis.DetectedLanguages, language)
-	}
-
 	return analysis, nil
 }
 
@@ -144,11 +133,14 @@ func (ca *CodebaseAnalyzer) processDirectory(ctx context.Context, directory, dir
 	if err != nil {
 		return nil, err
 	}
+
+	entrypoint, err := ca.entrypointDetector.DetectEntryPoints(dirPath, language)
 	dirAnalysis := &DirectoryAnalysis{
-		Directory: directory,
-		Language:  language,
-		Libraries: libs,
-		Packages:  packages,
+		Directory:   directory,
+		Language:    language,
+		Libraries:   libs,
+		Packages:    packages,
+		EntryPoints: entrypoint,
 	}
 
 	// Step 2: Populate instrumentations
@@ -166,7 +158,7 @@ func (ca *CodebaseAnalyzer) processDirectory(ctx context.Context, directory, dir
 }
 
 // collectLibrariesAndPackagesForDirectory collects libraries and packages for a specific directory
-func (ca *CodebaseAnalyzer) collectLibrariesAndPackagesForDirectory(ctx context.Context, dirPath, language string, languageDetector Language) ([]types.Library, []types.Package, error) {
+func (ca *CodebaseAnalyzer) collectLibrariesAndPackagesForDirectory(ctx context.Context, dirPath, language string, languageDetector Language) ([]domain.Library, []domain.Package, error) {
 	libs, err := languageDetector.GetOTelLibraries(ctx, dirPath)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to get OTel libraries for %s in %s: %w", language, dirPath, err)
@@ -204,23 +196,15 @@ func (ca *CodebaseAnalyzer) populateInstrumentationsForDirectory(ctx context.Con
 }
 
 // runIssueDetectorsForDirectory runs issue detectors for a specific directory
-func (ca *CodebaseAnalyzer) runIssueDetectorsForDirectory(ctx context.Context, dirAnalysis *DirectoryAnalysis) ([]types.Issue, error) {
-	var issues []types.Issue
+func (ca *CodebaseAnalyzer) runIssueDetectorsForDirectory(ctx context.Context, dirAnalysis *DirectoryAnalysis) ([]domain.Issue, error) {
+	var issues []domain.Issue
 
 	for _, detector := range ca.detectors {
 		if !ca.detectorAppliesForLanguage(detector, dirAnalysis.Language) {
 			continue
 		}
 
-		// Create temporary analysis for this directory
-		tempAnalysis := &Analysis{
-			DetectedLanguages:         []string{dirAnalysis.Language},
-			Libraries:                 dirAnalysis.Libraries,
-			Packages:                  dirAnalysis.Packages,
-			AvailableInstrumentations: dirAnalysis.AvailableInstrumentations,
-		}
-
-		detectorIssues, err := detector.Detect(ctx, tempAnalysis)
+		detectorIssues, err := detector.Detect(ctx, dirAnalysis)
 		if err != nil {
 			return nil, fmt.Errorf("detector %s failed for directory %s: %w", detector.ID(), dirAnalysis.Directory, err)
 		}

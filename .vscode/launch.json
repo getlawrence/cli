@@ -34,7 +34,7 @@
             "args": [
                 "codegen",
                 "--path",
-                "${workspaceFolder}/examples/monorepo-sample",
+                "${workspaceFolder}/examples/go-sample",
             ],
             "env": {
                 "GO111MODULE": "on"

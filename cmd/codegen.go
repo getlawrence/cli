@@ -5,12 +5,11 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/getlawrence/cli/internal/agents"
-	"github.com/getlawrence/cli/internal/codegen"
+	"github.com/getlawrence/cli/internal/codegen/generator"
+	"github.com/getlawrence/cli/internal/codegen/types"
 	"github.com/getlawrence/cli/internal/detector"
 	"github.com/getlawrence/cli/internal/detector/issues"
 	"github.com/getlawrence/cli/internal/detector/languages"
-	"github.com/getlawrence/cli/internal/templates"
 	"github.com/spf13/cobra"
 )
 
@@ -88,37 +87,37 @@ func runCodegen(cmd *cobra.Command, args []string) error {
 	})
 
 	// Initialize generator with existing detector system
-	generator, err := codegen.NewGenerator(codebaseAnalyzer)
+	codeGenerator, err := generator.NewGenerator(codebaseAnalyzer)
 	if err != nil {
 		return fmt.Errorf("failed to initialize generator: %w", err)
 	}
 
 	// Handle list commands
 	if listAgents {
-		return listAvailableAgents(generator)
+		return listAvailableAgents(codeGenerator)
 	}
 
 	if listTemplates {
-		return listAvailableTemplates(generator)
+		return listAvailableTemplates(codeGenerator)
 	}
 
 	if listStrategies {
-		return listAvailableStrategies(generator)
+		return listAvailableStrategies(codeGenerator)
 	}
 
 	// Determine generation mode
-	mode := codegen.GenerationMode(generationMode)
+	mode := types.GenerationMode(generationMode)
 	if mode == "" {
-		mode = generator.GetDefaultStrategy()
+		mode = codeGenerator.GetDefaultStrategy()
 	}
 
 	// Validate mode
-	if mode != codegen.AIMode && mode != codegen.TemplateMode {
+	if mode != types.AIMode && mode != types.TemplateMode {
 		return fmt.Errorf("invalid generation mode %s. Valid options: ai, template", mode)
 	}
 
 	// Validate mode-specific requirements
-	if mode == codegen.AIMode && agentType == "" {
+	if mode == types.AIMode && agentType == "" {
 		return fmt.Errorf("agent type is required for AI mode. Use --list-agents to see available options")
 	}
 
@@ -129,12 +128,12 @@ func runCodegen(cmd *cobra.Command, args []string) error {
 			method, strings.Join(validMethods, ", "))
 	}
 
-	req := codegen.GenerationRequest{
+	req := types.GenerationRequest{
 		CodebasePath: codebasePath,
 		Language:     language,
-		Method:       templates.InstallationMethod(method),
-		AgentType:    agents.AgentType(agentType), // Deprecated field for backward compatibility
-		Config: codegen.StrategyConfig{
+		Method:       method,
+		AgentType:    agentType, // Deprecated field for backward compatibility
+		Config: types.StrategyConfig{
 			Mode:            mode,
 			AgentType:       agentType,
 			OutputDirectory: outputDir,
@@ -142,10 +141,10 @@ func runCodegen(cmd *cobra.Command, args []string) error {
 		},
 	}
 
-	return generator.Generate(ctx, req)
+	return codeGenerator.Generate(ctx, req)
 }
 
-func listAvailableAgents(generator *codegen.Generator) error {
+func listAvailableAgents(generator *generator.Generator) error {
 	agents := generator.ListAvailableAgents()
 
 	if len(agents) == 0 {
@@ -166,7 +165,7 @@ func listAvailableAgents(generator *codegen.Generator) error {
 	return nil
 }
 
-func listAvailableTemplates(generator *codegen.Generator) error {
+func listAvailableTemplates(generator *generator.Generator) error {
 	templates := generator.ListAvailableTemplates()
 
 	fmt.Println("Available templates:")
@@ -177,7 +176,7 @@ func listAvailableTemplates(generator *codegen.Generator) error {
 	return nil
 }
 
-func listAvailableStrategies(generator *codegen.Generator) error {
+func listAvailableStrategies(generator *generator.Generator) error {
 	strategies := generator.ListAvailableStrategies()
 
 	fmt.Println("Available generation strategies:")

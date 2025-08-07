@@ -6,10 +6,7 @@ import (
 )
 
 func main() {
-
-	// Create HTTP handler with OpenTelemetry instrumentation
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("Hello, OpenTelemetry!"))
 	})

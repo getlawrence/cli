@@ -1,59 +1,25 @@
-package codegen
+package generator
 
 import (
 	"context"
 	"fmt"
 
 	"github.com/getlawrence/cli/internal/agents"
+	"github.com/getlawrence/cli/internal/codegen/generator/agent"
+	"github.com/getlawrence/cli/internal/codegen/generator/template"
+	"github.com/getlawrence/cli/internal/codegen/types"
 	"github.com/getlawrence/cli/internal/detector"
-	"github.com/getlawrence/cli/internal/detector/types"
+	"github.com/getlawrence/cli/internal/domain"
 	"github.com/getlawrence/cli/internal/templates"
 )
-
-type OpportunityType string
-
-const (
-	OpportunityInstallOTEL      OpportunityType = "install_otel"
-	OpportunityInstallComponent OpportunityType = "install_component"
-	OpportunityRemoveComponent  OpportunityType = "remove_component"
-)
-
-type ComponentType string
-
-const (
-	ComponentTypeInstrumentation ComponentType = "instrumentation"
-	ComponentTypeSDK             ComponentType = "sdk"
-	ComponentTypePropagator      ComponentType = "propagator"
-	ComponentTypeExporter        ComponentType = "exporter"
-)
-
-type Opportunity struct {
-	Type          OpportunityType `json:"type"`
-	Language      string          `json:"language"`
-	Framework     string          `json:"framework"`
-	ComponentType ComponentType   `json:"componentType"`
-	Component     string          `json:"component"`
-	FilePath      string          `json:"file_path"`
-	Suggestion    string          `json:"suggestion"`
-	Issue         *types.Issue    `json:"issue,omitempty"`
-}
-
-// GenerationRequest contains parameters for code generation
-type GenerationRequest struct {
-	CodebasePath string                       `json:"codebase_path"`
-	Language     string                       `json:"language,omitempty"`
-	Method       templates.InstallationMethod `json:"method"`
-	AgentType    agents.AgentType             `json:"agent_type"` // Deprecated: use Config.AgentType
-	Config       StrategyConfig               `json:"config"`
-}
 
 // Generator extends the detector system for code generation
 type Generator struct {
 	detector        *detector.CodebaseAnalyzer
 	templateEngine  *templates.TemplateEngine
 	agentDetector   *agents.Detector
-	strategies      map[GenerationMode]CodeGenerationStrategy
-	defaultStrategy GenerationMode
+	strategies      map[types.GenerationMode]types.CodeGenerationStrategy
+	defaultStrategy types.GenerationMode
 }
 
 // NewGenerator creates a new code generator
@@ -69,10 +35,10 @@ func NewGenerator(codebaseAnalyzer *detector.CodebaseAnalyzer) (*Generator, erro
 	}
 
 	// Initialize strategies
-	strategies := make(map[GenerationMode]CodeGenerationStrategy)
-	strategies[AIMode] = NewAIGenerationStrategy(agentDetector, templateEngine)
-	strategies[TemplateMode] = NewTemplateGenerationStrategy(templateEngine)
-	defaultStrategy := TemplateMode
+	strategies := make(map[types.GenerationMode]types.CodeGenerationStrategy)
+	strategies[types.AIMode] = agent.NewAIGenerationStrategy(agentDetector, templateEngine)
+	strategies[types.TemplateMode] = template.NewTemplateGenerationStrategy(templateEngine)
+	defaultStrategy := types.TemplateMode
 
 	return &Generator{
 		detector:        codebaseAnalyzer,
@@ -84,7 +50,7 @@ func NewGenerator(codebaseAnalyzer *detector.CodebaseAnalyzer) (*Generator, erro
 }
 
 // GenerateInstrumentation analyzes and generates code
-func (g *Generator) Generate(ctx context.Context, req GenerationRequest) error {
+func (g *Generator) Generate(ctx context.Context, req types.GenerationRequest) error {
 	// Use existing detector for analysis
 	analysis, err := g.detector.AnalyzeCodebase(ctx, req.CodebasePath)
 	if err != nil {
@@ -143,8 +109,8 @@ func (g *Generator) ListAvailableTemplates() []string {
 }
 
 // ListAvailableStrategies returns all available generation strategies
-func (g *Generator) ListAvailableStrategies() map[GenerationMode]bool {
-	strategies := make(map[GenerationMode]bool)
+func (g *Generator) ListAvailableStrategies() map[types.GenerationMode]bool {
+	strategies := make(map[types.GenerationMode]bool)
 	for mode, strategy := range g.strategies {
 		strategies[mode] = strategy.IsAvailable()
 	}
@@ -152,12 +118,12 @@ func (g *Generator) ListAvailableStrategies() map[GenerationMode]bool {
 }
 
 // GetDefaultStrategy returns the default generation strategy
-func (g *Generator) GetDefaultStrategy() GenerationMode {
+func (g *Generator) GetDefaultStrategy() types.GenerationMode {
 	return g.defaultStrategy
 }
 
 // validateStrategyRequirements checks if all required flags are provided for a strategy
-func (g *Generator) validateStrategyRequirements(strategy CodeGenerationStrategy, req GenerationRequest) error {
+func (g *Generator) validateStrategyRequirements(strategy types.CodeGenerationStrategy, req types.GenerationRequest) error {
 	requiredFlags := strategy.GetRequiredFlags()
 
 	for _, flag := range requiredFlags {
@@ -177,41 +143,44 @@ func (g *Generator) validateStrategyRequirements(strategy CodeGenerationStrategy
 	return nil
 }
 
-func (g *Generator) convertIssuesToOpportunities(analysis *detector.Analysis) []Opportunity {
-	var opportunities []Opportunity
+func (g *Generator) convertIssuesToOpportunities(analysis *detector.Analysis) []domain.Opportunity {
+	var opportunities []domain.Opportunity
 
 	// Extract issues from the analysis
 	for _, dirAnalysis := range analysis.DirectoryAnalyses {
+		opportunities = append(opportunities, g.createOpportunitiesFromInstrumentations(dirAnalysis)...)
 		for _, issue := range dirAnalysis.Issues {
 			switch issue.Category {
-			case types.CategoryMissingOtel:
-				opportunities = append(opportunities, Opportunity{
-					Type:     OpportunityInstallOTEL,
-					Language: issue.Language,
-					FilePath: dirAnalysis.Directory,
-				})
+			case domain.CategoryMissingOtel:
+				for _, entryPoint := range dirAnalysis.EntryPoints {
+					if entryPoint.Confidence >= 0.8 {
+						opportunities = append(opportunities, domain.Opportunity{
+							Type:       domain.OpportunityInstallOTEL,
+							Language:   issue.Language,
+							FilePath:   dirAnalysis.Directory,
+							EntryPoint: &entryPoint,
+						})
+					}
+				}
 			}
 		}
 	}
-
-	opportunities = append(opportunities, g.createOpportunitiesFromInstrumentations(analysis)...)
-
 	return opportunities
 }
 
-func (g *Generator) createOpportunitiesFromInstrumentations(analysis *detector.Analysis) []Opportunity {
-	var opportunities []Opportunity
+func (g *Generator) createOpportunitiesFromInstrumentations(analysis *detector.DirectoryAnalysis) []domain.Opportunity {
+	var opportunities []domain.Opportunity
 
 	for _, instr := range analysis.AvailableInstrumentations {
 		if instr.IsAvailable && !g.isAlreadyInstrumented(analysis, instr) {
-			opp := Opportunity{
+			opp := domain.Opportunity{
 				Language:      instr.Language,
 				Framework:     instr.Package.Name,
 				Component:     instr.Package.Name,
-				ComponentType: ComponentTypeInstrumentation,
-				Type:          OpportunityInstallComponent,
+				ComponentType: domain.ComponentTypeInstrumentation,
+				Type:          domain.OpportunityInstallComponent,
 				Suggestion:    fmt.Sprintf("Add OpenTelemetry instrumentation for %s", instr.Package.Name),
-				FilePath:      analysis.RootPath,
+				FilePath:      analysis.Directory,
 			}
 			opportunities = append(opportunities, opp)
 		}
@@ -220,7 +189,7 @@ func (g *Generator) createOpportunitiesFromInstrumentations(analysis *detector.A
 	return opportunities
 }
 
-func (g *Generator) isAlreadyInstrumented(analysis *detector.Analysis, instr types.InstrumentationInfo) bool {
+func (g *Generator) isAlreadyInstrumented(analysis *detector.DirectoryAnalysis, instr domain.InstrumentationInfo) bool {
 	// Check if the instrumentation library is already in use
 	for _, lib := range analysis.Libraries {
 		if lib.Name == instr.Package.Name ||
@@ -231,20 +200,8 @@ func (g *Generator) isAlreadyInstrumented(analysis *detector.Analysis, instr typ
 	return false
 }
 
-func (g *Generator) extractRelevantInstrumentations(analysis *detector.Analysis, language string) []string {
-	var instrumentations []string
-
-	for _, instr := range analysis.AvailableInstrumentations {
-		if instr.Language == language && instr.IsAvailable {
-			instrumentations = append(instrumentations, instr.Package.Name)
-		}
-	}
-
-	return instrumentations
-}
-
-func (g *Generator) filterByLanguage(opportunities []Opportunity, language string) []Opportunity {
-	var filtered []Opportunity
+func (g *Generator) filterByLanguage(opportunities []domain.Opportunity, language string) []domain.Opportunity {
+	var filtered []domain.Opportunity
 
 	for _, opp := range opportunities {
 		if opp.Language == language {
