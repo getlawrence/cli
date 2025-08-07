@@ -188,6 +188,7 @@ func (g *Generator) convertIssuesToOpportunities(analysis *detector.Analysis) []
 				opportunities = append(opportunities, Opportunity{
 					Type:     OpportunityInstallOTEL,
 					Language: issue.Language,
+					FilePath: dirAnalysis.Directory,
 				})
 			}
 		}
@@ -210,6 +211,7 @@ func (g *Generator) createOpportunitiesFromInstrumentations(analysis *detector.A
 				ComponentType: ComponentTypeInstrumentation,
 				Type:          OpportunityInstallComponent,
 				Suggestion:    fmt.Sprintf("Add OpenTelemetry instrumentation for %s", instr.Package.Name),
+				FilePath:      analysis.RootPath,
 			}
 			opportunities = append(opportunities, opp)
 		}

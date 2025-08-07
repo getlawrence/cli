@@ -66,24 +66,29 @@ func (s *TemplateGenerationStrategy) GenerateCode(ctx context.Context, opportuni
 		return nil
 	}
 
-	// Group opportunities by language
-	languageOpportunities := s.groupOpportunitiesByLanguage(opportunities)
+	directoryOpportunities := s.groupOpportunitiesByDirectory(opportunities)
+	if len(directoryOpportunities) == 0 {
+		fmt.Println("No opportunities to process")
+		return nil
+	}
 
-	// Generate code for each language
 	var generatedFiles []string
 	var operationsSummary []string
 
-	for language, langOpportunities := range languageOpportunities {
-		// Analyze what operations will be performed
-		operationsData := s.analyzeOpportunities(langOpportunities)
-		operationsSummary = append(operationsSummary, s.createOperationsSummary(language, operationsData)...)
+	for directory, opps := range directoryOpportunities {
+		languageOpportunities := s.groupOpportunitiesByLanguage(opps)
 
-		files, err := s.generateCodeForLanguage(language, langOpportunities, req)
-		if err != nil {
-			fmt.Printf("Warning: failed to generate code for %s: %v\n", language, err)
-			continue
+		for language, langOpportunities := range languageOpportunities {
+			operationsData := s.analyzeOpportunities(langOpportunities)
+			operationsSummary = append(operationsSummary, s.createOperationsSummary(language, operationsData)...)
+
+			files, err := s.generateCodeForLanguage(language, langOpportunities, req, directory)
+			if err != nil {
+				fmt.Printf("Warning: failed to generate code for %s: %v\n", language, err)
+				continue
+			}
+			generatedFiles = append(generatedFiles, files...)
 		}
-		generatedFiles = append(generatedFiles, files...)
 	}
 
 	if len(generatedFiles) == 0 {
@@ -107,8 +112,7 @@ func (s *TemplateGenerationStrategy) GenerateCode(ctx context.Context, opportuni
 	return nil
 }
 
-func (s *TemplateGenerationStrategy) generateCodeForLanguage(language string, opportunities []Opportunity, req GenerationRequest) ([]string, error) {
-	// Analyze opportunities to determine what operations to perform
+func (s *TemplateGenerationStrategy) generateCodeForLanguage(language string, opportunities []Opportunity, req GenerationRequest, directory string) ([]string, error) {
 	operationsData := s.analyzeOpportunities(opportunities)
 
 	if operationsData.isEmpty() {
@@ -118,19 +122,19 @@ func (s *TemplateGenerationStrategy) generateCodeForLanguage(language string, op
 	// Generate code based on the method and language
 	switch strings.ToLower(language) {
 	case "go":
-		return s.generateGoCode(operationsData, req)
+		return s.generateGoCode(operationsData, req, directory)
 	case "python":
-		return s.generatePythonCode(operationsData, req)
+		return s.generatePythonCode(operationsData, req, directory)
 	default:
 		return nil, fmt.Errorf("template-based code generation not supported for language: %s", language)
 	}
 }
 
-func (s *TemplateGenerationStrategy) generateGoCode(operationsData *OperationsData, req GenerationRequest) ([]string, error) {
+func (s *TemplateGenerationStrategy) generateGoCode(operationsData *OperationsData, req GenerationRequest, directory string) ([]string, error) {
 	// Generate based on method
 	switch req.Method {
 	case templates.CodeInstrumentation:
-		return s.generateGoCodeInstrumentation(operationsData, req)
+		return s.generateGoCodeInstrumentation(operationsData, req, directory)
 	case templates.AutoInstrumentation:
 		return s.generateGoAutoInstrumentation(operationsData, req)
 	default:
@@ -138,7 +142,7 @@ func (s *TemplateGenerationStrategy) generateGoCode(operationsData *OperationsDa
 	}
 }
 
-func (s *TemplateGenerationStrategy) generateGoCodeInstrumentation(operationsData *OperationsData, req GenerationRequest) ([]string, error) {
+func (s *TemplateGenerationStrategy) generateGoCodeInstrumentation(operationsData *OperationsData, req GenerationRequest, directory string) ([]string, error) {
 	serviceName := filepath.Base(req.CodebasePath)
 	if serviceName == "." {
 		// Get current directory name when path is "."
@@ -172,9 +176,11 @@ func (s *TemplateGenerationStrategy) generateGoCodeInstrumentation(operationsDat
 		outputDir = req.Config.OutputDirectory
 	}
 
+	finalOutputDir := filepath.Join(outputDir, directory)
+
 	// Write to file
 	filename := "otel_instrumentation.go"
-	outputPath := filepath.Join(outputDir, filename)
+	outputPath := filepath.Join(finalOutputDir, filename)
 
 	if req.Config.DryRun {
 		fmt.Printf("Generated Go instrumentation code (dry run):\n")
@@ -242,7 +248,7 @@ func (s *TemplateGenerationStrategy) generateGoAutoInstrumentation(operationsDat
 	return []string{outputPath}, nil
 }
 
-func (s *TemplateGenerationStrategy) generatePythonCode(operationsData *OperationsData, req GenerationRequest) ([]string, error) {
+func (s *TemplateGenerationStrategy) generatePythonCode(operationsData *OperationsData, req GenerationRequest, directory string) ([]string, error) {
 	serviceName := filepath.Base(req.CodebasePath)
 	if serviceName == "." {
 		// Get current directory name when path is "."
@@ -275,10 +281,11 @@ func (s *TemplateGenerationStrategy) generatePythonCode(operationsData *Operatio
 	if req.Config.OutputDirectory != "" {
 		outputDir = req.Config.OutputDirectory
 	}
+	finalOutputDir := filepath.Join(outputDir, directory)
 
 	// Write to file
 	filename := "otel_instrumentation.py"
-	outputPath := filepath.Join(outputDir, filename)
+	outputPath := filepath.Join(finalOutputDir, filename)
 
 	if req.Config.DryRun {
 		fmt.Printf("Generated Python instrumentation code (dry run):\n")
@@ -363,6 +370,19 @@ func (s *TemplateGenerationStrategy) createOperationsSummary(language string, da
 	}
 
 	return summary
+}
+
+// groupOpportunitiesByLanguage groups opportunities by programming language
+func (s *TemplateGenerationStrategy) groupOpportunitiesByDirectory(opportunities []Opportunity) map[string][]Opportunity {
+	grouped := make(map[string][]Opportunity)
+
+	for _, opp := range opportunities {
+		if opp.FilePath != "" {
+			grouped[opp.FilePath] = append(grouped[opp.FilePath], opp)
+		}
+	}
+
+	return grouped
 }
 
 // groupOpportunitiesByLanguage groups opportunities by programming language
