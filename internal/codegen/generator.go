@@ -86,13 +86,13 @@ func NewGenerator(codebaseAnalyzer *detector.CodebaseAnalyzer) (*Generator, erro
 // GenerateInstrumentation analyzes and generates code
 func (g *Generator) Generate(ctx context.Context, req GenerationRequest) error {
 	// Use existing detector for analysis
-	analysis, issues, err := g.detector.AnalyzeCodebase(ctx, req.CodebasePath)
+	analysis, err := g.detector.AnalyzeCodebase(ctx, req.CodebasePath)
 	if err != nil {
 		return fmt.Errorf("codebase analysis failed: %w", err)
 	}
 
 	// Convert issues to opportunities
-	opportunities := g.convertIssuesToOpportunities(analysis, issues)
+	opportunities := g.convertIssuesToOpportunities(analysis)
 
 	// Filter by language if specified
 	if req.Language != "" {
@@ -177,21 +177,23 @@ func (g *Generator) validateStrategyRequirements(strategy CodeGenerationStrategy
 	return nil
 }
 
-func (g *Generator) convertIssuesToOpportunities(analysis *detector.Analysis, issues []types.Issue) []Opportunity {
+func (g *Generator) convertIssuesToOpportunities(analysis *detector.Analysis) []Opportunity {
 	var opportunities []Opportunity
 
-	// Convert issues to opportunities based on their type
-	for _, issue := range issues {
-		switch issue.Category {
-		case types.CategoryMissingOtel:
-			opportunities = append(opportunities, Opportunity{
-				Type:     OpportunityInstallOTEL,
-				Language: issue.Language,
-			})
+	// Extract issues from the analysis
+	for _, dirAnalysis := range analysis.DirectoryAnalyses {
+		for _, issue := range dirAnalysis.Issues {
+			switch issue.Category {
+			case types.CategoryMissingOtel:
+				opportunities = append(opportunities, Opportunity{
+					Type:     OpportunityInstallOTEL,
+					Language: issue.Language,
+					FilePath: dirAnalysis.Directory,
+				})
+			}
 		}
 	}
 
-	// Also create opportunities from available instrumentations
 	opportunities = append(opportunities, g.createOpportunitiesFromInstrumentations(analysis)...)
 
 	return opportunities
@@ -207,7 +209,9 @@ func (g *Generator) createOpportunitiesFromInstrumentations(analysis *detector.A
 				Framework:     instr.Package.Name,
 				Component:     instr.Package.Name,
 				ComponentType: ComponentTypeInstrumentation,
+				Type:          OpportunityInstallComponent,
 				Suggestion:    fmt.Sprintf("Add OpenTelemetry instrumentation for %s", instr.Package.Name),
+				FilePath:      analysis.RootPath,
 			}
 			opportunities = append(opportunities, opp)
 		}

@@ -34,3 +34,4 @@ go.work.sum
 # Build output
 cli
 lawrence
+main

@@ -23,7 +23,6 @@ func Execute() error {
 
 func init() {
 	// Global flags
-	rootCmd.PersistentFlags().StringP("config", "c", "", "config file (default is $HOME/.lawrence.yaml)")
 	rootCmd.PersistentFlags().BoolP("verbose", "v", false, "verbose output")
 	rootCmd.PersistentFlags().StringP("output", "o", "text", "output format (text, json, yaml)")
 }
