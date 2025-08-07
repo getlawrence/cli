@@ -37,15 +37,6 @@ func NewPythonHandler() *PythonHandler {
 					body: (block) @function_body
 					(#eq? @function_name "main")
 				)
-				(if_statement
-					condition: (comparison_operator
-						left: (identifier) @name_var
-						right: (string) @main_str
-					)
-					body: (block) @function_body
-					(#eq? @name_var "__name__")
-					(#match? @main_str ".*__main__.*")
-				)
 			`,
 			},
 			InsertionQueries: map[string]string{
@@ -64,8 +55,6 @@ func NewPythonHandler() *PythonHandler {
 			InitializationTemplate: `
     # Initialize OpenTelemetry
     tp = initialize_otel()
-    import atexit
-    atexit.register(lambda: tp.shutdown())
 `,
 			CleanupTemplate: `tp.shutdown()`,
 		},
