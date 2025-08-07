@@ -21,15 +21,22 @@ const (
 
 // TemplateGenerationStrategy implements direct code generation using templates
 type TemplateGenerationStrategy struct {
-	templateEngine *templates.TemplateEngine
-	codeInjector   *injector.CodeInjector
+	templateEngine   *templates.TemplateEngine
+	codeInjector     *injector.CodeInjector
+	languageRegistry *LanguageGeneratorRegistry
 }
 
 // NewTemplateGenerationStrategy creates a new template-based generation strategy
 func NewTemplateGenerationStrategy(templateEngine *templates.TemplateEngine) *TemplateGenerationStrategy {
+	registry := NewLanguageGeneratorRegistry()
+
+	registry.RegisterLanguage("python", NewPythonCodeGenerator())
+	registry.RegisterLanguage("go", NewGoCodeGenerator())
+
 	return &TemplateGenerationStrategy{
-		templateEngine: templateEngine,
-		codeInjector:   injector.NewCodeInjector(),
+		templateEngine:   templateEngine,
+		codeInjector:     injector.NewCodeInjector(),
+		languageRegistry: registry,
 	}
 }
 
@@ -46,6 +53,11 @@ func (s *TemplateGenerationStrategy) IsAvailable() bool {
 // GetRequiredFlags returns flags required for template generation
 func (s *TemplateGenerationStrategy) GetRequiredFlags() []string {
 	return []string{} // No required flags
+}
+
+// GetSupportedLanguages returns all supported languages for template generation
+func (s *TemplateGenerationStrategy) GetSupportedLanguages() []string {
+	return s.languageRegistry.GetSupportedLanguages()
 }
 
 // GenerateCode generates code directly using templates
@@ -111,49 +123,38 @@ func (s *TemplateGenerationStrategy) GenerateCode(ctx context.Context, opportuni
 }
 
 func (s *TemplateGenerationStrategy) generateCodeForLanguage(language string, opportunities []domain.Opportunity, req types.GenerationRequest, directory string) ([]string, error) {
-	operationsData := s.analyzeOpportunities(opportunities)
-
-	// Generate code based on the method and language
-	switch strings.ToLower(language) {
-	case "go":
-		return s.generateGoCode(operationsData, req, directory)
-	case "python":
-		return s.generatePythonCode(operationsData, req, directory)
-	default:
+	// Get language generator
+	languageGen, exists := s.languageRegistry.GetGenerator(strings.ToLower(language))
+	if !exists {
 		return nil, fmt.Errorf("template-based code generation not supported for language: %s", language)
 	}
-}
 
-func (s *TemplateGenerationStrategy) generateGoCode(operationsData *types.OperationsData, req types.GenerationRequest, directory string) ([]string, error) {
 	// Convert string method to InstallationMethod
 	method := templates.InstallationMethod(req.Method)
 
-	// Generate based on method
-	switch method {
-	case templates.CodeInstrumentation:
-		return s.generateGoCodeInstrumentation(operationsData, req, directory)
-	case templates.AutoInstrumentation:
-		return s.generateGoAutoInstrumentation(operationsData, req)
-	default:
-		return nil, fmt.Errorf("unsupported method %s for Go", req.Method)
+	// Validate method is supported for this language
+	if err := languageGen.ValidateMethod(method); err != nil {
+		return nil, err
 	}
+
+	operationsData := s.analyzeOpportunities(opportunities)
+	return s.generateCodeWithLanguageGenerator(languageGen, method, operationsData, req, directory)
 }
 
-func (s *TemplateGenerationStrategy) generateGoCodeInstrumentation(operationsData *types.OperationsData, req types.GenerationRequest, directory string) ([]string, error) {
-	serviceName := filepath.Base(req.CodebasePath)
-	if serviceName == "." {
-		// Get current directory name when path is "."
-		if cwd, err := os.Getwd(); err == nil {
-			serviceName = filepath.Base(cwd)
-		} else {
-			serviceName = defaultServiceName
-		}
-	}
+// generateCodeWithLanguageGenerator is a generic method for generating code using any language generator
+func (s *TemplateGenerationStrategy) generateCodeWithLanguageGenerator(
+	languageGen LanguageCodeGenerator,
+	method templates.InstallationMethod,
+	operationsData *types.OperationsData,
+	req types.GenerationRequest,
+	directory string,
+) ([]string, error) {
+	serviceName := s.determineServiceName(req.CodebasePath)
 
 	// Create template data
 	data := templates.TemplateData{
-		Language:          "go",
-		Method:            templates.InstallationMethod(req.Method),
+		Language:          languageGen.GetLanguageName(),
+		Method:            method,
 		Instrumentations:  operationsData.InstallInstrumentations,
 		ServiceName:       serviceName,
 		InstallOTEL:       operationsData.InstallOTEL,
@@ -162,91 +163,33 @@ func (s *TemplateGenerationStrategy) generateGoCodeInstrumentation(operationsDat
 	}
 
 	// Generate code using template
-	code, err := s.templateEngine.GenerateInstructions("go", templates.InstallationMethod(req.Method), data)
+	code, err := s.templateEngine.GenerateInstructions(languageGen.GetLanguageName(), method, data)
 	if err != nil {
-		return nil, fmt.Errorf("failed to generate Go code: %w", err)
+		return nil, fmt.Errorf("failed to generate %s code: %w", languageGen.GetLanguageName(), err)
 	}
 
-	// Determine output directory
-	outputDir := req.CodebasePath
-	if req.Config.OutputDirectory != "" {
-		outputDir = req.Config.OutputDirectory
-	}
-
-	finalOutputDir := filepath.Join(outputDir, directory)
-
-	// Write to file
-	filename := "otel_instrumentation.go"
-	outputPath := filepath.Join(finalOutputDir, filename)
-
-	if req.Config.DryRun {
-		fmt.Printf("Generated Go instrumentation code (dry run):\n")
-		fmt.Printf(dryRunOutputFormat, outputPath)
-		fmt.Printf(dryRunContentFormat, code)
-		return []string{outputPath}, nil
-	}
-
-	if err := s.writeCodeToFile(outputPath, code); err != nil {
-		return nil, fmt.Errorf("failed to write Go code to %s: %w", outputPath, err)
-	}
-
-	return []string{outputPath}, nil
-}
-
-func (s *TemplateGenerationStrategy) generateGoAutoInstrumentation(operationsData *types.OperationsData, req types.GenerationRequest) ([]string, error) {
-	serviceName := filepath.Base(req.CodebasePath)
-	if serviceName == "." {
-		// Get current directory name when path is "."
-		if cwd, err := os.Getwd(); err == nil {
-			serviceName = filepath.Base(cwd)
-		} else {
-			serviceName = defaultServiceName
-		}
-	}
-
-	// Create template data
-	data := templates.TemplateData{
-		Language:          "go",
-		Method:            templates.InstallationMethod(req.Method),
-		Instrumentations:  operationsData.InstallInstrumentations,
-		ServiceName:       serviceName,
-		InstallOTEL:       operationsData.InstallOTEL,
-		InstallComponents: operationsData.InstallComponents,
-		RemoveComponents:  operationsData.RemoveComponents,
-	}
-
-	// Generate code using auto template
-	code, err := s.templateEngine.GenerateInstructions("go", templates.InstallationMethod(req.Method), data)
-	if err != nil {
-		return nil, fmt.Errorf("failed to generate Go auto instrumentation: %w", err)
-	}
-
-	// Determine output directory
-	outputDir := req.CodebasePath
-	if req.Config.OutputDirectory != "" {
-		outputDir = req.Config.OutputDirectory
-	}
-
-	// Write to file
-	filename := "otel_auto.go"
+	// Determine output directory and filename
+	outputDir := s.determineOutputDirectory(req, directory)
+	filename := languageGen.GetOutputFilename(method)
 	outputPath := filepath.Join(outputDir, filename)
 
 	if req.Config.DryRun {
-		fmt.Printf("Generated Go auto instrumentation code (dry run):\n")
+		fmt.Printf("Generated %s instrumentation code (dry run):\n", languageGen.GetLanguageName())
 		fmt.Printf(dryRunOutputFormat, outputPath)
 		fmt.Printf(dryRunContentFormat, code)
 		return []string{outputPath}, nil
 	}
 
 	if err := s.writeCodeToFile(outputPath, code); err != nil {
-		return nil, fmt.Errorf("failed to write Go auto code to %s: %w", outputPath, err)
+		return nil, fmt.Errorf("failed to write %s code to %s: %w", languageGen.GetLanguageName(), outputPath, err)
 	}
 
 	return []string{outputPath}, nil
 }
 
-func (s *TemplateGenerationStrategy) generatePythonCode(operationsData *types.OperationsData, req types.GenerationRequest, directory string) ([]string, error) {
-	serviceName := filepath.Base(req.CodebasePath)
+// determineServiceName extracts service name from codebase path
+func (s *TemplateGenerationStrategy) determineServiceName(codebasePath string) string {
+	serviceName := filepath.Base(codebasePath)
 	if serviceName == "." {
 		// Get current directory name when path is "."
 		if cwd, err := os.Getwd(); err == nil {
@@ -255,47 +198,16 @@ func (s *TemplateGenerationStrategy) generatePythonCode(operationsData *types.Op
 			serviceName = defaultServiceName
 		}
 	}
+	return serviceName
+}
 
-	// Create template data
-	data := templates.TemplateData{
-		Language:          "python",
-		Method:            templates.InstallationMethod(req.Method),
-		Instrumentations:  operationsData.InstallInstrumentations,
-		ServiceName:       serviceName,
-		InstallOTEL:       operationsData.InstallOTEL,
-		InstallComponents: operationsData.InstallComponents,
-		RemoveComponents:  operationsData.RemoveComponents,
-	}
-
-	// Generate code using template
-	code, err := s.templateEngine.GenerateInstructions("python", templates.InstallationMethod(req.Method), data)
-	if err != nil {
-		return nil, fmt.Errorf("failed to generate Python code: %w", err)
-	}
-
-	// Determine output directory
+// determineOutputDirectory determines the output directory for generated files
+func (s *TemplateGenerationStrategy) determineOutputDirectory(req types.GenerationRequest, directory string) string {
 	outputDir := req.CodebasePath
 	if req.Config.OutputDirectory != "" {
 		outputDir = req.Config.OutputDirectory
 	}
-	finalOutputDir := filepath.Join(outputDir, directory)
-
-	// Write to file
-	filename := "otel_instrumentation.py"
-	outputPath := filepath.Join(finalOutputDir, filename)
-
-	if req.Config.DryRun {
-		fmt.Printf("Generated Python instrumentation code (dry run):\n")
-		fmt.Printf(dryRunOutputFormat, outputPath)
-		fmt.Printf(dryRunContentFormat, code)
-		return []string{outputPath}, nil
-	}
-
-	if err := s.writeCodeToFile(outputPath, code); err != nil {
-		return nil, fmt.Errorf("failed to write Python code to %s: %w", outputPath, err)
-	}
-
-	return []string{outputPath}, nil
+	return filepath.Join(outputDir, directory)
 }
 
 func (s *TemplateGenerationStrategy) writeCodeToFile(filePath, content string) error {
