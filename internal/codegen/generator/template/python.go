@@ -26,11 +26,11 @@ func (g *PythonCodeGenerator) GetSupportedMethods() []templates.InstallationMeth
 func (g *PythonCodeGenerator) GetOutputFilename(method templates.InstallationMethod) string {
 	switch method {
 	case templates.CodeInstrumentation:
-		return "otel_instrumentation.py"
+		return "otel.py"
 	case templates.AutoInstrumentation:
-		return "otel_auto.py"
+		return "otel.py"
 	default:
-		return "otel_instrumentation.py"
+		return "otel.py"
 	}
 }
 
