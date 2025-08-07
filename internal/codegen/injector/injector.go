@@ -14,6 +14,10 @@ import (
 	"github.com/smacker/go-tree-sitter/python"
 )
 
+const (
+	goImportFormat = "\t\"%s\"\n"
+)
+
 type CodeInjector struct {
 	languages map[string]*sitter.Language
 	configs   map[string]*types.LanguageConfig
@@ -137,6 +141,14 @@ func (ci *CodeInjector) analyzeImports(tree *sitter.Tree, content []byte, config
 						Column:     node.EndPoint().Column + 1,
 						Context:    node.Content(content),
 						Priority:   1,
+					})
+				case "import_block":
+					// This is a multi-line import block - we want to insert before the closing )
+					analysis.ImportLocations = append(analysis.ImportLocations, types.InsertionPoint{
+						LineNumber: node.EndPoint().Row,    // Insert before the closing )
+						Column:     node.EndPoint().Column, // At the beginning of the line
+						Context:    node.Content(content),
+						Priority:   2, // Higher priority for import blocks
 					})
 				}
 			}
@@ -297,31 +309,55 @@ func (ci *CodeInjector) generateImportModifications(
 	var modifications []types.CodeModification
 
 	requiredImports := ci.getRequiredImports(operationsData, config)
+	newImports := make([]string, 0)
 
+	// Collect imports that need to be added
 	for _, importPath := range requiredImports {
 		if !analysis.ExistingImports[importPath] {
-			// Find best insertion point for imports
-			var insertionPoint types.InsertionPoint
-			if len(analysis.ImportLocations) > 0 {
-				insertionPoint = analysis.ImportLocations[len(analysis.ImportLocations)-1]
-			} else {
-				// Default to top of file after package declaration
-				insertionPoint = types.InsertionPoint{LineNumber: 3, Column: 1, Priority: 1}
-			}
-
-			// Generate import code based on language template
-			importCode := ci.formatImport(importPath, config)
-
-			modifications = append(modifications, types.CodeModification{
-				Type:        types.ModificationAddImport,
-				Language:    analysis.Language,
-				FilePath:    analysis.FilePath,
-				LineNumber:  insertionPoint.LineNumber,
-				Column:      insertionPoint.Column,
-				InsertAfter: true,
-				Content:     importCode,
-			})
+			newImports = append(newImports, importPath)
 		}
+	}
+
+	if len(newImports) == 0 {
+		return modifications
+	}
+
+	// Find best insertion point for imports
+	var insertionPoint types.InsertionPoint
+	if len(analysis.ImportLocations) > 0 {
+		// Find the insertion point with highest priority
+		insertionPoint = analysis.ImportLocations[0]
+		for _, location := range analysis.ImportLocations {
+			if location.Priority > insertionPoint.Priority {
+				insertionPoint = location
+			}
+		}
+	} else {
+		// Default to top of file after package declaration
+		insertionPoint = types.InsertionPoint{LineNumber: 3, Column: 1, Priority: 1}
+	}
+
+	// Generate import code based on language
+	var importCode string
+	if config.Language == "Go" {
+		importCode = ci.formatGoImports(newImports, len(analysis.ImportLocations) > 0)
+	} else {
+		// For other languages, use the existing single import format
+		for _, importPath := range newImports {
+			importCode += ci.formatImport(importPath, config)
+		}
+	}
+
+	if importCode != "" {
+		modifications = append(modifications, types.CodeModification{
+			Type:        types.ModificationAddImport,
+			Language:    analysis.Language,
+			FilePath:    analysis.FilePath,
+			LineNumber:  insertionPoint.LineNumber,
+			Column:      insertionPoint.Column,
+			InsertAfter: true,
+			Content:     importCode,
+		})
 	}
 
 	return modifications
@@ -378,7 +414,7 @@ func (ci *CodeInjector) getRequiredImports(operationsData *types.OperationsData,
 func (ci *CodeInjector) formatImport(importPath string, config *types.LanguageConfig) string {
 	switch config.Language {
 	case "Go":
-		return fmt.Sprintf("import \"%s\"\n", importPath)
+		return fmt.Sprintf(goImportFormat, importPath)
 	case "Python":
 		if strings.Contains(importPath, ".") {
 			parts := strings.Split(importPath, ".")
@@ -387,6 +423,38 @@ func (ci *CodeInjector) formatImport(importPath string, config *types.LanguageCo
 		return fmt.Sprintf("import %s\n", importPath)
 	}
 	return fmt.Sprintf(config.ImportTemplate+"\n", importPath)
+}
+
+// formatGoImports formats Go import statements as a single import block
+func (ci *CodeInjector) formatGoImports(imports []string, hasExistingImports bool) string {
+	if len(imports) == 0 {
+		return ""
+	}
+
+	var result strings.Builder
+
+	if hasExistingImports {
+		// If there are existing imports, add them to the existing import block
+		// The insertion point should be before the closing ) of an import block
+		for _, importPath := range imports {
+			result.WriteString(fmt.Sprintf(goImportFormat, importPath))
+		}
+	} else {
+		// Create a new import block
+		if len(imports) == 1 {
+			// Single import - use single line format
+			result.WriteString(fmt.Sprintf("import \"%s\"\n\n", imports[0]))
+		} else {
+			// Multiple imports - use multi-line format
+			result.WriteString("import (\n")
+			for _, importPath := range imports {
+				result.WriteString(fmt.Sprintf(goImportFormat, importPath))
+			}
+			result.WriteString(")\n\n")
+		}
+	}
+
+	return result.String()
 }
 
 // generateFromTemplate generates code from a template with data

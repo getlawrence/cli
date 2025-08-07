@@ -181,30 +181,3 @@ func getEnvOrDefault(key, defaultValue string) string {
 	}
 	return defaultValue
 }
-
-{{if .InstallOTEL}}
-// Example usage:
-//
-// func main() {
-//     // Initialize OpenTelemetry
-//     tp, err := SetupOTEL()
-//     if err != nil {
-//         log.Fatal("Failed to setup OpenTelemetry:", err)
-//     }
-//     defer func() {
-//         if err := ShutdownOTEL(tp); err != nil {
-//             log.Printf("Error shutting down OpenTelemetry: %v", err)
-//         }
-//     }()
-//
-//     // Your application code here
-//     {{range .Instrumentations}}
-//     {{if eq . "otelhttp"}}// Use WrapHTTPHandler or WrapHTTPHandlerFunc for HTTP instrumentation{{end}}
-//     {{if eq . "otelgin"}}// Use SetupGinMiddleware for Gin instrumentation{{end}}
-//     {{if eq . "otelmux"}}// Use SetupMuxMiddleware for Gorilla Mux instrumentation{{end}}
-//     {{if eq . "otelsql"}}// Use WrapSQLDriver for SQL instrumentation{{end}}
-//     {{if eq . "otelgrpc"}}// Use SetupGRPCClientInterceptors/SetupGRPCServerInterceptors for gRPC instrumentation{{end}}
-//     {{if eq . "otelredis"}}// Use WrapRedisClient for Redis instrumentation{{end}}
-//     {{end}}
-// }
-{{end}}

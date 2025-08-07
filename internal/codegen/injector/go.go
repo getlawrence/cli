@@ -14,6 +14,13 @@ func InitializeGoConfig() *types.LanguageConfig {
 						path: (interpreted_string_literal) @import_path
 					)
 				) @import_location
+				(import_declaration 
+					(import_spec_list
+						(import_spec 
+							path: (interpreted_string_literal) @import_path
+						)
+					)
+				) @import_block
 			`,
 		},
 		FunctionQueries: map[string]string{
