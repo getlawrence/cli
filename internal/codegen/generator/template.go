@@ -404,7 +404,7 @@ func (s *TemplateGenerationStrategy) handleEntryPointModifications(
 	var modifiedFiles []string
 
 	for _, opp := range opportunities {
-		if opp.Type == domain.OpportunityModifyEntryPoint && opp.EntryPoint != nil {
+		if opp.Type == domain.OpportunityInstallOTEL && opp.EntryPoint != nil {
 			files, err := s.codeInjector.InjectOtelInitialization(
 				context.Background(),
 				opp.EntryPoint,

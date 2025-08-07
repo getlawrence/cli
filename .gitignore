@@ -35,3 +35,7 @@ go.work.sum
 cli
 lawrence
 main
+
+# otel instrumentation in examples directory
+examples/**/otel_instrumentation.go
+examples/**/otel_instrumentation.py

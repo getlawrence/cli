@@ -25,7 +25,10 @@ func NewCodeInjector() *CodeInjector {
 			"Go":     golang.GetLanguage(),
 			"Python": python.GetLanguage(),
 		},
-		configs: make(map[string]*types.LanguageConfig),
+		configs: map[string]*types.LanguageConfig{
+			"go":     InitializeGoConfig(),
+			"python": InitializePythonConfig(),
+		},
 	}
 	return injector
 }
@@ -35,7 +38,7 @@ func (ci *CodeInjector) InjectOtelInitialization(ctx context.Context,
 	operationsData *types.OperationsData,
 	req types.GenerationRequest) ([]string, error) {
 
-	config, exists := ci.configs[entryPoint.Language]
+	config, exists := ci.configs[strings.ToLower(entryPoint.Language)]
 	if !exists {
 		return nil, fmt.Errorf("unsupported language for modification: %s", entryPoint.Language)
 	}
@@ -348,112 +351,6 @@ func (ci *CodeInjector) generateInitializationModification(
 		InsertBefore: false,
 		InsertAfter:  true,
 		Content:      initCode,
-	}
-}
-
-// initializeGoConfig sets up the Go language configuration
-func (ci *CodeInjector) initializeGoConfig() {
-	ci.configs["Go"] = &types.LanguageConfig{
-		Language:       "Go",
-		FileExtensions: []string{".go"},
-		ImportQueries: map[string]string{
-			"existing_imports": `
-				(import_declaration 
-					(import_spec 
-						path: (interpreted_string_literal) @import_path
-					)
-				) @import_location
-			`,
-		},
-		FunctionQueries: map[string]string{
-			"main_function": `
-				(function_declaration 
-					name: (identifier) @function_name
-					body: (block) @function_body
-					(#eq? @function_name "main")
-				)
-			`,
-		},
-		InsertionQueries: map[string]string{
-			"optimal_insertion": `
-				(block
-					(var_declaration) @after_variables
-				)
-				(block
-					(call_expression) @before_function_calls
-				)
-				(block) @function_start
-			`,
-		},
-		ImportTemplate: `import "%s"`,
-		InitializationTemplate: `
-	// Initialize OpenTelemetry
-	tp, err := initializeOTEL()
-	if err != nil {
-		log.Fatal("Failed to initialize OpenTelemetry:", err)
-	}
-	defer func() {
-		if err := tp.Shutdown(context.Background()); err != nil {
-			log.Printf("Error shutting down tracer provider: %%v", err)
-		}
-	}()
-`,
-		CleanupTemplate: `defer tp.Shutdown(context.Background())`,
-	}
-}
-
-func (ci *CodeInjector) initializePythonConfig() {
-	ci.configs["Python"] = &types.LanguageConfig{
-		Language:       "Python",
-		FileExtensions: []string{".py", ".pyw"},
-		ImportQueries: map[string]string{
-			"existing_imports": `
-				(import_statement 
-					name: (dotted_name) @import_path
-				) @import_location
-				(import_from_statement
-					module_name: (dotted_name) @import_path
-				) @import_location
-			`,
-		},
-		FunctionQueries: map[string]string{
-			"main_function": `
-				(function_definition 
-					name: (identifier) @function_name
-					body: (block) @function_body
-					(#eq? @function_name "main")
-				)
-				(if_statement
-					condition: (comparison_operator
-						left: (identifier) @name_var
-						right: (string) @main_str
-					)
-					body: (block) @function_body
-					(#eq? @name_var "__name__")
-					(#match? @main_str ".*__main__.*")
-				)
-			`,
-		},
-		InsertionQueries: map[string]string{
-			"optimal_insertion": `
-				(block
-					(assignment) @after_variables
-				)
-				(block
-					(expression_statement 
-						(call)) @before_function_calls
-				)
-				(block) @function_start
-			`,
-		},
-		ImportTemplate: `from opentelemetry import %s`,
-		InitializationTemplate: `
-    # Initialize OpenTelemetry
-    tp = initialize_otel()
-    import atexit
-    atexit.register(lambda: tp.shutdown())
-`,
-		CleanupTemplate: `tp.shutdown()`,
 	}
 }
 

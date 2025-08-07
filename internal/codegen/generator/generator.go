@@ -147,15 +147,19 @@ func (g *Generator) convertIssuesToOpportunities(analysis *detector.Analysis) []
 	// Extract issues from the analysis
 	for _, dirAnalysis := range analysis.DirectoryAnalyses {
 		opportunities = append(opportunities, g.createOpportunitiesFromInstrumentations(dirAnalysis)...)
-		opportunities = append(opportunities, g.createEntryPointModificationOpportunities(dirAnalysis)...)
 		for _, issue := range dirAnalysis.Issues {
 			switch issue.Category {
 			case domain.CategoryMissingOtel:
-				opportunities = append(opportunities, domain.Opportunity{
-					Type:     domain.OpportunityInstallOTEL,
-					Language: issue.Language,
-					FilePath: dirAnalysis.Directory,
-				})
+				for _, entryPoint := range dirAnalysis.EntryPoints {
+					if entryPoint.Confidence >= 0.8 {
+						opportunities = append(opportunities, domain.Opportunity{
+							Type:       domain.OpportunityInstallOTEL,
+							Language:   issue.Language,
+							FilePath:   dirAnalysis.Directory,
+							EntryPoint: &entryPoint,
+						})
+					}
+				}
 			}
 		}
 	}
@@ -175,27 +179,6 @@ func (g *Generator) createOpportunitiesFromInstrumentations(analysis *detector.D
 				Type:          domain.OpportunityInstallComponent,
 				Suggestion:    fmt.Sprintf("Add OpenTelemetry instrumentation for %s", instr.Package.Name),
 				FilePath:      analysis.Directory,
-			}
-			opportunities = append(opportunities, opp)
-		}
-	}
-
-	return opportunities
-}
-
-func (g *Generator) createEntryPointModificationOpportunities(analysis *detector.DirectoryAnalysis) []domain.Opportunity {
-	var opportunities []domain.Opportunity
-
-	// Create entry point modification opportunities for each detected entry point
-	for _, entryPoint := range analysis.EntryPoints {
-		// Only create opportunities for languages we support and high-confidence entry points
-		if entryPoint.Confidence >= 0.8 && (entryPoint.Language == "Go" || entryPoint.Language == "Python") {
-			opp := domain.Opportunity{
-				Type:       domain.OpportunityModifyEntryPoint,
-				Language:   entryPoint.Language,
-				FilePath:   analysis.Directory,
-				EntryPoint: &entryPoint,
-				Suggestion: fmt.Sprintf("Modify entry point in %s to initialize OpenTelemetry", entryPoint.FilePath),
 			}
 			opportunities = append(opportunities, opp)
 		}

@@ -44,7 +44,6 @@ const (
 	OpportunityInstallOTEL      OpportunityType = "install_otel"
 	OpportunityInstallComponent OpportunityType = "install_component"
 	OpportunityRemoveComponent  OpportunityType = "remove_component"
-	OpportunityModifyEntryPoint OpportunityType = "modify_entry_point"
 )
 
 // ComponentType represents different types of OTEL components
