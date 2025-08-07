@@ -21,53 +21,43 @@ func NewGoHandler() *GoHandler {
 			Language:       "Go",
 			FileExtensions: []string{".go"},
 			ImportQueries: map[string]string{
-				"existing_imports": `
-				(import_declaration 
-					(import_spec 
-						path: (interpreted_string_literal) @import_path
-					) @import_spec
-				) @import_declaration
-				(import_declaration 
-					(interpreted_string_literal) @import_path
-				) @import_declaration
-			`,
+				"existing_imports": `(interpreted_string_literal) @import_path`,
 			},
 			FunctionQueries: map[string]string{
 				"main_function": `
-				(function_declaration
-					name: (identifier) @function_name
-					body: (block) @function_body
-					(#eq? @function_name "main")
-				)
-				(function_declaration
-					name: (identifier) @function_name
-					body: (block) @init_function
-					(#eq? @function_name "init")
-				)
-			`,
+(function_declaration
+  name: (identifier) @function_name
+  body: (block) @function_body
+  (#eq? @function_name "main"))
+
+(function_declaration
+  name: (identifier) @function_name
+  body: (block) @init_function
+  (#eq? @function_name "init"))
+`,
 			},
 			InsertionQueries: map[string]string{
 				"optimal_insertion": `
-				(block
-					(var_declaration) @after_variables
-				)
-				(block
-					(short_var_declaration) @after_variables
-				)
-				(block
-					(assignment_statement) @after_variables
-				)
-				(block
-					(expression_statement 
-						(call_expression)) @before_function_calls
-				)
-				(block) @function_start
-			`,
+(block
+  (var_declaration) @after_variables)
+
+(block
+  (short_var_declaration) @after_variables)
+
+(block
+  (assignment_statement) @after_variables)
+
+(block
+  (expression_statement 
+    (call_expression)) @before_function_calls)
+
+(block) @function_start
+`,
 			},
 			ImportTemplate: `"go.opentelemetry.io/%s"`,
 			InitializationTemplate: `
 	// Initialize OpenTelemetry
-	tp, err := initOTEL()
+	tp, err := SetupOTEL()
 	if err != nil {
 		log.Fatalf("Failed to initialize OTEL: %v", err)
 	}
@@ -293,6 +283,6 @@ func (h *GoHandler) detectExistingOTELSetup(bodyNode *sitter.Node, content []byt
 	bodyContent := bodyNode.Content(content)
 	return strings.Contains(bodyContent, "trace.NewTracerProvider") ||
 		strings.Contains(bodyContent, "otel.SetTracerProvider") ||
-		strings.Contains(bodyContent, "initOTEL") ||
+		strings.Contains(bodyContent, "SetupOTEL") ||
 		strings.Contains(bodyContent, "setupTracing")
 }
