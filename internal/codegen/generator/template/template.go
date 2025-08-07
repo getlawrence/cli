@@ -85,9 +85,9 @@ func (s *TemplateGenerationStrategy) GenerateCode(ctx context.Context, opportuni
 		for language, langOpportunities := range languageOpportunities {
 			operationsData := s.analyzeOpportunities(langOpportunities)
 			operationsSummary = append(operationsSummary, s.createOperationsSummary(language, operationsData)...)
+			dependencyPath := s.determineOutputDirectory(req, directory)
 
-			// Add dependencies first
-			if err := s.addDependencies(ctx, req.CodebasePath, language, operationsData, req); err != nil {
+			if err := s.addDependencies(ctx, dependencyPath, language, operationsData, req); err != nil {
 				fmt.Printf("Warning: failed to add dependencies for %s: %v\n", language, err)
 			}
 
