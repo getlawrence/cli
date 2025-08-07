@@ -1,4 +1,4 @@
-package codegen
+package generator
 
 import (
 	"context"
@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 
 	"github.com/getlawrence/cli/internal/agents"
+	"github.com/getlawrence/cli/internal/codegen/types"
+	"github.com/getlawrence/cli/internal/domain"
 	"github.com/getlawrence/cli/internal/templates"
 )
 
@@ -40,7 +42,7 @@ func (s *AIGenerationStrategy) GetRequiredFlags() []string {
 }
 
 // GenerateCode generates code using AI agents
-func (s *AIGenerationStrategy) GenerateCode(ctx context.Context, opportunities []Opportunity, req GenerationRequest) error {
+func (s *AIGenerationStrategy) GenerateCode(ctx context.Context, opportunities []domain.Opportunity, req types.GenerationRequest) error {
 	// Verify requested agent is available
 	if err := s.verifyAgentAvailability(agents.AgentType(req.Config.AgentType)); err != nil {
 		return err
@@ -79,7 +81,7 @@ func (s *AIGenerationStrategy) verifyAgentAvailability(agentType agents.AgentTyp
 	return fmt.Errorf("requested agent %s is not available", agentType)
 }
 
-func (s *AIGenerationStrategy) generateInstructionsForLanguages(languageOpportunities map[string][]Opportunity, req GenerationRequest) ([]string, error) {
+func (s *AIGenerationStrategy) generateInstructionsForLanguages(languageOpportunities map[string][]domain.Opportunity, req types.GenerationRequest) ([]string, error) {
 	var allInstructions []string
 
 	for language, langOpportunities := range languageOpportunities {
@@ -87,11 +89,11 @@ func (s *AIGenerationStrategy) generateInstructionsForLanguages(languageOpportun
 		allInstrumentations := s.collectAllInstrumentations(langOpportunities)
 
 		// Generate comprehensive instructions for this language
-		instructions, err := s.templateEngine.GenerateComprehensiveInstructions(
+		instruction, err := s.templateEngine.GenerateComprehensiveInstructions(
 			language,
-			req.Method,
+			templates.InstallationMethod(req.Method),
 			allInstrumentations,
-			filepath.Base(req.CodebasePath),
+			req.CodebasePath,
 		)
 		if err != nil {
 			fmt.Printf("Warning: failed to generate comprehensive instructions for %s: %v\n", language, err)
@@ -99,13 +101,13 @@ func (s *AIGenerationStrategy) generateInstructionsForLanguages(languageOpportun
 		}
 
 		fmt.Printf("Generated comprehensive instrumentation instructions for %s\n", language)
-		allInstructions = append(allInstructions, instructions)
+		allInstructions = append(allInstructions, instruction)
 	}
 
 	return allInstructions, nil
 }
 
-func (s *AIGenerationStrategy) sendInstructionsToAgent(allInstructions []string, req GenerationRequest) error {
+func (s *AIGenerationStrategy) sendInstructionsToAgent(allInstructions []string, req types.GenerationRequest) error {
 	// Combine all language instructions into a single comprehensive guide
 	combinedInstructions := s.combineInstructions(allInstructions, req.CodebasePath)
 
@@ -154,8 +156,8 @@ func (s *AIGenerationStrategy) combineInstructions(allInstructions []string, cod
 }
 
 // groupOpportunitiesByLanguage groups opportunities by programming language
-func (s *AIGenerationStrategy) groupOpportunitiesByLanguage(opportunities []Opportunity) map[string][]Opportunity {
-	grouped := make(map[string][]Opportunity)
+func (s *AIGenerationStrategy) groupOpportunitiesByLanguage(opportunities []domain.Opportunity) map[string][]domain.Opportunity {
+	grouped := make(map[string][]domain.Opportunity)
 
 	for _, opp := range opportunities {
 		if opp.Language != "" {
@@ -167,10 +169,10 @@ func (s *AIGenerationStrategy) groupOpportunitiesByLanguage(opportunities []Oppo
 }
 
 // collectAllInstrumentations extracts unique instrumentations from all opportunities
-func (s *AIGenerationStrategy) collectAllInstrumentations(opportunities []Opportunity) []string {
+func (s *AIGenerationStrategy) collectAllInstrumentations(opportunities []domain.Opportunity) []string {
 	var instrumentations []string
 	for _, opp := range opportunities {
-		if opp.ComponentType == ComponentTypeInstrumentation {
+		if opp.ComponentType == domain.ComponentTypeInstrumentation {
 			instrumentations = append(instrumentations, string(opp.Component))
 		}
 	}

@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/getlawrence/cli/internal/detector/types"
+	"github.com/getlawrence/cli/internal/domain"
 	"gopkg.in/yaml.v3"
 )
 
@@ -47,7 +47,7 @@ type RegistryEntry struct {
 }
 
 // GetInstrumentation checks if instrumentation exists for a given package
-func (s *InstrumentationRegistryService) GetInstrumentation(ctx context.Context, pkg types.Package) (*types.InstrumentationInfo, error) {
+func (s *InstrumentationRegistryService) GetInstrumentation(ctx context.Context, pkg domain.Package) (*domain.InstrumentationInfo, error) {
 	// Convert package name to registry format
 	packageName := s.PackageName(pkg.Name)
 
@@ -87,8 +87,8 @@ func (s *InstrumentationRegistryService) GetInstrumentation(ctx context.Context,
 		return nil, fmt.Errorf("failed to parse YAML: %w", err)
 	}
 
-	// Convert to types.InstrumentationInfo
-	info := &types.InstrumentationInfo{
+	// Convert to domain.InstrumentationInfo
+	info := &domain.InstrumentationInfo{
 		Package:      pkg,
 		Title:        entry.Title,
 		Description:  entry.Description,
@@ -104,16 +104,16 @@ func (s *InstrumentationRegistryService) GetInstrumentation(ctx context.Context,
 
 	// Convert authors
 	for _, author := range entry.Authors {
-		info.Authors = append(info.Authors, types.Author{Name: author.Name})
+		info.Authors = append(info.Authors, domain.Author{Name: author.Name})
 	}
 
 	// Set URLs
-	info.URLs = types.URLs{Repo: entry.URLs.Repo}
+	info.URLs = domain.URLs{Repo: entry.URLs.Repo}
 
 	return info, nil
 }
 
-// normalizetypes.PackageName converts package names to the format used in the registry
+// normalizedomain.PackageName converts package names to the format used in the registry
 func (s *InstrumentationRegistryService) PackageName(packageName string) string {
 	// Handle common package name formats
 	name := strings.ToLower(packageName)
@@ -132,7 +132,7 @@ func (s *InstrumentationRegistryService) PackageName(packageName string) string 
 }
 
 // GetAvailableInstrumentations returns all instrumentations for a given language
-func (s *InstrumentationRegistryService) GetAvailableInstrumentations(ctx context.Context, language string) ([]types.InstrumentationInfo, error) {
+func (s *InstrumentationRegistryService) GetAvailableInstrumentations(ctx context.Context, language string) ([]domain.InstrumentationInfo, error) {
 	// This would require listing all instrumentation files for a language
 	// For now, we'll implement package-specific lookup only
 	// This could be extended to fetch directory listings or use a registry API

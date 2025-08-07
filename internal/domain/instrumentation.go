@@ -1,4 +1,4 @@
-package types
+package domain
 
 // Library represents an OpenTelemetry library or package
 type Library struct {
@@ -43,52 +43,4 @@ type Author struct {
 // URLs represents URLs in instrumentation metadata
 type URLs struct {
 	Repo string `json:"repo,omitempty"`
-}
-
-// Issue represents a detected problem or recommendation
-type Issue struct {
-	ID          string   `json:"id"`
-	Title       string   `json:"title"`
-	Description string   `json:"description"`
-	Severity    Severity `json:"severity"`
-	Category    Category `json:"category"`
-	Language    string   `json:"language,omitempty"`
-	File        string   `json:"file,omitempty"`
-	Line        int      `json:"line,omitempty"`
-	Column      int      `json:"column,omitempty"`
-	Suggestion  string   `json:"suggestion,omitempty"`
-	References  []string `json:"references,omitempty"`
-}
-
-// Severity levels for issues
-type Severity string
-
-const (
-	SeverityError   Severity = "error"
-	SeverityWarning Severity = "warning"
-	SeverityInfo    Severity = "info"
-)
-
-// Category represents the type of issue
-type Category string
-
-const (
-	CategoryMissingOtel     Category = "missing_otel"
-	CategoryConfiguration   Category = "configuration"
-	CategoryInstrumentation Category = "instrumentation"
-	CategoryPerformance     Category = "performance"
-	CategorySecurity        Category = "security"
-	CategoryBestPractice    Category = "best_practice"
-	CategoryDeprecated      Category = "deprecated"
-)
-
-type EntryPoint struct {
-	FilePath     string
-	Language     string
-	FunctionName string
-	LineNumber   uint32
-	Column       uint32
-	NodeType     string
-	Confidence   float64
-	Context      string
 }

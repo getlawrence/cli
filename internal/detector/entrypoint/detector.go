@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/getlawrence/cli/internal/detector/types"
+	"github.com/getlawrence/cli/internal/domain"
 	sitter "github.com/smacker/go-tree-sitter"
 	"github.com/smacker/go-tree-sitter/golang"
 	"github.com/smacker/go-tree-sitter/python"
@@ -53,7 +53,7 @@ func NewTreeSitterEntryDetector() *TreeSitterEntryDetector {
 }
 
 // DetectEntryPoints finds entry points in the specified language
-func (d *TreeSitterEntryDetector) DetectEntryPoints(projectPath, language string) ([]types.EntryPoint, error) {
+func (d *TreeSitterEntryDetector) DetectEntryPoints(projectPath, language string) ([]domain.EntryPoint, error) {
 	lang, exists := d.languages[language]
 	if !exists {
 		return nil, fmt.Errorf("unsupported language: %s", language)
@@ -64,7 +64,7 @@ func (d *TreeSitterEntryDetector) DetectEntryPoints(projectPath, language string
 		return nil, fmt.Errorf("no query defined for language: %s", language)
 	}
 
-	var entryPoints []types.EntryPoint
+	var entryPoints []domain.EntryPoint
 	fileExtensions := d.getFileExtensions(language)
 
 	err := filepath.Walk(projectPath, func(path string, info os.FileInfo, err error) error {
@@ -91,7 +91,7 @@ func (d *TreeSitterEntryDetector) DetectEntryPoints(projectPath, language string
 }
 
 // analyzeFile parses a single file and extracts entry points
-func (d *TreeSitterEntryDetector) analyzeFile(filePath string, lang *sitter.Language, queryStr, language string) ([]types.EntryPoint, error) {
+func (d *TreeSitterEntryDetector) analyzeFile(filePath string, lang *sitter.Language, queryStr, language string) ([]domain.EntryPoint, error) {
 	// Read file content
 	content, err := os.ReadFile(filePath)
 	if err != nil {
@@ -122,7 +122,7 @@ func (d *TreeSitterEntryDetector) analyzeFile(filePath string, lang *sitter.Lang
 
 	qc.Exec(q, tree.RootNode())
 
-	var entryPoints []types.EntryPoint
+	var entryPoints []domain.EntryPoint
 
 	// Process matches
 	for {
@@ -135,7 +135,7 @@ func (d *TreeSitterEntryDetector) analyzeFile(filePath string, lang *sitter.Lang
 			capture := q.CaptureNameForId(c.Index)
 			node := c.Node
 
-			entryPoint := types.EntryPoint{
+			entryPoint := domain.EntryPoint{
 				FilePath:   filePath,
 				Language:   language,
 				NodeType:   capture,
@@ -197,8 +197,8 @@ func (d *TreeSitterEntryDetector) hasValidExtension(filePath string, extensions 
 }
 
 // DetectAllEntryPoints detects entry points across all supported languages
-func (d *TreeSitterEntryDetector) DetectAllEntryPoints(projectPath string) (map[string][]types.EntryPoint, error) {
-	allEntryPoints := make(map[string][]types.EntryPoint)
+func (d *TreeSitterEntryDetector) DetectAllEntryPoints(projectPath string) (map[string][]domain.EntryPoint, error) {
+	allEntryPoints := make(map[string][]domain.EntryPoint)
 
 	for language := range d.languages {
 		entryPoints, err := d.DetectEntryPoints(projectPath, language)
@@ -216,7 +216,7 @@ func (d *TreeSitterEntryDetector) DetectAllEntryPoints(projectPath string) (map[
 }
 
 // Enhanced detection with framework patterns
-func (d *TreeSitterEntryDetector) DetectFrameworkPatterns(projectPath, language string) ([]types.EntryPoint, error) {
+func (d *TreeSitterEntryDetector) DetectFrameworkPatterns(projectPath, language string) ([]domain.EntryPoint, error) {
 	// Implementation similar to DetectEntryPoints but with framework-specific queries
 	// This allows for more targeted instrumentation
 	return d.DetectEntryPoints(projectPath, language)

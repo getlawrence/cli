@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/getlawrence/cli/internal/detector"
-	"github.com/getlawrence/cli/internal/detector/types"
+	"github.com/getlawrence/cli/internal/domain"
 )
 
 // MissingInstrumentationDetector detects packages that have available instrumentations but are not instrumented
@@ -33,8 +33,8 @@ func (m *MissingInstrumentationDetector) Description() string {
 }
 
 // Category returns the issue category
-func (m *MissingInstrumentationDetector) Category() types.Category {
-	return types.CategoryInstrumentation
+func (m *MissingInstrumentationDetector) Category() domain.Category {
+	return domain.CategoryInstrumentation
 }
 
 // Languages returns which languages this detector applies to
@@ -43,8 +43,8 @@ func (m *MissingInstrumentationDetector) Languages() []string {
 }
 
 // Detect finds packages with available instrumentations
-func (m *MissingInstrumentationDetector) Detect(ctx context.Context, directory *detector.DirectoryAnalysis) ([]types.Issue, error) {
-	var issues []types.Issue
+func (m *MissingInstrumentationDetector) Detect(ctx context.Context, directory *detector.DirectoryAnalysis) ([]domain.Issue, error) {
+	var issues []domain.Issue
 
 	// Check if any packages have available instrumentations
 	for _, instrumentation := range directory.AvailableInstrumentations {
@@ -53,12 +53,12 @@ func (m *MissingInstrumentationDetector) Detect(ctx context.Context, directory *
 
 		if !isInstrumented {
 			// Create an issue for missing instrumentation
-			issue := types.Issue{
+			issue := domain.Issue{
 				ID:          fmt.Sprintf("missing_instrumentation_%s_%s", instrumentation.Language, instrumentation.Package.Name),
 				Title:       fmt.Sprintf("OpenTelemetry instrumentation available for %s", instrumentation.Package.Name),
 				Description: m.buildDescription(instrumentation),
-				Severity:    types.SeverityInfo,
-				Category:    types.CategoryInstrumentation,
+				Severity:    domain.SeverityInfo,
+				Category:    domain.CategoryInstrumentation,
 				Language:    instrumentation.Language,
 				Suggestion:  m.buildSuggestion(instrumentation),
 				References:  m.buildReferences(instrumentation),
@@ -76,7 +76,7 @@ func (m *MissingInstrumentationDetector) Detect(ctx context.Context, directory *
 }
 
 // isPackageInstrumented checks if a package is already instrumented with OpenTelemetry
-func (m *MissingInstrumentationDetector) isPackageInstrumented(pkg types.Package, libraries []types.Library) bool {
+func (m *MissingInstrumentationDetector) isPackageInstrumented(pkg domain.Package, libraries []domain.Library) bool {
 	packageName := strings.ToLower(pkg.Name)
 
 	// Common patterns for instrumentation library names
@@ -104,7 +104,7 @@ func (m *MissingInstrumentationDetector) isPackageInstrumented(pkg types.Package
 }
 
 // buildDescription creates a detailed description for the issue
-func (m *MissingInstrumentationDetector) buildDescription(instrumentation types.InstrumentationInfo) string {
+func (m *MissingInstrumentationDetector) buildDescription(instrumentation domain.InstrumentationInfo) string {
 	description := fmt.Sprintf("The package '%s' is used in your project and has OpenTelemetry instrumentation available.",
 		instrumentation.Package.Name)
 
@@ -124,7 +124,7 @@ func (m *MissingInstrumentationDetector) buildDescription(instrumentation types.
 }
 
 // buildSuggestion creates installation/usage suggestions
-func (m *MissingInstrumentationDetector) buildSuggestion(instrumentation types.InstrumentationInfo) string {
+func (m *MissingInstrumentationDetector) buildSuggestion(instrumentation domain.InstrumentationInfo) string {
 	packageName := instrumentation.Package.Name
 	language := instrumentation.Language
 
@@ -155,7 +155,7 @@ func (m *MissingInstrumentationDetector) buildSuggestion(instrumentation types.I
 }
 
 // buildReferences creates reference links
-func (m *MissingInstrumentationDetector) buildReferences(instrumentation types.InstrumentationInfo) []string {
+func (m *MissingInstrumentationDetector) buildReferences(instrumentation domain.InstrumentationInfo) []string {
 	var references []string
 
 	if instrumentation.URLs.Repo != "" {

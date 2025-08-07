@@ -11,7 +11,7 @@ import (
 	"github.com/getlawrence/cli/internal/detector"
 	"github.com/getlawrence/cli/internal/detector/issues"
 	"github.com/getlawrence/cli/internal/detector/languages"
-	"github.com/getlawrence/cli/internal/detector/types"
+	"github.com/getlawrence/cli/internal/domain"
 	"github.com/spf13/cobra"
 )
 
@@ -100,10 +100,10 @@ func outputText(analysis *detector.Analysis, detailed, verbose bool) error {
 	fmt.Printf("=================================\n\n")
 
 	// Aggregate data from all directories
-	var allIssues []types.Issue
-	var allLibraries []types.Library
-	var allPackages []types.Package
-	var allInstrumentations []types.InstrumentationInfo
+	var allIssues []domain.Issue
+	var allLibraries []domain.Library
+	var allPackages []domain.Package
+	var allInstrumentations []domain.InstrumentationInfo
 	detectedLanguages := make(map[string]bool)
 
 	for _, dirAnalysis := range analysis.DirectoryAnalyses {
@@ -207,7 +207,7 @@ func outputText(analysis *detector.Analysis, detailed, verbose bool) error {
 	return nil
 }
 
-func printIssuesByCategory(title string, issues []types.Issue, detailed bool) {
+func printIssuesByCategory(title string, issues []domain.Issue, detailed bool) {
 	if len(issues) == 0 {
 		return
 	}
@@ -239,10 +239,10 @@ func printIssuesByCategory(title string, issues []types.Issue, detailed bool) {
 
 func outputJSON(analysis *detector.Analysis) error {
 	// Aggregate data from all directories for backward compatibility
-	var allIssues []types.Issue
-	var allLibraries []types.Library
-	var allPackages []types.Package
-	var allInstrumentations []types.InstrumentationInfo
+	var allIssues []domain.Issue
+	var allLibraries []domain.Library
+	var allPackages []domain.Package
+	var allInstrumentations []domain.InstrumentationInfo
 	detectedLanguages := make(map[string]bool)
 
 	for _, dirAnalysis := range analysis.DirectoryAnalyses {

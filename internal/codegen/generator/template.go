@@ -1,4 +1,4 @@
-package codegen
+package generator
 
 import (
 	"context"
@@ -7,6 +7,9 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/getlawrence/cli/internal/codegen/injector"
+	"github.com/getlawrence/cli/internal/codegen/types"
+	"github.com/getlawrence/cli/internal/domain"
 	"github.com/getlawrence/cli/internal/templates"
 )
 
@@ -16,33 +19,17 @@ const (
 	defaultServiceName  = "my-service"
 )
 
-// OperationsData contains the analysis of opportunities organized by operation type
-type OperationsData struct {
-	InstallOTEL             bool                // Whether OTEL needs to be installed
-	InstallInstrumentations []string            // Instrumentations to install
-	InstallComponents       map[string][]string // Components to install by type (sdk, propagator, exporter)
-	RemoveComponents        map[string][]string // Components to remove by type
-}
-
-// isEmpty checks if there are any operations to perform
-func (od *OperationsData) isEmpty() bool {
-	return !od.InstallOTEL &&
-		len(od.InstallInstrumentations) == 0 &&
-		len(od.InstallComponents) == 0 &&
-		len(od.RemoveComponents) == 0
-}
-
 // TemplateGenerationStrategy implements direct code generation using templates
 type TemplateGenerationStrategy struct {
-	templateEngine  *templates.TemplateEngine
-	genericModifier *GenericCodeModifier
+	templateEngine *templates.TemplateEngine
+	codeInjector   *injector.CodeInjector
 }
 
 // NewTemplateGenerationStrategy creates a new template-based generation strategy
 func NewTemplateGenerationStrategy(templateEngine *templates.TemplateEngine) *TemplateGenerationStrategy {
 	return &TemplateGenerationStrategy{
-		templateEngine:  templateEngine,
-		genericModifier: NewGenericCodeModifier(),
+		templateEngine: templateEngine,
+		codeInjector:   injector.NewCodeInjector(),
 	}
 }
 
@@ -62,7 +49,7 @@ func (s *TemplateGenerationStrategy) GetRequiredFlags() []string {
 }
 
 // GenerateCode generates code directly using templates
-func (s *TemplateGenerationStrategy) GenerateCode(ctx context.Context, opportunities []Opportunity, req GenerationRequest) error {
+func (s *TemplateGenerationStrategy) GenerateCode(ctx context.Context, opportunities []domain.Opportunity, req types.GenerationRequest) error {
 	if len(opportunities) == 0 {
 		fmt.Println("No code generation opportunities found")
 		return nil
@@ -123,12 +110,8 @@ func (s *TemplateGenerationStrategy) GenerateCode(ctx context.Context, opportuni
 	return nil
 }
 
-func (s *TemplateGenerationStrategy) generateCodeForLanguage(language string, opportunities []Opportunity, req GenerationRequest, directory string) ([]string, error) {
+func (s *TemplateGenerationStrategy) generateCodeForLanguage(language string, opportunities []domain.Opportunity, req types.GenerationRequest, directory string) ([]string, error) {
 	operationsData := s.analyzeOpportunities(opportunities)
-
-	if operationsData.isEmpty() {
-		return nil, fmt.Errorf("no operations to perform for %s", language)
-	}
 
 	// Generate code based on the method and language
 	switch strings.ToLower(language) {
@@ -141,7 +124,7 @@ func (s *TemplateGenerationStrategy) generateCodeForLanguage(language string, op
 	}
 }
 
-func (s *TemplateGenerationStrategy) generateGoCode(operationsData *OperationsData, req GenerationRequest, directory string) ([]string, error) {
+func (s *TemplateGenerationStrategy) generateGoCode(operationsData *types.OperationsData, req types.GenerationRequest, directory string) ([]string, error) {
 	// Generate based on method
 	switch req.Method {
 	case templates.CodeInstrumentation:
@@ -153,7 +136,7 @@ func (s *TemplateGenerationStrategy) generateGoCode(operationsData *OperationsDa
 	}
 }
 
-func (s *TemplateGenerationStrategy) generateGoCodeInstrumentation(operationsData *OperationsData, req GenerationRequest, directory string) ([]string, error) {
+func (s *TemplateGenerationStrategy) generateGoCodeInstrumentation(operationsData *types.OperationsData, req types.GenerationRequest, directory string) ([]string, error) {
 	serviceName := filepath.Base(req.CodebasePath)
 	if serviceName == "." {
 		// Get current directory name when path is "."
@@ -207,7 +190,7 @@ func (s *TemplateGenerationStrategy) generateGoCodeInstrumentation(operationsDat
 	return []string{outputPath}, nil
 }
 
-func (s *TemplateGenerationStrategy) generateGoAutoInstrumentation(operationsData *OperationsData, req GenerationRequest) ([]string, error) {
+func (s *TemplateGenerationStrategy) generateGoAutoInstrumentation(operationsData *types.OperationsData, req types.GenerationRequest) ([]string, error) {
 	serviceName := filepath.Base(req.CodebasePath)
 	if serviceName == "." {
 		// Get current directory name when path is "."
@@ -259,7 +242,7 @@ func (s *TemplateGenerationStrategy) generateGoAutoInstrumentation(operationsDat
 	return []string{outputPath}, nil
 }
 
-func (s *TemplateGenerationStrategy) generatePythonCode(operationsData *OperationsData, req GenerationRequest, directory string) ([]string, error) {
+func (s *TemplateGenerationStrategy) generatePythonCode(operationsData *types.OperationsData, req types.GenerationRequest, directory string) ([]string, error) {
 	serviceName := filepath.Base(req.CodebasePath)
 	if serviceName == "." {
 		// Get current directory name when path is "."
@@ -328,26 +311,26 @@ func (s *TemplateGenerationStrategy) writeCodeToFile(filePath, content string) e
 }
 
 // analyzeOpportunities processes opportunities and organizes them by operation type
-func (s *TemplateGenerationStrategy) analyzeOpportunities(opportunities []Opportunity) *OperationsData {
-	data := &OperationsData{
+func (s *TemplateGenerationStrategy) analyzeOpportunities(opportunities []domain.Opportunity) *types.OperationsData {
+	data := &types.OperationsData{
 		InstallComponents: make(map[string][]string),
 		RemoveComponents:  make(map[string][]string),
 	}
 
 	for _, opp := range opportunities {
 		switch opp.Type {
-		case OpportunityInstallOTEL:
+		case domain.OpportunityInstallOTEL:
 			data.InstallOTEL = true
 
-		case OpportunityInstallComponent:
-			if opp.ComponentType == ComponentTypeInstrumentation {
+		case domain.OpportunityInstallComponent:
+			if opp.ComponentType == domain.ComponentTypeInstrumentation {
 				data.InstallInstrumentations = append(data.InstallInstrumentations, opp.Component)
 			} else {
 				componentType := string(opp.ComponentType)
 				data.InstallComponents[componentType] = append(data.InstallComponents[componentType], opp.Component)
 			}
 
-		case OpportunityRemoveComponent:
+		case domain.OpportunityRemoveComponent:
 			componentType := string(opp.ComponentType)
 			data.RemoveComponents[componentType] = append(data.RemoveComponents[componentType], opp.Component)
 		}
@@ -357,7 +340,7 @@ func (s *TemplateGenerationStrategy) analyzeOpportunities(opportunities []Opport
 }
 
 // createOperationsSummary generates a human-readable summary of operations for a language
-func (s *TemplateGenerationStrategy) createOperationsSummary(language string, data *OperationsData) []string {
+func (s *TemplateGenerationStrategy) createOperationsSummary(language string, data *types.OperationsData) []string {
 	var summary []string
 
 	if data.InstallOTEL {
@@ -384,8 +367,8 @@ func (s *TemplateGenerationStrategy) createOperationsSummary(language string, da
 }
 
 // groupOpportunitiesByLanguage groups opportunities by programming language
-func (s *TemplateGenerationStrategy) groupOpportunitiesByDirectory(opportunities []Opportunity) map[string][]Opportunity {
-	grouped := make(map[string][]Opportunity)
+func (s *TemplateGenerationStrategy) groupOpportunitiesByDirectory(opportunities []domain.Opportunity) map[string][]domain.Opportunity {
+	grouped := make(map[string][]domain.Opportunity)
 
 	for _, opp := range opportunities {
 		if opp.FilePath != "" {
@@ -397,8 +380,8 @@ func (s *TemplateGenerationStrategy) groupOpportunitiesByDirectory(opportunities
 }
 
 // groupOpportunitiesByLanguage groups opportunities by programming language
-func (s *TemplateGenerationStrategy) groupOpportunitiesByLanguage(opportunities []Opportunity) map[string][]Opportunity {
-	grouped := make(map[string][]Opportunity)
+func (s *TemplateGenerationStrategy) groupOpportunitiesByLanguage(opportunities []domain.Opportunity) map[string][]domain.Opportunity {
+	grouped := make(map[string][]domain.Opportunity)
 
 	for _, opp := range opportunities {
 		if opp.Language != "" {
@@ -411,15 +394,15 @@ func (s *TemplateGenerationStrategy) groupOpportunitiesByLanguage(opportunities 
 
 // handleEntryPointModifications processes entry point modification opportunities
 func (s *TemplateGenerationStrategy) handleEntryPointModifications(
-	opportunities []Opportunity,
-	req GenerationRequest,
-	operationsData *OperationsData,
+	opportunities []domain.Opportunity,
+	req types.GenerationRequest,
+	operationsData *types.OperationsData,
 ) ([]string, error) {
 	var modifiedFiles []string
 
 	for _, opp := range opportunities {
-		if opp.Type == OpportunityModifyEntryPoint && opp.EntryPoint != nil {
-			files, err := s.genericModifier.ModifyEntryPoint(
+		if opp.Type == domain.OpportunityModifyEntryPoint && opp.EntryPoint != nil {
+			files, err := s.codeInjector.InjectOtelInitialization(
 				context.Background(),
 				opp.EntryPoint,
 				operationsData,
