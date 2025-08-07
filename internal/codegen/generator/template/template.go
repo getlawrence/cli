@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/getlawrence/cli/internal/codegen/dependency"
 	"github.com/getlawrence/cli/internal/codegen/injector"
 	"github.com/getlawrence/cli/internal/codegen/types"
 	"github.com/getlawrence/cli/internal/domain"
@@ -24,6 +25,7 @@ type TemplateGenerationStrategy struct {
 	templateEngine   *templates.TemplateEngine
 	codeInjector     *injector.CodeInjector
 	languageRegistry *LanguageGeneratorRegistry
+	dependencyWriter *dependency.DependencyWriter
 }
 
 // NewTemplateGenerationStrategy creates a new template-based generation strategy
@@ -37,6 +39,7 @@ func NewTemplateGenerationStrategy(templateEngine *templates.TemplateEngine) *Te
 		templateEngine:   templateEngine,
 		codeInjector:     injector.NewCodeInjector(),
 		languageRegistry: registry,
+		dependencyWriter: dependency.NewDependencyWriter(),
 	}
 }
 
@@ -82,6 +85,11 @@ func (s *TemplateGenerationStrategy) GenerateCode(ctx context.Context, opportuni
 		for language, langOpportunities := range languageOpportunities {
 			operationsData := s.analyzeOpportunities(langOpportunities)
 			operationsSummary = append(operationsSummary, s.createOperationsSummary(language, operationsData)...)
+
+			// Add dependencies first
+			if err := s.addDependencies(ctx, req.CodebasePath, language, operationsData, req); err != nil {
+				fmt.Printf("Warning: failed to add dependencies for %s: %v\n", language, err)
+			}
 
 			// Handle entry point modifications
 			entryPointFiles, err := s.handleEntryPointModifications(langOpportunities, req, operationsData)
@@ -306,7 +314,9 @@ func (s *TemplateGenerationStrategy) groupOpportunitiesByLanguage(opportunities 
 
 	for _, opp := range opportunities {
 		if opp.Language != "" {
-			grouped[opp.Language] = append(grouped[opp.Language], opp)
+			// Normalize language name to lowercase
+			language := strings.ToLower(opp.Language)
+			grouped[language] = append(grouped[language], opp)
 		}
 	}
 
@@ -337,4 +347,25 @@ func (s *TemplateGenerationStrategy) handleEntryPointModifications(
 	}
 
 	return modifiedFiles, nil
+}
+
+// addDependencies handles adding required dependencies to the project
+func (s *TemplateGenerationStrategy) addDependencies(
+	ctx context.Context,
+	projectPath, language string,
+	operationsData *types.OperationsData,
+	req types.GenerationRequest,
+) error {
+	// Skip if no dependencies need to be added
+	if !operationsData.InstallOTEL && len(operationsData.InstallInstrumentations) == 0 && len(operationsData.InstallComponents) == 0 {
+		return nil
+	}
+
+	// Validate project structure
+	if err := s.dependencyWriter.ValidateProjectStructure(projectPath, language); err != nil {
+		fmt.Printf("Warning: %v\n", err)
+	}
+
+	// Add dependencies
+	return s.dependencyWriter.AddDependencies(ctx, projectPath, language, operationsData, req)
 }
