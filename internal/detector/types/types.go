@@ -81,3 +81,14 @@ const (
 	CategoryBestPractice    Category = "best_practice"
 	CategoryDeprecated      Category = "deprecated"
 )
+
+type EntryPoint struct {
+	FilePath     string
+	Language     string
+	FunctionName string
+	LineNumber   uint32
+	Column       uint32
+	NodeType     string
+	Confidence   float64
+	Context      string
+}

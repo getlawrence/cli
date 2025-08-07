@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/getlawrence/cli/internal/detector/entrypoint"
 	"github.com/getlawrence/cli/internal/detector/types"
 )
 
@@ -34,17 +35,13 @@ type IssueDetector interface {
 	// Languages returns which languages this detector applies to (empty = all)
 	Languages() []string
 	// Detect finds issues in the given context
-	Detect(ctx context.Context, analysis *Analysis) ([]types.Issue, error)
+	Detect(ctx context.Context, analysis *DirectoryAnalysis) ([]types.Issue, error)
 }
 
 // Analysis contains the results of language detection and library discovery
 type Analysis struct {
-	RootPath                  string                        `json:"root_path"`
-	DetectedLanguages         []string                      `json:"detected_languages"`
-	Libraries                 []types.Library               `json:"libraries"`
-	Packages                  []types.Package               `json:"packages"`
-	AvailableInstrumentations []types.InstrumentationInfo   `json:"available_instrumentations"`
-	DirectoryAnalyses         map[string]*DirectoryAnalysis `json:"directory_analyses"`
+	RootPath          string                        `json:"root_path"`
+	DirectoryAnalyses map[string]*DirectoryAnalysis `json:"directory_analyses"`
 }
 
 // DirectoryAnalysis contains analysis results for a specific directory
@@ -55,19 +52,22 @@ type DirectoryAnalysis struct {
 	Packages                  []types.Package             `json:"packages"`
 	AvailableInstrumentations []types.InstrumentationInfo `json:"available_instrumentations"`
 	Issues                    []types.Issue               `json:"issues"`
+	EntryPoints               []types.EntryPoint          `json:"entry_points"`
 }
 
 // CodebaseAnalyzer coordinates the detection process
 type CodebaseAnalyzer struct {
-	detectors         []IssueDetector
-	languageDetectors map[string]Language
+	detectors          []IssueDetector
+	languageDetectors  map[string]Language
+	entrypointDetector *entrypoint.TreeSitterEntryDetector
 }
 
 // NewCodebaseAnalyzer creates a new analysis engine
 func NewCodebaseAnalyzer(detectors []IssueDetector, languages map[string]Language) *CodebaseAnalyzer {
 	return &CodebaseAnalyzer{
-		detectors:         detectors,
-		languageDetectors: languages,
+		detectors:          detectors,
+		languageDetectors:  languages,
+		entrypointDetector: entrypoint.NewTreeSitterEntryDetector(),
 	}
 }
 
@@ -108,18 +108,7 @@ func (ca *CodebaseAnalyzer) AnalyzeCodebase(ctx context.Context, rootPath string
 			return nil, fmt.Errorf("failed to process directory %s: %w", directory, err)
 		}
 		analysis.DirectoryAnalyses[directory] = dirAnalysis
-
-		// Aggregate results to main analysis
-		analysis.Libraries = append(analysis.Libraries, dirAnalysis.Libraries...)
-		analysis.Packages = append(analysis.Packages, dirAnalysis.Packages...)
-		analysis.AvailableInstrumentations = append(analysis.AvailableInstrumentations, dirAnalysis.AvailableInstrumentations...)
 	}
-
-	// Set detected languages from seen languages
-	for language := range seenLanguages {
-		analysis.DetectedLanguages = append(analysis.DetectedLanguages, language)
-	}
-
 	return analysis, nil
 }
 
@@ -144,11 +133,14 @@ func (ca *CodebaseAnalyzer) processDirectory(ctx context.Context, directory, dir
 	if err != nil {
 		return nil, err
 	}
+
+	entrypoint, err := ca.entrypointDetector.DetectEntryPoints(dirPath, language)
 	dirAnalysis := &DirectoryAnalysis{
-		Directory: directory,
-		Language:  language,
-		Libraries: libs,
-		Packages:  packages,
+		Directory:   directory,
+		Language:    language,
+		Libraries:   libs,
+		Packages:    packages,
+		EntryPoints: entrypoint,
 	}
 
 	// Step 2: Populate instrumentations
@@ -212,15 +204,7 @@ func (ca *CodebaseAnalyzer) runIssueDetectorsForDirectory(ctx context.Context, d
 			continue
 		}
 
-		// Create temporary analysis for this directory
-		tempAnalysis := &Analysis{
-			DetectedLanguages:         []string{dirAnalysis.Language},
-			Libraries:                 dirAnalysis.Libraries,
-			Packages:                  dirAnalysis.Packages,
-			AvailableInstrumentations: dirAnalysis.AvailableInstrumentations,
-		}
-
-		detectorIssues, err := detector.Detect(ctx, tempAnalysis)
+		detectorIssues, err := detector.Detect(ctx, dirAnalysis)
 		if err != nil {
 			return nil, fmt.Errorf("detector %s failed for directory %s: %w", detector.ID(), dirAnalysis.Directory, err)
 		}

@@ -99,18 +99,35 @@ func outputText(analysis *detector.Analysis, detailed, verbose bool) error {
 	fmt.Printf("📊 OpenTelemetry Analysis Results\n")
 	fmt.Printf("=================================\n\n")
 
-	// Aggregate issues from all directories
+	// Aggregate data from all directories
 	var allIssues []types.Issue
+	var allLibraries []types.Library
+	var allPackages []types.Package
+	var allInstrumentations []types.InstrumentationInfo
+	detectedLanguages := make(map[string]bool)
+
 	for _, dirAnalysis := range analysis.DirectoryAnalyses {
 		allIssues = append(allIssues, dirAnalysis.Issues...)
+		allLibraries = append(allLibraries, dirAnalysis.Libraries...)
+		allPackages = append(allPackages, dirAnalysis.Packages...)
+		allInstrumentations = append(allInstrumentations, dirAnalysis.AvailableInstrumentations...)
+		if dirAnalysis.Language != "" {
+			detectedLanguages[dirAnalysis.Language] = true
+		}
+	}
+
+	// Convert detected languages map to slice
+	var languageSlice []string
+	for lang := range detectedLanguages {
+		languageSlice = append(languageSlice, lang)
 	}
 
 	// Summary
 	fmt.Printf("📂 Project Path: %s\n", analysis.RootPath)
-	fmt.Printf("🗣️  Languages Detected: %v\n", analysis.DetectedLanguages)
-	fmt.Printf("📦 OpenTelemetry Libraries: %d\n", len(analysis.Libraries))
-	fmt.Printf("📥 All Packages: %d\n", len(analysis.Packages))
-	fmt.Printf("🔧 Available Instrumentations: %d\n", len(analysis.AvailableInstrumentations))
+	fmt.Printf("🗣️  Languages Detected: %v\n", languageSlice)
+	fmt.Printf("📦 OpenTelemetry Libraries: %d\n", len(allLibraries))
+	fmt.Printf("📥 All Packages: %d\n", len(allPackages))
+	fmt.Printf("🔧 Available Instrumentations: %d\n", len(allInstrumentations))
 	fmt.Printf("📁 Directories Analyzed: %d\n", len(analysis.DirectoryAnalyses))
 	fmt.Printf("⚠️  Issues Found: %d\n\n", len(allIssues))
 
@@ -139,10 +156,10 @@ func outputText(analysis *detector.Analysis, detailed, verbose bool) error {
 	}
 
 	// Libraries
-	if len(analysis.Libraries) > 0 {
+	if len(allLibraries) > 0 {
 		fmt.Printf("📦 OpenTelemetry Libraries Found:\n")
 		fmt.Printf("---------------------------------\n")
-		for _, lib := range analysis.Libraries {
+		for _, lib := range allLibraries {
 			if lib.Version != "" {
 				fmt.Printf("  • %s (%s) - %s\n", lib.Name, lib.Version, lib.Language)
 			} else {
@@ -156,10 +173,10 @@ func outputText(analysis *detector.Analysis, detailed, verbose bool) error {
 	}
 
 	// Available Instrumentations
-	if len(analysis.AvailableInstrumentations) > 0 {
+	if len(allInstrumentations) > 0 {
 		fmt.Printf("🔧 Available OpenTelemetry Instrumentations:\n")
 		fmt.Printf("-------------------------------------------\n")
-		for _, instrumentation := range analysis.AvailableInstrumentations {
+		for _, instrumentation := range allInstrumentations {
 			status := "🔧"
 			if instrumentation.IsFirstParty {
 				status = "✅"
@@ -183,15 +200,6 @@ func outputText(analysis *detector.Analysis, detailed, verbose bool) error {
 	if len(allIssues) > 0 {
 		fmt.Printf("⚠️  Issues and Recommendations:\n")
 		fmt.Printf("-------------------------------\n")
-
-		// Group issues by severity
-		errors := filterIssuesBySeverity(allIssues, types.SeverityError)
-		warnings := filterIssuesBySeverity(allIssues, types.SeverityWarning)
-		infos := filterIssuesBySeverity(allIssues, types.SeverityInfo)
-
-		printIssuesByCategory("🚨 Errors", errors, detailed)
-		printIssuesByCategory("⚠️  Warnings", warnings, detailed)
-		printIssuesByCategory("ℹ️  Information", infos, detailed)
 	} else {
 		fmt.Printf("✅ No issues found! Your OpenTelemetry setup looks good.\n")
 	}
@@ -230,10 +238,27 @@ func printIssuesByCategory(title string, issues []types.Issue, detailed bool) {
 }
 
 func outputJSON(analysis *detector.Analysis) error {
-	// Aggregate issues from all directories for backward compatibility
+	// Aggregate data from all directories for backward compatibility
 	var allIssues []types.Issue
+	var allLibraries []types.Library
+	var allPackages []types.Package
+	var allInstrumentations []types.InstrumentationInfo
+	detectedLanguages := make(map[string]bool)
+
 	for _, dirAnalysis := range analysis.DirectoryAnalyses {
 		allIssues = append(allIssues, dirAnalysis.Issues...)
+		allLibraries = append(allLibraries, dirAnalysis.Libraries...)
+		allPackages = append(allPackages, dirAnalysis.Packages...)
+		allInstrumentations = append(allInstrumentations, dirAnalysis.AvailableInstrumentations...)
+		if dirAnalysis.Language != "" {
+			detectedLanguages[dirAnalysis.Language] = true
+		}
+	}
+
+	// Convert detected languages map to slice
+	var languageSlice []string
+	for lang := range detectedLanguages {
+		languageSlice = append(languageSlice, lang)
 	}
 
 	result := map[string]interface{}{
@@ -241,10 +266,10 @@ func outputJSON(analysis *detector.Analysis) error {
 		"all_issues": allIssues,
 		"summary": map[string]interface{}{
 			"total_directories":      len(analysis.DirectoryAnalyses),
-			"total_languages":        len(analysis.DetectedLanguages),
-			"total_libraries":        len(analysis.Libraries),
-			"total_packages":         len(analysis.Packages),
-			"total_instrumentations": len(analysis.AvailableInstrumentations),
+			"total_languages":        len(languageSlice),
+			"total_libraries":        len(allLibraries),
+			"total_packages":         len(allPackages),
+			"total_instrumentations": len(allInstrumentations),
 			"total_issues":           len(allIssues),
 		},
 	}
@@ -258,73 +283,4 @@ func outputYAML(analysis *detector.Analysis) error {
 	// For simplicity, output as JSON for now
 	// In a real implementation, you'd use a YAML library
 	return outputJSON(analysis)
-}
-
-// Filter functions
-
-func filterAnalysisByLanguages(analysis *detector.Analysis, languages []string) *detector.Analysis {
-	filtered := *analysis
-	filtered.DetectedLanguages = filterStringSlice(analysis.DetectedLanguages, languages)
-
-	var filteredLibs []types.Library
-	for _, lib := range analysis.Libraries {
-		if containsString(languages, lib.Language) {
-			filteredLibs = append(filteredLibs, lib)
-		}
-	}
-	filtered.Libraries = filteredLibs
-
-	return &filtered
-}
-
-func filterIssuesByLanguages(issues []types.Issue, languages []string) []types.Issue {
-	var filtered []types.Issue
-	for _, issue := range issues {
-		// Include issues with no language specified (general issues)
-		if issue.Language == "" || containsString(languages, issue.Language) {
-			filtered = append(filtered, issue)
-		}
-	}
-	return filtered
-}
-
-func filterIssuesByCategories(issues []types.Issue, categories []string) []types.Issue {
-	var filtered []types.Issue
-	for _, issue := range issues {
-		if containsString(categories, string(issue.Category)) {
-			filtered = append(filtered, issue)
-		}
-	}
-	return filtered
-}
-
-func filterIssuesBySeverity(issues []types.Issue, severity types.Severity) []types.Issue {
-	var filtered []types.Issue
-	for _, issue := range issues {
-		if issue.Severity == severity {
-			filtered = append(filtered, issue)
-		}
-	}
-	return filtered
-}
-
-// Helper functions
-
-func filterStringSlice(slice, filter []string) []string {
-	var result []string
-	for _, item := range slice {
-		if containsString(filter, item) {
-			result = append(result, item)
-		}
-	}
-	return result
-}
-
-func containsString(slice []string, item string) bool {
-	for _, s := range slice {
-		if s == item {
-			return true
-		}
-	}
-	return false
 }

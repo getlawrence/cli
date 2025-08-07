@@ -182,6 +182,7 @@ func (g *Generator) convertIssuesToOpportunities(analysis *detector.Analysis) []
 
 	// Extract issues from the analysis
 	for _, dirAnalysis := range analysis.DirectoryAnalyses {
+		opportunities = append(opportunities, g.createOpportunitiesFromInstrumentations(dirAnalysis)...)
 		for _, issue := range dirAnalysis.Issues {
 			switch issue.Category {
 			case types.CategoryMissingOtel:
@@ -193,13 +194,10 @@ func (g *Generator) convertIssuesToOpportunities(analysis *detector.Analysis) []
 			}
 		}
 	}
-
-	opportunities = append(opportunities, g.createOpportunitiesFromInstrumentations(analysis)...)
-
 	return opportunities
 }
 
-func (g *Generator) createOpportunitiesFromInstrumentations(analysis *detector.Analysis) []Opportunity {
+func (g *Generator) createOpportunitiesFromInstrumentations(analysis *detector.DirectoryAnalysis) []Opportunity {
 	var opportunities []Opportunity
 
 	for _, instr := range analysis.AvailableInstrumentations {
@@ -211,7 +209,7 @@ func (g *Generator) createOpportunitiesFromInstrumentations(analysis *detector.A
 				ComponentType: ComponentTypeInstrumentation,
 				Type:          OpportunityInstallComponent,
 				Suggestion:    fmt.Sprintf("Add OpenTelemetry instrumentation for %s", instr.Package.Name),
-				FilePath:      analysis.RootPath,
+				FilePath:      analysis.Directory,
 			}
 			opportunities = append(opportunities, opp)
 		}
@@ -220,7 +218,7 @@ func (g *Generator) createOpportunitiesFromInstrumentations(analysis *detector.A
 	return opportunities
 }
 
-func (g *Generator) isAlreadyInstrumented(analysis *detector.Analysis, instr types.InstrumentationInfo) bool {
+func (g *Generator) isAlreadyInstrumented(analysis *detector.DirectoryAnalysis, instr types.InstrumentationInfo) bool {
 	// Check if the instrumentation library is already in use
 	for _, lib := range analysis.Libraries {
 		if lib.Name == instr.Package.Name ||
@@ -229,18 +227,6 @@ func (g *Generator) isAlreadyInstrumented(analysis *detector.Analysis, instr typ
 		}
 	}
 	return false
-}
-
-func (g *Generator) extractRelevantInstrumentations(analysis *detector.Analysis, language string) []string {
-	var instrumentations []string
-
-	for _, instr := range analysis.AvailableInstrumentations {
-		if instr.Language == language && instr.IsAvailable {
-			instrumentations = append(instrumentations, instr.Package.Name)
-		}
-	}
-
-	return instrumentations
 }
 
 func (g *Generator) filterByLanguage(opportunities []Opportunity, language string) []Opportunity {

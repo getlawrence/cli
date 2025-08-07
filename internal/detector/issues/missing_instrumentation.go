@@ -43,13 +43,13 @@ func (m *MissingInstrumentationDetector) Languages() []string {
 }
 
 // Detect finds packages with available instrumentations
-func (m *MissingInstrumentationDetector) Detect(ctx context.Context, analysis *detector.Analysis) ([]types.Issue, error) {
+func (m *MissingInstrumentationDetector) Detect(ctx context.Context, directory *detector.DirectoryAnalysis) ([]types.Issue, error) {
 	var issues []types.Issue
 
 	// Check if any packages have available instrumentations
-	for _, instrumentation := range analysis.AvailableInstrumentations {
+	for _, instrumentation := range directory.AvailableInstrumentations {
 		// Check if this package is already instrumented
-		isInstrumented := m.isPackageInstrumented(instrumentation.Package, analysis.Libraries)
+		isInstrumented := m.isPackageInstrumented(instrumentation.Package, directory.Libraries)
 
 		if !isInstrumented {
 			// Create an issue for missing instrumentation

@@ -42,11 +42,11 @@ func (m *MissingOTelDetector) Languages() []string {
 }
 
 // Detect finds missing OTel library issues
-func (m *MissingOTelDetector) Detect(ctx context.Context, analysis *detector.Analysis) ([]types.Issue, error) {
+func (m *MissingOTelDetector) Detect(ctx context.Context, directory *detector.DirectoryAnalysis) ([]types.Issue, error) {
 	var issues []types.Issue
 
-	if len(analysis.Libraries) == 0 && len(analysis.DetectedLanguages) > 0 {
-		langList := fmt.Sprintf("Detected languages: %v", analysis.DetectedLanguages)
+	if len(directory.Libraries) == 0 && len(directory.Language) > 0 {
+		langList := fmt.Sprintf("Detected languages: %v", directory.Language)
 
 		issues = append(issues, types.Issue{
 			ID:          m.ID(),
@@ -55,7 +55,7 @@ func (m *MissingOTelDetector) Detect(ctx context.Context, analysis *detector.Ana
 			Severity:    types.SeverityWarning,
 			Category:    m.Category(),
 			Suggestion:  "Consider adding OpenTelemetry instrumentation to gain observability into your application",
-			Language:    analysis.DetectedLanguages[0],
+			Language:    directory.Language,
 			References: []string{
 				"https://opentelemetry.io/docs/instrumentation/",
 				"https://opentelemetry.io/docs/getting-started/",
@@ -100,16 +100,16 @@ func (i *IncompleteInstrumentationDetector) Languages() []string {
 }
 
 // Detect finds incomplete instrumentation issues
-func (i *IncompleteInstrumentationDetector) Detect(ctx context.Context, analysis *detector.Analysis) ([]types.Issue, error) {
+func (i *IncompleteInstrumentationDetector) Detect(ctx context.Context, directory *detector.DirectoryAnalysis) ([]types.Issue, error) {
 	var issues []types.Issue
 
-	if len(analysis.Libraries) > 0 {
+	if len(directory.Libraries) > 0 {
 		hasTracing := false
 		hasMetrics := false
 		hasLogging := false
 
 		// Check what types of instrumentation are present
-		for _, lib := range analysis.Libraries {
+		for _, lib := range directory.Libraries {
 			switch {
 			case containsAny(lib.Name, []string{"trace", "tracing"}):
 				hasTracing = true
@@ -201,11 +201,11 @@ func (o *OutdatedLibrariesDetector) Languages() []string {
 }
 
 // Detect finds outdated library issues
-func (o *OutdatedLibrariesDetector) Detect(ctx context.Context, analysis *detector.Analysis) ([]types.Issue, error) {
+func (o *OutdatedLibrariesDetector) Detect(ctx context.Context, directory detector.DirectoryAnalysis) ([]types.Issue, error) {
 	var issues []types.Issue
 
 	// Simple version check - in a real implementation, you'd check against latest versions
-	for _, lib := range analysis.Libraries {
+	for _, lib := range directory.Libraries {
 		if lib.Version != "" && isOutdatedVersion(lib.Version) {
 			issues = append(issues, types.Issue{
 				ID:          o.ID() + "_" + lib.Name,
