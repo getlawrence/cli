@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	inj "github.com/getlawrence/cli/internal/codegen/injector"
 	"github.com/getlawrence/cli/internal/languages"
 	"github.com/spf13/cobra"
 )
@@ -23,9 +24,16 @@ func Execute() error {
 }
 
 func init() {
-	// Register all language plugins
-	languages.DefaultRegistry.Register(languages.NewGoPlugin())
-	languages.DefaultRegistry.Register(languages.NewPythonPlugin())
+	// Register all language plugins and their injectors explicitly
+	goPlugin := languages.NewGoPlugin()
+	pyPlugin := languages.NewPythonPlugin()
+
+	languages.DefaultRegistry.Register(goPlugin)
+	languages.DefaultRegistry.Register(pyPlugin)
+
+	// Register language injectors for code modification
+	inj.RegisterLanguageInjector(goPlugin.DisplayName(), goPlugin.Injector())
+	inj.RegisterLanguageInjector(pyPlugin.DisplayName(), pyPlugin.Injector())
 
 	// Global flags
 	rootCmd.PersistentFlags().BoolP("verbose", "v", false, "verbose output")

@@ -143,8 +143,17 @@ func isProgrammingLanguage(lang string) bool {
 
 // shouldSkipFile determines if a file or directory should be skipped during language detection
 func shouldSkipFile(rootPath, path string, info os.FileInfo) bool {
-	// Skip directories (they will be traversed)
+	// Skip common non-source directories
+	relPath, _ := filepath.Rel(rootPath, path)
+	pathParts := strings.Split(relPath, string(filepath.Separator))
+	skipDirs := map[string]struct{}{"node_modules": {}, "vendor": {}, ".git": {}, "__pycache__": {}, ".venv": {}, "venv": {}}
+
 	if info.IsDir() {
+		name := info.Name()
+		if _, ok := skipDirs[name]; ok {
+			return true
+		}
+		// Allow traversal into other directories
 		return false
 	}
 
@@ -153,16 +162,9 @@ func shouldSkipFile(rootPath, path string, info os.FileInfo) bool {
 		return true
 	}
 
-	// Skip common non-source directories
-	relPath, _ := filepath.Rel(rootPath, path)
-	pathParts := strings.Split(relPath, string(filepath.Separator))
-
-	skipDirs := []string{"node_modules", "vendor", ".git", "__pycache__", ".venv", "venv"}
 	for _, part := range pathParts {
-		for _, skipDir := range skipDirs {
-			if part == skipDir {
-				return true
-			}
+		if _, ok := skipDirs[part]; ok {
+			return true
 		}
 	}
 

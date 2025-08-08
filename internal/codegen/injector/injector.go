@@ -3,9 +3,11 @@ package injector
 import (
 	"context"
 	"fmt"
+	gformat "go/format"
 	"os"
 	"path/filepath"
 	"strings"
+	"text/template"
 
 	"github.com/getlawrence/cli/internal/codegen/types"
 	"github.com/getlawrence/cli/internal/domain"
@@ -364,9 +366,18 @@ func (ci *CodeInjector) generateInitializationModification(
 
 // generateFromTemplate generates code from a template with data
 func (ci *CodeInjector) generateFromTemplate(templateStr string, data map[string]interface{}) string {
-	// For now, return the template as-is. In a full implementation,
-	// you would use the text/template package to process the template
-	return templateStr
+	if templateStr == "" {
+		return ""
+	}
+	tmpl, err := template.New("snippet").Parse(templateStr)
+	if err != nil {
+		return templateStr
+	}
+	var sb strings.Builder
+	if err := tmpl.Execute(&sb, data); err != nil {
+		return templateStr
+	}
+	return sb.String()
 }
 
 // applyModifications applies the generated modifications to the source file
@@ -415,6 +426,13 @@ func (ci *CodeInjector) applyModifications(filePath string, modifications []type
 	}
 
 	modifiedContent := strings.Join(lines, "\n")
+
+	// Format Go files for syntactic correctness
+	if strings.EqualFold(filepath.Ext(filePath), ".go") {
+		if formatted, err := gformat.Source([]byte(modifiedContent)); err == nil {
+			modifiedContent = string(formatted)
+		}
+	}
 
 	if dryRun {
 		fmt.Printf("Would modify file: %s\n", filePath)

@@ -1,12 +1,19 @@
 package languages
 
 import (
+	"bufio"
+	"context"
 	"fmt"
 	"strings"
+
+	"os"
+	"path/filepath"
+	"regexp"
 
 	dep "github.com/getlawrence/cli/internal/codegen/dependency"
 	inj "github.com/getlawrence/cli/internal/codegen/injector"
 	"github.com/getlawrence/cli/internal/codegen/types"
+	"github.com/getlawrence/cli/internal/domain"
 	"github.com/getlawrence/cli/internal/templates"
 	sitter "github.com/smacker/go-tree-sitter"
 	tspython "github.com/smacker/go-tree-sitter/python"
@@ -240,3 +247,301 @@ func (p *PythonPlugin) findMainBlockWithRegex(content []byte, analysis *types.Fi
 	}
 }
 func (p *PythonPlugin) FallbackAnalyzeImports(content []byte, analysis *types.FileAnalysis) {}
+
+// DetectionProvider implementation (replaces legacy PythonDetector)
+func (p *PythonPlugin) GetOTelLibraries(ctx context.Context, rootPath string) ([]domain.Library, error) {
+	var libraries []domain.Library
+
+	// requirements.txt
+	reqPath := filepath.Join(rootPath, "requirements.txt")
+	if _, err := os.Stat(reqPath); err == nil {
+		libs, err := p.parseRequirements(reqPath)
+		if err != nil {
+			return nil, err
+		}
+		libraries = append(libraries, libs...)
+	}
+
+	// pyproject.toml
+	pyprojectPath := filepath.Join(rootPath, "pyproject.toml")
+	if _, err := os.Stat(pyprojectPath); err == nil {
+		libs, err := p.parsePyproject(pyprojectPath)
+		if err != nil {
+			return nil, err
+		}
+		libraries = append(libraries, libs...)
+	}
+
+	// imports
+	pyFiles, err := p.findPythonFiles(rootPath)
+	if err != nil {
+		return nil, err
+	}
+	for _, f := range pyFiles {
+		libs, err := p.parsePythonImports(f)
+		if err != nil {
+			return nil, err
+		}
+		libraries = append(libraries, libs...)
+	}
+	return p.deduplicateLibraries(libraries), nil
+}
+
+func (p *PythonPlugin) GetAllPackages(ctx context.Context, rootPath string) ([]domain.Package, error) {
+	var packages []domain.Package
+
+	reqPath := filepath.Join(rootPath, "requirements.txt")
+	if _, err := os.Stat(reqPath); err == nil {
+		pkgs, err := p.parseAllRequirements(reqPath)
+		if err != nil {
+			return nil, err
+		}
+		packages = append(packages, pkgs...)
+	}
+
+	pyprojectPath := filepath.Join(rootPath, "pyproject.toml")
+	if _, err := os.Stat(pyprojectPath); err == nil {
+		pkgs, err := p.parseAllPyproject(pyprojectPath)
+		if err != nil {
+			return nil, err
+		}
+		packages = append(packages, pkgs...)
+	}
+
+	pyFiles, err := p.findPythonFiles(rootPath)
+	if err != nil {
+		return nil, err
+	}
+	for _, f := range pyFiles {
+		pkgs, err := p.parseAllPythonImports(f)
+		if err != nil {
+			return nil, err
+		}
+		packages = append(packages, pkgs...)
+	}
+	return p.deduplicatePackages(packages), nil
+}
+
+// Helpers (ported from legacy detector)
+func (p *PythonPlugin) parseRequirements(reqPath string) ([]domain.Library, error) {
+	file, err := os.Open(reqPath)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+	var libraries []domain.Library
+	scanner := bufio.NewScanner(file)
+	otelRegex := regexp.MustCompile(`^(opentelemetry[a-zA-Z0-9\-_]*)(==|>=|<=|>|<|~=)([^\s;#]+)`)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if strings.HasPrefix(line, "#") || line == "" {
+			continue
+		}
+		if matches := otelRegex.FindStringSubmatch(line); len(matches) >= 4 {
+			libraries = append(libraries, domain.Library{
+				Name: matches[1], Version: matches[3], Language: "python", ImportPath: matches[1], PackageFile: reqPath,
+			})
+		}
+	}
+	return libraries, scanner.Err()
+}
+
+func (p *PythonPlugin) parsePyproject(pyprojectPath string) ([]domain.Library, error) {
+	file, err := os.Open(pyprojectPath)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+	var libraries []domain.Library
+	scanner := bufio.NewScanner(file)
+	inDependencies := false
+	otelRegex := regexp.MustCompile(`"(opentelemetry[a-zA-Z0-9\-_]*)[^"]*"`)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if strings.Contains(line, "dependencies") && strings.Contains(line, "=") {
+			inDependencies = true
+			continue
+		}
+		if inDependencies && strings.HasPrefix(line, "[") {
+			inDependencies = false
+			continue
+		}
+		if inDependencies {
+			if matches := otelRegex.FindStringSubmatch(line); len(matches) >= 2 {
+				libraries = append(libraries, domain.Library{Name: matches[1], Language: "python", ImportPath: matches[1], PackageFile: pyprojectPath})
+			}
+		}
+	}
+	return libraries, scanner.Err()
+}
+
+func (p *PythonPlugin) findPythonFiles(rootPath string) ([]string, error) {
+	var pyFiles []string
+	err := filepath.Walk(rootPath, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.IsDir() && (info.Name() == "__pycache__" || info.Name() == ".git" || info.Name() == "venv" || info.Name() == ".venv") {
+			return filepath.SkipDir
+		}
+		if strings.HasSuffix(path, ".py") {
+			pyFiles = append(pyFiles, path)
+		}
+		return nil
+	})
+	return pyFiles, err
+}
+
+func (p *PythonPlugin) parsePythonImports(filePath string) ([]domain.Library, error) {
+	file, err := os.Open(filePath)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+	var libraries []domain.Library
+	scanner := bufio.NewScanner(file)
+	importRegex := regexp.MustCompile(`^(?:from\s+)?(opentelemetry[a-zA-Z0-9\._]*)\s*(?:import|$)`)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if matches := importRegex.FindStringSubmatch(line); len(matches) >= 2 {
+			libraries = append(libraries, domain.Library{Name: matches[1], Language: "python", ImportPath: matches[1]})
+		}
+	}
+	return libraries, scanner.Err()
+}
+
+func (p *PythonPlugin) parseAllRequirements(reqPath string) ([]domain.Package, error) {
+	file, err := os.Open(reqPath)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+	var packages []domain.Package
+	scanner := bufio.NewScanner(file)
+	packageRegex := regexp.MustCompile(`^([a-zA-Z0-9\-\_\.]+)(?:[>=<!\s]+([^\s#]+))?`)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		matches := packageRegex.FindStringSubmatch(line)
+		if len(matches) >= 2 {
+			version := ""
+			if len(matches) >= 3 {
+				version = matches[2]
+			}
+			packages = append(packages, domain.Package{Name: matches[1], Version: version, Language: "python", ImportPath: matches[1], PackageFile: reqPath})
+		}
+	}
+	return packages, scanner.Err()
+}
+
+func (p *PythonPlugin) parseAllPyproject(pyprojectPath string) ([]domain.Package, error) {
+	file, err := os.Open(pyprojectPath)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+	var packages []domain.Package
+	scanner := bufio.NewScanner(file)
+	inDependencies := false
+	depRegex := regexp.MustCompile(`^\s*"([^"]+)"\s*=`)
+	depArrayRegex := regexp.MustCompile(`^\s*"([^"]+)"`)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "[tool.poetry.dependencies]" || line == "[project]" {
+			inDependencies = true
+			continue
+		}
+		if strings.HasPrefix(line, "[") && inDependencies {
+			inDependencies = false
+			continue
+		}
+		if inDependencies {
+			if matches := depRegex.FindStringSubmatch(line); len(matches) >= 2 {
+				packages = append(packages, domain.Package{Name: matches[1], Language: "python", ImportPath: matches[1], PackageFile: pyprojectPath})
+			} else if matches := depArrayRegex.FindStringSubmatch(line); len(matches) >= 2 {
+				packages = append(packages, domain.Package{Name: matches[1], Language: "python", ImportPath: matches[1], PackageFile: pyprojectPath})
+			}
+		}
+	}
+	return packages, scanner.Err()
+}
+
+func (p *PythonPlugin) parseAllPythonImports(filePath string) ([]domain.Package, error) {
+	file, err := os.Open(filePath)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+	var packages []domain.Package
+	scanner := bufio.NewScanner(file)
+	fromImportRegex := regexp.MustCompile(`^from\s+([a-zA-Z0-9\._]+)\s+import`)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		var packageName string
+		if matches := fromImportRegex.FindStringSubmatch(line); len(matches) >= 2 {
+			packageName = matches[1]
+		} else if strings.HasPrefix(line, "import ") {
+			importLine := strings.TrimPrefix(line, "import ")
+			parts := strings.Split(importLine, ",")
+			if len(parts) > 0 {
+				packageName = strings.TrimSpace(strings.Split(parts[0], " as ")[0])
+			}
+		}
+		if packageName != "" && p.isThirdPartyPythonPackage(packageName) {
+			rootPackage := strings.Split(packageName, ".")[0]
+			packages = append(packages, domain.Package{Name: rootPackage, Language: "python", ImportPath: packageName})
+		}
+	}
+	return packages, scanner.Err()
+}
+
+// Helpers ported from legacy detector
+func (p *PythonPlugin) deduplicateLibraries(libraries []domain.Library) []domain.Library {
+	seen := make(map[string]bool)
+	var result []domain.Library
+	for _, lib := range libraries {
+		key := fmt.Sprintf("%s:%s", lib.Name, lib.Version)
+		if !seen[key] {
+			seen[key] = true
+			result = append(result, lib)
+		}
+	}
+	return result
+}
+
+func (p *PythonPlugin) deduplicatePackages(packages []domain.Package) []domain.Package {
+	seen := make(map[string]bool)
+	var result []domain.Package
+	for _, pkg := range packages {
+		key := fmt.Sprintf("%s:%s", pkg.Name, pkg.Version)
+		if !seen[key] {
+			seen[key] = true
+			result = append(result, pkg)
+		}
+	}
+	return result
+}
+
+func (p *PythonPlugin) isThirdPartyPythonPackage(packageName string) bool {
+	standardLibrary := []string{
+		"os", "sys", "json", "re", "time", "datetime", "math", "random",
+		"collections", "itertools", "functools", "operator", "copy",
+		"pickle", "sqlite3", "threading", "multiprocessing", "subprocess",
+		"urllib", "http", "email", "html", "xml", "logging", "unittest",
+		"argparse", "configparser", "pathlib", "io", "csv", "base64",
+		"hashlib", "hmac", "secrets", "uuid", "typing", "dataclasses",
+		"enum", "contextlib", "warnings", "traceback", "__future__",
+	}
+	rootPackage := strings.Split(packageName, ".")[0]
+	for _, stdLib := range standardLibrary {
+		if rootPackage == stdLib {
+			return false
+		}
+	}
+	return !strings.HasPrefix(packageName, ".")
+}

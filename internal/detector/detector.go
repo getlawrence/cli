@@ -8,19 +8,12 @@ import (
 
 	"github.com/getlawrence/cli/internal/detector/entrypoint"
 	"github.com/getlawrence/cli/internal/domain"
+	plugins "github.com/getlawrence/cli/internal/languages"
 )
 
 // Language represents a programming language detector
-type Language interface {
-	// Name returns the language name
-	Name() string
-	// GetOTelLibraries finds OpenTelemetry libraries used in the codebase
-	GetOTelLibraries(ctx context.Context, rootPath string) ([]domain.Library, error)
-	// GetAllPackages finds all packages/dependencies used in the codebase
-	GetAllPackages(ctx context.Context, rootPath string) ([]domain.Package, error)
-	// GetFilePatterns returns file patterns this language detector should scan
-	GetFilePatterns() []string
-}
+// Language is deprecated. Use LanguagePlugin with optional DetectionProvider instead.
+type Language interface{}
 
 // IssueDetector defines how to detect specific issues
 type IssueDetector interface {
@@ -58,12 +51,12 @@ type DirectoryAnalysis struct {
 // CodebaseAnalyzer coordinates the detection process
 type CodebaseAnalyzer struct {
 	detectors          []IssueDetector
-	languageDetectors  map[string]Language
+	languageDetectors  map[string]plugins.LanguagePlugin
 	entrypointDetector *entrypoint.TreeSitterEntryDetector
 }
 
 // NewCodebaseAnalyzer creates a new analysis engine
-func NewCodebaseAnalyzer(detectors []IssueDetector, languages map[string]Language) *CodebaseAnalyzer {
+func NewCodebaseAnalyzer(detectors []IssueDetector, languages map[string]plugins.LanguagePlugin) *CodebaseAnalyzer {
 	return &CodebaseAnalyzer{
 		detectors:          detectors,
 		languageDetectors:  languages,
@@ -86,7 +79,8 @@ func (ca *CodebaseAnalyzer) AnalyzeCodebase(ctx context.Context, rootPath string
 
 	// iterate through detected languages in directories
 	if len(directoryLanguages) == 0 {
-		return nil, fmt.Errorf("no languages detected in the codebase at %s", rootPath)
+		// Return empty analysis instead of error; caller can present a friendly message
+		return analysis, nil
 	}
 
 	seenLanguages := make(map[string]bool)
@@ -109,9 +103,9 @@ func (ca *CodebaseAnalyzer) AnalyzeCodebase(ctx context.Context, rootPath string
 }
 
 // findLanguageDetector finds the corresponding language detector for a language name
-func (ca *CodebaseAnalyzer) findLanguageDetector(language string) Language {
-	language = strings.ToLower(language)
-	return ca.languageDetectors[language]
+func (ca *CodebaseAnalyzer) findLanguageDetector(language string) plugins.LanguagePlugin {
+	id := normalizeLanguageID(language)
+	return ca.languageDetectors[id]
 }
 
 // calculateDirectoryPath calculates the full path for a directory
@@ -123,7 +117,7 @@ func (ca *CodebaseAnalyzer) calculateDirectoryPath(rootPath, directory string) s
 }
 
 // processDirectory handles the complete analysis pipeline for a single directory
-func (ca *CodebaseAnalyzer) processDirectory(ctx context.Context, directory, dirPath, language string, languageDetector Language) (*DirectoryAnalysis, error) {
+func (ca *CodebaseAnalyzer) processDirectory(ctx context.Context, directory, dirPath, language string, languageDetector plugins.LanguagePlugin) (*DirectoryAnalysis, error) {
 	// Step 1: Collect libraries and packages (optional)
 	var (
 		libs     []domain.Library
@@ -137,7 +131,7 @@ func (ca *CodebaseAnalyzer) processDirectory(ctx context.Context, directory, dir
 		}
 	}
 
-	entrypoint, err := ca.entrypointDetector.DetectEntryPoints(dirPath, language)
+	entrypoint, err := ca.entrypointDetector.DetectEntryPoints(dirPath, displayName(language))
 	dirAnalysis := &DirectoryAnalysis{
 		Directory:   directory,
 		Language:    language,
@@ -163,18 +157,20 @@ func (ca *CodebaseAnalyzer) processDirectory(ctx context.Context, directory, dir
 }
 
 // collectLibrariesAndPackagesForDirectory collects libraries and packages for a specific directory
-func (ca *CodebaseAnalyzer) collectLibrariesAndPackagesForDirectory(ctx context.Context, dirPath, language string, languageDetector Language) ([]domain.Library, []domain.Package, error) {
-	libs, err := languageDetector.GetOTelLibraries(ctx, dirPath)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to get OTel libraries for %s in %s: %w", language, dirPath, err)
+func (ca *CodebaseAnalyzer) collectLibrariesAndPackagesForDirectory(ctx context.Context, dirPath, language string, languageDetector plugins.LanguagePlugin) ([]domain.Library, []domain.Package, error) {
+	// Only collect if plugin implements DetectionProvider
+	if dp, ok := languageDetector.(plugins.DetectionProvider); ok {
+		libs, err := dp.GetOTelLibraries(ctx, dirPath)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to get OTel libraries for %s in %s: %w", language, dirPath, err)
+		}
+		packages, err := dp.GetAllPackages(ctx, dirPath)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to get packages for %s in %s: %w", language, dirPath, err)
+		}
+		return libs, packages, nil
 	}
-
-	packages, err := languageDetector.GetAllPackages(ctx, dirPath)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to get packages for %s in %s: %w", language, dirPath, err)
-	}
-
-	return libs, packages, nil
+	return nil, nil, nil
 }
 
 // populateInstrumentationsForDirectory populates instrumentations for a specific directory
@@ -230,10 +226,29 @@ func (ca *CodebaseAnalyzer) detectorAppliesForLanguage(detector IssueDetector, l
 
 	// Check if the language matches any detector language
 	for _, detectorLang := range detectorLanguages {
-		if language == detectorLang {
+		if normalizeLanguageID(language) == normalizeLanguageID(detectorLang) {
 			return true
 		}
 	}
 
 	return false
+}
+
+// normalizeLanguageID coerces language identifiers to a stable lowercase id (e.g., "go", "python").
+func normalizeLanguageID(lang string) string {
+	return strings.ToLower(lang)
+}
+
+// displayName returns a display name expected by plugin registry (e.g., "Go", "Python").
+// For now, capitalize first letter.
+func displayName(lang string) string {
+	l := strings.ToLower(lang)
+	switch l {
+	case "go":
+		return "Go"
+	case "python":
+		return "Python"
+	default:
+		return lang
+	}
 }

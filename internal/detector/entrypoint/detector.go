@@ -3,6 +3,7 @@ package entrypoint
 import (
 	"context"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -63,12 +64,24 @@ func (d *TreeSitterEntryDetector) collectEntryPointsByDirectory(projectPath stri
 	dirEntryPoints := make(map[string]domain.EntryPoint)
 	fileExtensions := d.getFileExtensions(language)
 
-	err := filepath.Walk(projectPath, func(path string, info os.FileInfo, err error) error {
+	skipDirs := map[string]struct{}{
+		".git": {}, "node_modules": {}, "vendor": {}, "venv": {}, ".venv": {}, "__pycache__": {},
+	}
+
+	err := filepath.WalkDir(projectPath, func(path string, de fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
 
-		if info.IsDir() || !d.hasValidExtension(path, fileExtensions) {
+		if de.IsDir() {
+			name := de.Name()
+			if _, skip := skipDirs[name]; skip {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+
+		if !d.hasValidExtension(path, fileExtensions) {
 			return nil
 		}
 
@@ -82,7 +95,7 @@ func (d *TreeSitterEntryDetector) collectEntryPointsByDirectory(projectPath stri
 func (d *TreeSitterEntryDetector) processFileForEntryPoints(path string, lang *sitter.Language, query, language string, dirEntryPoints map[string]domain.EntryPoint) error {
 	entries, err := d.analyzeFile(path, lang, query, language)
 	if err != nil {
-		fmt.Printf("Warning: Could not analyze %s: %v\n", path, err)
+		// Swallow per-file analysis errors to keep directory scan resilient
 		return nil
 	}
 
@@ -254,7 +267,6 @@ func (d *TreeSitterEntryDetector) DetectAllEntryPoints(projectPath string) (map[
 	for language := range d.languages {
 		entryPoints, err := d.DetectEntryPoints(projectPath, language)
 		if err != nil {
-			fmt.Printf("Warning: Error detecting entry points for %s: %v\n", language, err)
 			continue
 		}
 

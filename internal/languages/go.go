@@ -1,12 +1,18 @@
 package languages
 
 import (
+	"bufio"
+	"context"
 	"fmt"
+	"os"
+	"path/filepath"
+	"regexp"
 	"strings"
 
 	dep "github.com/getlawrence/cli/internal/codegen/dependency"
 	inj "github.com/getlawrence/cli/internal/codegen/injector"
 	"github.com/getlawrence/cli/internal/codegen/types"
+	"github.com/getlawrence/cli/internal/domain"
 	"github.com/getlawrence/cli/internal/templates"
 	sitter "github.com/smacker/go-tree-sitter"
 	"github.com/smacker/go-tree-sitter/golang"
@@ -263,3 +269,265 @@ func (p *GoPlugin) detectExistingOTELSetup(bodyNode *sitter.Node, content []byte
 
 // Implement required method to satisfy injector.LanguageInjector
 func (p *GoPlugin) FallbackAnalyzeImports(content []byte, analysis *types.FileAnalysis) {}
+
+// DetectionProvider implementation (replaces legacy GoDetector)
+func (p *GoPlugin) GetOTelLibraries(ctx context.Context, rootPath string) ([]domain.Library, error) {
+	var libraries []domain.Library
+
+	// Parse go.mod
+	goModPath := filepath.Join(rootPath, "go.mod")
+	if _, err := os.Stat(goModPath); err == nil {
+		libs, err := p.parseGoMod(goModPath)
+		if err != nil {
+			return nil, err
+		}
+		libraries = append(libraries, libs...)
+	}
+
+	// Scan .go files
+	goFiles, err := p.findGoFiles(rootPath)
+	if err != nil {
+		return nil, err
+	}
+	for _, file := range goFiles {
+		libs, err := p.parseGoImports(file)
+		if err != nil {
+			return nil, err
+		}
+		libraries = append(libraries, libs...)
+	}
+
+	return p.deduplicateLibraries(libraries), nil
+}
+
+func (p *GoPlugin) GetAllPackages(ctx context.Context, rootPath string) ([]domain.Package, error) {
+	var packages []domain.Package
+
+	goModPath := filepath.Join(rootPath, "go.mod")
+	if _, err := os.Stat(goModPath); err == nil {
+		pkgs, err := p.parseAllDependencies(goModPath)
+		if err != nil {
+			return nil, err
+		}
+		packages = append(packages, pkgs...)
+	}
+
+	goFiles, err := p.findGoFiles(rootPath)
+	if err != nil {
+		return nil, err
+	}
+	for _, file := range goFiles {
+		pkgs, err := p.parseAllImports(file)
+		if err != nil {
+			return nil, err
+		}
+		packages = append(packages, pkgs...)
+	}
+
+	return p.deduplicatePackages(packages), nil
+}
+
+// Helpers (ported from legacy detector)
+func (p *GoPlugin) parseGoMod(goModPath string) ([]domain.Library, error) {
+	file, err := os.Open(goModPath)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	var libraries []domain.Library
+	scanner := bufio.NewScanner(file)
+	otelRegex := regexp.MustCompile(`^\s*(go\.opentelemetry\.io/[^\s]+)\s+([^\s]+)`)
+
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		matches := otelRegex.FindStringSubmatch(line)
+		if len(matches) >= 3 {
+			libraries = append(libraries, domain.Library{
+				Name:        matches[1],
+				Version:     matches[2],
+				Language:    "go",
+				ImportPath:  matches[1],
+				PackageFile: goModPath,
+			})
+		}
+	}
+	return libraries, scanner.Err()
+}
+
+func (p *GoPlugin) parseGoImports(filePath string) ([]domain.Library, error) {
+	file, err := os.Open(filePath)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	var libraries []domain.Library
+	scanner := bufio.NewScanner(file)
+	inImportBlock := false
+	otelImportRegex := regexp.MustCompile(`"(go\.opentelemetry\.io/[^"]+)"`)
+	singleImportRegex := regexp.MustCompile(`import\s+"(go\.opentelemetry\.io/[^"]+)"`)
+
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if matches := singleImportRegex.FindStringSubmatch(line); len(matches) >= 2 {
+			libraries = append(libraries, domain.Library{Name: matches[1], Language: "go", ImportPath: matches[1]})
+			continue
+		}
+		if strings.HasPrefix(line, "import (") {
+			inImportBlock = true
+			continue
+		}
+		if inImportBlock && line == ")" {
+			inImportBlock = false
+			continue
+		}
+		if inImportBlock {
+			if matches := otelImportRegex.FindStringSubmatch(line); len(matches) >= 2 {
+				libraries = append(libraries, domain.Library{Name: matches[1], Language: "go", ImportPath: matches[1]})
+			}
+		}
+	}
+	return libraries, scanner.Err()
+}
+
+func (p *GoPlugin) findGoFiles(rootPath string) ([]string, error) {
+	var goFiles []string
+	err := filepath.Walk(rootPath, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.IsDir() && (info.Name() == "vendor" || info.Name() == ".git") {
+			return filepath.SkipDir
+		}
+		if strings.HasSuffix(path, ".go") {
+			goFiles = append(goFiles, path)
+		}
+		return nil
+	})
+	return goFiles, err
+}
+
+func (p *GoPlugin) deduplicateLibraries(libraries []domain.Library) []domain.Library {
+	seen := make(map[string]bool)
+	var result []domain.Library
+	for _, lib := range libraries {
+		key := fmt.Sprintf("%s:%s", lib.Name, lib.Version)
+		if !seen[key] {
+			seen[key] = true
+			result = append(result, lib)
+		}
+	}
+	return result
+}
+
+func (p *GoPlugin) parseAllDependencies(goModPath string) ([]domain.Package, error) {
+	file, err := os.Open(goModPath)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	var packages []domain.Package
+	scanner := bufio.NewScanner(file)
+	depRegex := regexp.MustCompile(`^\s*([^\s]+)\s+([^\s]+)`)
+	inRequireBlock := false
+
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if strings.HasPrefix(line, "require (") {
+			inRequireBlock = true
+			continue
+		}
+		if inRequireBlock && line == ")" {
+			inRequireBlock = false
+			continue
+		}
+		line = strings.TrimPrefix(line, "require ")
+		if inRequireBlock || strings.HasPrefix(scanner.Text(), "require ") {
+			matches := depRegex.FindStringSubmatch(line)
+			if len(matches) >= 3 {
+				packageName := matches[1]
+				if !strings.HasPrefix(packageName, "golang.org/x/") && !strings.Contains(packageName, ".") {
+					continue
+				}
+				packages = append(packages, domain.Package{
+					Name:        packageName,
+					Version:     strings.TrimSuffix(matches[2], " // indirect"),
+					Language:    "go",
+					ImportPath:  packageName,
+					PackageFile: goModPath,
+				})
+			}
+		}
+	}
+	return packages, scanner.Err()
+}
+
+func (p *GoPlugin) parseAllImports(filePath string) ([]domain.Package, error) {
+	file, err := os.Open(filePath)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	var packages []domain.Package
+	scanner := bufio.NewScanner(file)
+	inImportBlock := false
+	importRegex := regexp.MustCompile(`"([^"]+)"`)
+	singleImportRegex := regexp.MustCompile(`import\s+"([^"]+)"`)
+
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if matches := singleImportRegex.FindStringSubmatch(line); len(matches) >= 2 {
+			packageName := matches[1]
+			if p.isThirdPartyPackage(packageName) {
+				packages = append(packages, domain.Package{Name: packageName, Language: "go", ImportPath: packageName})
+			}
+			continue
+		}
+		if strings.HasPrefix(line, "import (") {
+			inImportBlock = true
+			continue
+		}
+		if inImportBlock && line == ")" {
+			inImportBlock = false
+			continue
+		}
+		if inImportBlock {
+			if matches := importRegex.FindStringSubmatch(line); len(matches) >= 2 {
+				packageName := matches[1]
+				if p.isThirdPartyPackage(packageName) {
+					packages = append(packages, domain.Package{Name: packageName, Language: "go", ImportPath: packageName})
+				}
+			}
+		}
+	}
+	return packages, scanner.Err()
+}
+
+func (p *GoPlugin) isThirdPartyPackage(packageName string) bool {
+	if !strings.Contains(packageName, ".") {
+		return false
+	}
+	thirdPartyPrefixes := []string{"github.com/", "gitlab.com/", "go.uber.org/", "google.golang.org/", "gopkg.in/", "go.opentelemetry.io/"}
+	for _, prefix := range thirdPartyPrefixes {
+		if strings.HasPrefix(packageName, prefix) {
+			return true
+		}
+	}
+	return strings.Contains(packageName, ".")
+}
+
+func (p *GoPlugin) deduplicatePackages(packages []domain.Package) []domain.Package {
+	seen := make(map[string]bool)
+	var result []domain.Package
+	for _, pkg := range packages {
+		key := fmt.Sprintf("%s:%s", pkg.Name, pkg.Version)
+		if !seen[key] {
+			seen[key] = true
+			result = append(result, pkg)
+		}
+	}
+	return result
+}

@@ -2,6 +2,7 @@ package agents
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 
@@ -142,8 +143,8 @@ func (d *Detector) executeCommand(agent Agent, request AgentExecutionRequest) er
 func (d *Detector) executeGitHubCopilot(prompt string, targetDir string) error {
 	cmd := exec.Command("gh", "copilot", "suggest", prompt)
 	cmd.Dir = targetDir
-	cmd.Stdout = nil // Let output go to terminal
-	cmd.Stderr = nil
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
 	return cmd.Run()
 }
 
@@ -152,23 +153,23 @@ func (d *Detector) executeGemini(prompt string, targetDir string) error {
 	// Use --all-files to ensure Gemini can see all files in the directory
 	cmd := exec.Command("gemini", "--prompt", prompt, "--yolo", "--all-files")
 	cmd.Dir = targetDir
-	cmd.Stdout = nil
-	cmd.Stderr = nil
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
 	return cmd.Run()
 }
 
 func (d *Detector) executeClaude(prompt string, targetDir string) error {
 	cmd := exec.Command("claude", "code", prompt)
 	cmd.Dir = targetDir
-	cmd.Stdout = nil
-	cmd.Stderr = nil
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
 	return cmd.Run()
 }
 
 func (d *Detector) executeOpenAI(prompt string, targetDir string) error {
 	cmd := exec.Command("openai", "api", "completions.create", "-p", prompt)
 	cmd.Dir = targetDir
-	cmd.Stdout = nil
-	cmd.Stderr = nil
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
 	return cmd.Run()
 }

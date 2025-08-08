@@ -1,8 +1,11 @@
 package languages
 
 import (
+	"context"
+
 	"github.com/getlawrence/cli/internal/codegen/dependency"
 	"github.com/getlawrence/cli/internal/codegen/injector"
+	"github.com/getlawrence/cli/internal/domain"
 	"github.com/getlawrence/cli/internal/templates"
 	sitter "github.com/smacker/go-tree-sitter"
 )
@@ -28,4 +31,11 @@ type LanguagePlugin interface {
 	// Template-based code generation support
 	SupportedMethods() []templates.InstallationMethod // empty if not supported
 	OutputFilename(method templates.InstallationMethod) string
+}
+
+// DetectionProvider is an optional capability a plugin can implement to provide
+// library and package discovery for analysis.
+type DetectionProvider interface {
+	GetOTelLibraries(ctx context.Context, rootPath string) ([]domain.Library, error)
+	GetAllPackages(ctx context.Context, rootPath string) ([]domain.Package, error)
 }

@@ -10,9 +10,10 @@ import (
 
 	"github.com/getlawrence/cli/internal/detector"
 	"github.com/getlawrence/cli/internal/detector/issues"
-	"github.com/getlawrence/cli/internal/detector/languages"
 	"github.com/getlawrence/cli/internal/domain"
+	langplugins "github.com/getlawrence/cli/internal/languages"
 	"github.com/spf13/cobra"
+	yaml "gopkg.in/yaml.v3"
 )
 
 // analyzeCmd represents the analyze command
@@ -39,7 +40,7 @@ func init() {
 	// Add analyze-specific flags
 	analyzeCmd.Flags().BoolP("detailed", "d", false, "Show detailed analysis including file-level information")
 	analyzeCmd.Flags().StringSliceP("languages", "l", []string{}, "Limit analysis to specific languages (go, python, java, etc.)")
-	analyzeCmd.Flags().StringSliceP("categories", "", []string{}, "Limit issues to specific categories (missing_library, configuration, etc.)")
+	analyzeCmd.Flags().StringSliceP("categories", "", []string{}, "Limit issues to specific categories (missing_otel, configuration, instrumentation, etc.)")
 }
 
 func runAnalyze(cmd *cobra.Command, args []string) error {
@@ -72,9 +73,10 @@ func runAnalyze(cmd *cobra.Command, args []string) error {
 	// Create analysis engine
 	codebaseAnalyzer := detector.NewCodebaseAnalyzer([]detector.IssueDetector{
 		issues.NewMissingOTelDetector(),
-	}, map[string]detector.Language{
-		"go":     languages.NewGoDetector(),
-		"python": languages.NewPythonDetector(),
+		issues.NewMissingInstrumentationDetector(),
+	}, map[string]langplugins.LanguagePlugin{
+		"go":     langplugins.NewGoPlugin(),
+		"python": langplugins.NewPythonPlugin(),
 	})
 
 	// Run analysis
@@ -84,10 +86,19 @@ func runAnalyze(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("analysis failed: %w", err)
 	}
 
+	// Apply filters
+	allowedLangs, _ := cmd.Flags().GetStringSlice("languages")
+	allowedCats, _ := cmd.Flags().GetStringSlice("categories")
+	if len(allowedLangs) > 0 || len(allowedCats) > 0 {
+		analysis = filterAnalysis(analysis, allowedLangs, allowedCats)
+	}
+
 	// Output results
 	switch outputFormat {
 	case "json":
 		return outputJSON(analysis)
+	case "yaml":
+		return outputYAML(analysis)
 	default:
 		return outputText(analysis, detailed, verbose)
 	}
@@ -262,4 +273,85 @@ func outputJSON(analysis *detector.Analysis) error {
 	encoder := json.NewEncoder(os.Stdout)
 	encoder.SetIndent("", "  ")
 	return encoder.Encode(result)
+}
+
+func outputYAML(analysis *detector.Analysis) error {
+	// Similar aggregation as JSON for backward compatibility
+	var allIssues []domain.Issue
+	var allLibraries []domain.Library
+	var allPackages []domain.Package
+	var allInstrumentations []domain.InstrumentationInfo
+	detectedLanguages := make(map[string]bool)
+
+	for _, dirAnalysis := range analysis.DirectoryAnalyses {
+		allIssues = append(allIssues, dirAnalysis.Issues...)
+		allLibraries = append(allLibraries, dirAnalysis.Libraries...)
+		allPackages = append(allPackages, dirAnalysis.Packages...)
+		allInstrumentations = append(allInstrumentations, dirAnalysis.AvailableInstrumentations...)
+		if dirAnalysis.Language != "" {
+			detectedLanguages[dirAnalysis.Language] = true
+		}
+	}
+
+	var languageSlice []string
+	for lang := range detectedLanguages {
+		languageSlice = append(languageSlice, lang)
+	}
+
+	result := map[string]interface{}{
+		"analysis":   analysis,
+		"all_issues": allIssues,
+		"summary": map[string]interface{}{
+			"total_directories":      len(analysis.DirectoryAnalyses),
+			"total_languages":        len(languageSlice),
+			"total_libraries":        len(allLibraries),
+			"total_packages":         len(allPackages),
+			"total_instrumentations": len(allInstrumentations),
+			"total_issues":           len(allIssues),
+		},
+	}
+
+	enc := yaml.NewEncoder(os.Stdout)
+	enc.SetIndent(2)
+	defer enc.Close()
+	return enc.Encode(result)
+}
+
+func filterAnalysis(analysis *detector.Analysis, allowedLangs []string, allowedCats []string) *detector.Analysis {
+	langAllow := map[string]bool{}
+	for _, l := range allowedLangs {
+		langAllow[strings.ToLower(l)] = true
+	}
+	catAllow := map[string]bool{}
+	for _, c := range allowedCats {
+		catAllow[strings.ToLower(c)] = true
+	}
+
+	filtered := &detector.Analysis{
+		RootPath:          analysis.RootPath,
+		DirectoryAnalyses: make(map[string]*detector.DirectoryAnalysis),
+	}
+
+	for dir, da := range analysis.DirectoryAnalyses {
+		if len(langAllow) > 0 && !langAllow[strings.ToLower(da.Language)] {
+			continue
+		}
+		// Filter issues by category
+		if len(catAllow) > 0 {
+			var fi []domain.Issue
+			for _, is := range da.Issues {
+				if catAllow[strings.ToLower(string(is.Category))] {
+					fi = append(fi, is)
+				}
+			}
+			// If filtering removed all issues, keep other fields
+			nda := *da
+			nda.Issues = fi
+			filtered.DirectoryAnalyses[dir] = &nda
+		} else {
+			filtered.DirectoryAnalyses[dir] = da
+		}
+	}
+
+	return filtered
 }
