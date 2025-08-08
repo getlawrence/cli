@@ -281,3 +281,8 @@ func (h *PythonHandler) detectExistingOTELSetup(bodyNode *sitter.Node, content [
 		strings.Contains(bodyContent, "TracerProvider") ||
 		strings.Contains(bodyContent, "set_tracer_provider")
 }
+
+// FallbackAnalyzeImports for Python: no-op since tree-sitter captures are sufficient
+func (h *PythonHandler) FallbackAnalyzeImports(content []byte, analysis *types.FileAnalysis) {
+	// Intentionally empty
+}
