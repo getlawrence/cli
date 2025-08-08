@@ -2,7 +2,6 @@ package languages
 
 import (
 	dep "github.com/getlawrence/cli/internal/codegen/dependency"
-	templ "github.com/getlawrence/cli/internal/codegen/generator/template"
 	inj "github.com/getlawrence/cli/internal/codegen/injector"
 	"github.com/getlawrence/cli/internal/templates"
 	sitter "github.com/smacker/go-tree-sitter"
@@ -33,10 +32,17 @@ func (p *PythonPlugin) Injector() inj.LanguageInjector      { return inj.NewPyth
 func (p *PythonPlugin) Dependencies() dep.DependencyHandler { return dep.NewPythonHandler() }
 
 func (p *PythonPlugin) SupportedMethods() []templates.InstallationMethod {
-	return templ.NewPythonCodeGenerator().GetSupportedMethods()
+	return []templates.InstallationMethod{templates.CodeInstrumentation, templates.AutoInstrumentation}
 }
 func (p *PythonPlugin) OutputFilename(m templates.InstallationMethod) string {
-	return templ.NewPythonCodeGenerator().GetOutputFilename(m)
+	switch m {
+	case templates.CodeInstrumentation:
+		return "otel.py"
+	case templates.AutoInstrumentation:
+		return "otel_auto.py"
+	default:
+		return "otel.py"
+	}
 }
 
 func init() {

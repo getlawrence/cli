@@ -11,6 +11,7 @@ import (
 	"github.com/getlawrence/cli/internal/codegen/injector"
 	"github.com/getlawrence/cli/internal/codegen/types"
 	"github.com/getlawrence/cli/internal/domain"
+	langplugins "github.com/getlawrence/cli/internal/languages"
 	"github.com/getlawrence/cli/internal/templates"
 )
 
@@ -24,20 +25,14 @@ const (
 type TemplateGenerationStrategy struct {
 	templateEngine   *templates.TemplateEngine
 	codeInjector     *injector.CodeInjector
-	languageRegistry *LanguageGeneratorRegistry
 	dependencyWriter *dependency.DependencyWriter
 }
 
 // NewTemplateGenerationStrategy creates a new template-based generation strategy
 func NewTemplateGenerationStrategy(templateEngine *templates.TemplateEngine) *TemplateGenerationStrategy {
-	registry := NewLanguageGeneratorRegistry()
-	registry.RegisterLanguage("python", NewPythonCodeGenerator())
-	registry.RegisterLanguage("go", NewGoCodeGenerator())
-
 	return &TemplateGenerationStrategy{
 		templateEngine:   templateEngine,
 		codeInjector:     injector.NewCodeInjector(),
-		languageRegistry: registry,
 		dependencyWriter: dependency.NewDependencyWriter(),
 	}
 }
@@ -59,7 +54,14 @@ func (s *TemplateGenerationStrategy) GetRequiredFlags() []string {
 
 // GetSupportedLanguages returns all supported languages for template generation
 func (s *TemplateGenerationStrategy) GetSupportedLanguages() []string {
-	return s.languageRegistry.GetSupportedLanguages()
+	// All languages with at least one supported method
+	var langs []string
+	for id, plugin := range langplugins.DefaultRegistry.All() {
+		if len(plugin.SupportedMethods()) > 0 {
+			langs = append(langs, id)
+		}
+	}
+	return langs
 }
 
 // GenerateCode generates code directly using templates
@@ -130,27 +132,26 @@ func (s *TemplateGenerationStrategy) GenerateCode(ctx context.Context, opportuni
 }
 
 func (s *TemplateGenerationStrategy) generateCodeForLanguage(language string, opportunities []domain.Opportunity, req types.GenerationRequest, directory string) ([]string, error) {
-	// Get language generator
-	languageGen, exists := s.languageRegistry.GetGenerator(strings.ToLower(language))
+	// Resolve plugin
+	plugin, exists := langplugins.DefaultRegistry.Get(strings.ToLower(language))
 	if !exists {
 		return nil, fmt.Errorf("template-based code generation not supported for language: %s", language)
 	}
 
 	// Convert string method to InstallationMethod
 	method := templates.InstallationMethod(req.Method)
-
-	// Validate method is supported for this language
-	if err := languageGen.ValidateMethod(method); err != nil {
-		return nil, err
+	// Validate method is supported
+	if !containsMethod(plugin.SupportedMethods(), method) {
+		return nil, fmt.Errorf("unsupported method %s for %s", method, language)
 	}
 
 	operationsData := s.analyzeOpportunities(opportunities)
-	return s.generateCodeWithLanguageGenerator(languageGen, method, operationsData, req, directory)
+	return s.generateCodeWithPlugin(plugin, method, operationsData, req, directory)
 }
 
-// generateCodeWithLanguageGenerator is a generic method for generating code using any language generator
-func (s *TemplateGenerationStrategy) generateCodeWithLanguageGenerator(
-	languageGen LanguageCodeGenerator,
+// generateCodeWithPlugin is a generic method for generating code using plugin methods
+func (s *TemplateGenerationStrategy) generateCodeWithPlugin(
+	plugin langplugins.LanguagePlugin,
 	method templates.InstallationMethod,
 	operationsData *types.OperationsData,
 	req types.GenerationRequest,
@@ -160,7 +161,7 @@ func (s *TemplateGenerationStrategy) generateCodeWithLanguageGenerator(
 
 	// Create template data
 	data := templates.TemplateData{
-		Language:          languageGen.GetLanguageName(),
+		Language:          plugin.ID(),
 		Method:            method,
 		Instrumentations:  operationsData.InstallInstrumentations,
 		ServiceName:       serviceName,
@@ -170,25 +171,25 @@ func (s *TemplateGenerationStrategy) generateCodeWithLanguageGenerator(
 	}
 
 	// Generate code using template
-	code, err := s.templateEngine.GenerateInstructions(languageGen.GetLanguageName(), method, data)
+	code, err := s.templateEngine.GenerateInstructions(plugin.ID(), method, data)
 	if err != nil {
-		return nil, fmt.Errorf("failed to generate %s code: %w", languageGen.GetLanguageName(), err)
+		return nil, fmt.Errorf("failed to generate %s code: %w", plugin.ID(), err)
 	}
 
 	// Determine output directory and filename
 	outputDir := s.determineOutputDirectory(req, directory)
-	filename := languageGen.GetOutputFilename(method)
+	filename := plugin.OutputFilename(method)
 	outputPath := filepath.Join(outputDir, filename)
 
 	if req.Config.DryRun {
-		fmt.Printf("Generated %s instrumentation code (dry run):\n", languageGen.GetLanguageName())
+		fmt.Printf("Generated %s instrumentation code (dry run):\n", plugin.ID())
 		fmt.Printf(dryRunOutputFormat, outputPath)
 		fmt.Printf(dryRunContentFormat, code)
 		return []string{outputPath}, nil
 	}
 
 	if err := s.writeCodeToFile(outputPath, code); err != nil {
-		return nil, fmt.Errorf("failed to write %s code to %s: %w", languageGen.GetLanguageName(), outputPath, err)
+		return nil, fmt.Errorf("failed to write %s code to %s: %w", plugin.ID(), outputPath, err)
 	}
 
 	return []string{outputPath}, nil
@@ -320,6 +321,16 @@ func (s *TemplateGenerationStrategy) groupOpportunitiesByLanguage(opportunities 
 	}
 
 	return grouped
+}
+
+// containsMethod checks if a method exists in a slice
+func containsMethod(methods []templates.InstallationMethod, m templates.InstallationMethod) bool {
+	for _, mm := range methods {
+		if mm == m {
+			return true
+		}
+	}
+	return false
 }
 
 // handleEntryPointModifications processes entry point modification opportunities
