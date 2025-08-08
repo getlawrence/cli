@@ -230,14 +230,14 @@ func (h *GoHandler) AnalyzeFunctionCapture(captureName string, node *sitter.Node
 // GetInsertionPointPriority returns priority for Go insertion point types
 func (h *GoHandler) GetInsertionPointPriority(captureName string) int {
 	switch captureName {
-	case "after_variables":
-		return 4 // Highest priority - after variable declarations
-	case "after_imports":
-		return 3 // High priority - after other imports
-	case "before_function_calls":
-		return 2 // Medium priority - before function calls
 	case "function_start":
-		return 1 // Low priority - start of function
+		return 100 // Highest priority - always start of function
+	case "after_variables":
+		return 3 // After variable declarations
+	case "after_imports":
+		return 2 // After other imports
+	case "before_function_calls":
+		return 1 // Before function calls
 	default:
 		return 1
 	}
@@ -279,11 +279,21 @@ func (h *GoHandler) findBestInsertionPoint(bodyNode *sitter.Node, content []byte
 				priority := h.GetInsertionPointPriority(captureName)
 
 				if priority > bestPoint.Priority {
-					bestPoint = types.InsertionPoint{
-						LineNumber: node.EndPoint().Row + 1,
-						Column:     node.EndPoint().Column + 1,
-						Context:    node.Content(content),
-						Priority:   priority,
+					// For function_start we want the very beginning of the block
+					if captureName == "function_start" {
+						bestPoint = types.InsertionPoint{
+							LineNumber: node.StartPoint().Row + 1,
+							Column:     node.StartPoint().Column + 1,
+							Context:    node.Content(content),
+							Priority:   priority,
+						}
+					} else {
+						bestPoint = types.InsertionPoint{
+							LineNumber: node.EndPoint().Row + 1,
+							Column:     node.EndPoint().Column + 1,
+							Context:    node.Content(content),
+							Priority:   priority,
+						}
 					}
 				}
 			}
