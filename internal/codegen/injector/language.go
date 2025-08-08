@@ -30,4 +30,7 @@ type LanguageInjector interface {
 
 	// GetInsertionPointPriority returns priority for insertion point types
 	GetInsertionPointPriority(captureName string) int
+
+	// FallbackAnalyzeImports allows language-specific analysis if tree-sitter didn't find enough info
+	FallbackAnalyzeImports(content []byte, analysis *types.FileAnalysis)
 }

@@ -42,11 +42,6 @@ func NewTreeSitterEntryDetector() *TreeSitterEntryDetector {
 					(#eq? @name_var "__name__")
 					(#match? @main_str ".*__main__.*")
 				) @main_if_block
-				
-				(function_definition
-					name: (identifier) @func_name
-					(#eq? @func_name "main")
-				) @main_function
 			`,
 		},
 	}
@@ -185,6 +180,9 @@ func (d *TreeSitterEntryDetector) analyzeFile(filePath string, lang *sitter.Lang
 			case "main_function", "main_method", "main_block":
 				entryPoint.FunctionName = "main"
 				entryPoint.Confidence = 1.0
+			case "main_if_block":
+				entryPoint.FunctionName = "if __name__ == '__main__'"
+				entryPoint.Confidence = 1.0
 			case "init_function":
 				entryPoint.FunctionName = "init"
 				entryPoint.Confidence = 0.9
@@ -203,7 +201,38 @@ func (d *TreeSitterEntryDetector) analyzeFile(filePath string, lang *sitter.Lang
 		}
 	}
 
+	// Fallback for Python: use regex if tree-sitter query found nothing
+	if len(entryPoints) == 0 && language == "Python" {
+		entryPoints = d.findPythonMainWithRegex(filePath, content)
+	}
+
 	return entryPoints, nil
+}
+
+// findPythonMainWithRegex uses regex to find Python if __name__ == '__main__': patterns
+func (d *TreeSitterEntryDetector) findPythonMainWithRegex(filePath string, content []byte) []domain.EntryPoint {
+	var entryPoints []domain.EntryPoint
+	lines := strings.Split(string(content), "\n")
+
+	for i, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if strings.Contains(trimmed, `if __name__ == '__main__'`) || strings.Contains(trimmed, `if __name__ == "__main__"`) {
+			entryPoint := domain.EntryPoint{
+				FilePath:     filePath,
+				Language:     "Python",
+				FunctionName: "if __name__ == '__main__'",
+				LineNumber:   uint32(i + 1), // 1-based line numbers
+				Column:       1,
+				NodeType:     "main_if_block",
+				Confidence:   1.0,
+				Context:      trimmed,
+			}
+			entryPoints = append(entryPoints, entryPoint)
+			break // Only one main block per file
+		}
+	}
+
+	return entryPoints
 }
 
 // getFileExtensions returns file extensions for a language

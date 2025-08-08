@@ -148,19 +148,24 @@ func (g *Generator) convertIssuesToOpportunities(analysis *detector.Analysis) []
 
 	// Extract issues from the analysis
 	for _, dirAnalysis := range analysis.DirectoryAnalyses {
+		// Ensure we only create InstallOTEL opportunities once per directory
+		addedInstallForDir := false
 		opportunities = append(opportunities, g.createOpportunitiesFromInstrumentations(dirAnalysis)...)
 		for _, issue := range dirAnalysis.Issues {
 			switch issue.Category {
 			case domain.CategoryMissingOtel:
-				for _, entryPoint := range dirAnalysis.EntryPoints {
-					if entryPoint.Confidence >= 0.8 {
-						opportunities = append(opportunities, domain.Opportunity{
-							Type:       domain.OpportunityInstallOTEL,
-							Language:   issue.Language,
-							FilePath:   dirAnalysis.Directory,
-							EntryPoint: &entryPoint,
-						})
+				if !addedInstallForDir {
+					for _, entryPoint := range dirAnalysis.EntryPoints {
+						if entryPoint.Confidence >= 0.8 {
+							opportunities = append(opportunities, domain.Opportunity{
+								Type:       domain.OpportunityInstallOTEL,
+								Language:   issue.Language,
+								FilePath:   dirAnalysis.Directory,
+								EntryPoint: &entryPoint,
+							})
+						}
 					}
+					addedInstallForDir = true
 				}
 			}
 		}

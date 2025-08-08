@@ -198,6 +198,23 @@ func outputText(analysis *detector.Analysis, detailed, verbose bool) error {
 	if len(allIssues) > 0 {
 		fmt.Printf("⚠️  Issues and Recommendations:\n")
 		fmt.Printf("-------------------------------\n")
+		fmt.Printf("Total Issues Found: %d\n\n", len(allIssues))
+		for _, issue := range allIssues {
+			fmt.Printf("  • %s (%s)\n", issue.Title, issue.Severity)
+			if issue.Description != "" {
+				fmt.Printf("    📖 %s\n", issue.Description)
+			}
+			if issue.Suggestion != "" {
+				fmt.Printf("    💡 %s\n", issue.Suggestion)
+			}
+			if detailed && len(issue.References) > 0 {
+				fmt.Printf("    📚 References: %s\n", strings.Join(issue.References, ", "))
+			}
+			if detailed && issue.File != "" {
+				fmt.Printf("    📄 File: %s, Line: %d\n", issue.File, issue.Line)
+			}
+			fmt.Println()
+		}
 	} else {
 		fmt.Printf("✅ No issues found! Your OpenTelemetry setup looks good.\n")
 	}

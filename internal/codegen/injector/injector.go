@@ -124,6 +124,11 @@ func (ci *CodeInjector) analyzeImports(tree *sitter.Tree, content []byte, handle
 		}
 	}
 
+	// Allow language-specific fallback if no import locations were found
+	if len(analysis.ImportLocations) == 0 {
+		handler.FallbackAnalyzeImports(content, analysis)
+	}
+
 	return nil
 }
 
@@ -239,10 +244,16 @@ func (ci *CodeInjector) generateModifications(
 	}
 
 	// Generate initialization modifications
+	// Ensure we only insert initialization once per file even if multiple entry points are detected
+	addedInit := false
 	for _, entryPoint := range analysis.EntryPoints {
+		if addedInit {
+			break
+		}
 		if !entryPoint.HasOTELSetup && operationsData.InstallOTEL {
 			initMod := ci.generateInitializationModification(entryPoint, operationsData, config, req)
 			modifications = append(modifications, initMod)
+			addedInit = true
 		}
 	}
 

@@ -21,7 +21,24 @@ func NewGoHandler() *GoHandler {
 			Language:       "Go",
 			FileExtensions: []string{".go"},
 			ImportQueries: map[string]string{
-				"existing_imports": `(interpreted_string_literal) @import_path`,
+				// Capture existing imports and their locations so we can append instead of creating a new block
+				// This captures:
+				// - import path strings within import specs as @import_path
+				// - individual import specs as @import_spec (good insertion point inside an existing block)
+				// - the entire import declaration as @import_declaration (fallback insertion point after imports)
+				"existing_imports": `
+ (import_declaration
+   (import_spec
+     path: (interpreted_string_literal) @import_path
+   ) @import_spec
+ ) @import_declaration
+
+ (import_declaration
+   (import_spec
+     path: (raw_string_literal) @import_path
+   ) @import_spec
+ ) @import_declaration
+`,
 			},
 			FunctionQueries: map[string]string{
 				"main_function": `
@@ -103,7 +120,7 @@ func (h *GoHandler) FormatImports(imports []string, hasExistingImports bool) str
 	var result strings.Builder
 
 	if hasExistingImports {
-		// Add to existing import block - just list the imports
+		// Add to existing import block - just list the imports (no wrapping import (...))
 		for _, importPath := range imports {
 			result.WriteString(fmt.Sprintf("\t%s\n", h.FormatSingleImport(importPath)))
 		}
@@ -213,14 +230,14 @@ func (h *GoHandler) AnalyzeFunctionCapture(captureName string, node *sitter.Node
 // GetInsertionPointPriority returns priority for Go insertion point types
 func (h *GoHandler) GetInsertionPointPriority(captureName string) int {
 	switch captureName {
-	case "after_variables":
-		return 4 // Highest priority - after variable declarations
-	case "after_imports":
-		return 3 // High priority - after other imports
-	case "before_function_calls":
-		return 2 // Medium priority - before function calls
 	case "function_start":
-		return 1 // Low priority - start of function
+		return 100 // Highest priority - always start of function
+	case "after_variables":
+		return 3 // After variable declarations
+	case "after_imports":
+		return 2 // After other imports
+	case "before_function_calls":
+		return 1 // Before function calls
 	default:
 		return 1
 	}
@@ -262,11 +279,21 @@ func (h *GoHandler) findBestInsertionPoint(bodyNode *sitter.Node, content []byte
 				priority := h.GetInsertionPointPriority(captureName)
 
 				if priority > bestPoint.Priority {
-					bestPoint = types.InsertionPoint{
-						LineNumber: node.EndPoint().Row + 1,
-						Column:     node.EndPoint().Column + 1,
-						Context:    node.Content(content),
-						Priority:   priority,
+					// For function_start we want the very beginning of the block
+					if captureName == "function_start" {
+						bestPoint = types.InsertionPoint{
+							LineNumber: node.StartPoint().Row + 1,
+							Column:     node.StartPoint().Column + 1,
+							Context:    node.Content(content),
+							Priority:   priority,
+						}
+					} else {
+						bestPoint = types.InsertionPoint{
+							LineNumber: node.EndPoint().Row + 1,
+							Column:     node.EndPoint().Column + 1,
+							Context:    node.Content(content),
+							Priority:   priority,
+						}
 					}
 				}
 			}
@@ -285,4 +312,77 @@ func (h *GoHandler) detectExistingOTELSetup(bodyNode *sitter.Node, content []byt
 		strings.Contains(bodyContent, "otel.SetTracerProvider") ||
 		strings.Contains(bodyContent, "SetupOTEL") ||
 		strings.Contains(bodyContent, "setupTracing")
+}
+
+// FallbackAnalyzeImports provides Go-specific import analysis when tree-sitter yields no insertion points
+func (h *GoHandler) FallbackAnalyzeImports(content []byte, analysis *types.FileAnalysis) {
+	// Only apply if this is Go
+	if analysis.Language != "Go" {
+		return
+	}
+
+	lines := strings.Split(string(content), "\n")
+	inBlock := false
+	lastSpecLine := -1
+	for i, line := range lines {
+		trim := strings.TrimSpace(line)
+		if strings.HasPrefix(trim, "import (") {
+			inBlock = true
+			continue
+		}
+		if inBlock {
+			if trim == ")" {
+				if lastSpecLine >= 0 {
+					analysis.ImportLocations = append(analysis.ImportLocations, types.InsertionPoint{
+						LineNumber: uint32(lastSpecLine + 1),
+						Column:     1,
+						Context:    lines[lastSpecLine],
+						Priority:   3,
+					})
+				} else {
+					analysis.ImportLocations = append(analysis.ImportLocations, types.InsertionPoint{
+						LineNumber: uint32(i),
+						Column:     1,
+						Context:    trim,
+						Priority:   2,
+					})
+				}
+				inBlock = false
+				continue
+			}
+			// Track last import spec line inside block
+			if strings.HasPrefix(trim, "\"") || strings.HasPrefix(trim, "\t\"") {
+				lastSpecLine = i
+				// Record existing import path without quotes if we can
+				imp := strings.TrimSpace(strings.Trim(trim, "\""))
+				if imp != "" {
+					analysis.ExistingImports[imp] = true
+					if strings.Contains(imp, "go.opentelemetry.io/") {
+						analysis.HasOTELImports = true
+					}
+				}
+			}
+		}
+	}
+	// Also handle single-line import form: import "pkg"
+	for i, line := range lines {
+		trim := strings.TrimSpace(line)
+		if strings.HasPrefix(trim, "import \"") && strings.HasSuffix(trim, "\"") {
+			// Insert after this line
+			analysis.ImportLocations = append(analysis.ImportLocations, types.InsertionPoint{
+				LineNumber: uint32(i + 1),
+				Column:     1,
+				Context:    trim,
+				Priority:   2,
+			})
+			imp := strings.TrimPrefix(trim, "import ")
+			imp = strings.Trim(imp, "\"")
+			if imp != "" {
+				analysis.ExistingImports[imp] = true
+				if strings.Contains(imp, "go.opentelemetry.io/") {
+					analysis.HasOTELImports = true
+				}
+			}
+		}
+	}
 }
