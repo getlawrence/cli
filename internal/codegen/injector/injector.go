@@ -16,13 +16,35 @@ type CodeInjector struct {
 	handlers map[string]LanguageInjector
 }
 
-func NewCodeInjector() *CodeInjector {
-	return &CodeInjector{
-		handlers: map[string]LanguageInjector{
-			"go":     NewGoHandler(),
-			"python": NewPythonHandler(),
-		},
+// registry for injectors to avoid import cycle with languages
+var injectorRegistry = map[string]LanguageInjector{}
+
+func RegisterLanguageInjector(id string, h LanguageInjector) {
+	injectorRegistry[strings.ToLower(id)] = h
+}
+
+func getRegisteredLanguageInjectors() map[string]LanguageInjector {
+	out := make(map[string]LanguageInjector, len(injectorRegistry))
+	for k, v := range injectorRegistry {
+		out[k] = v
 	}
+	return out
+}
+
+func NewCodeInjector() *CodeInjector {
+	handlers := make(map[string]LanguageInjector)
+	// Populate from package-level registry
+	for id, h := range getRegisteredLanguageInjectors() {
+		handlers[strings.ToLower(id)] = h
+	}
+	// Fallback defaults
+	if _, ok := handlers["go"]; !ok {
+		handlers["go"] = NewGoHandler()
+	}
+	if _, ok := handlers["python"]; !ok {
+		handlers["python"] = NewPythonHandler()
+	}
+	return &CodeInjector{handlers: handlers}
 }
 
 func (ci *CodeInjector) InjectOtelInitialization(ctx context.Context,

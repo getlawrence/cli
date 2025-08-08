@@ -12,14 +12,35 @@ type DependencyWriter struct {
 	handlers map[string]DependencyHandler
 }
 
+// registry for dependency handlers to avoid import cycle with languages
+var dependencyRegistry = map[string]DependencyHandler{}
+
+func RegisterDependencyHandler(id string, h DependencyHandler) {
+	dependencyRegistry[id] = h
+}
+
+func getRegisteredDependencyHandlers() map[string]DependencyHandler {
+	out := make(map[string]DependencyHandler, len(dependencyRegistry))
+	for k, v := range dependencyRegistry {
+		out[k] = v
+	}
+	return out
+}
+
 // NewDependencyWriter creates a new dependency manager with all supported handlers
 func NewDependencyWriter() *DependencyWriter {
-	return &DependencyWriter{
-		handlers: map[string]DependencyHandler{
-			"go":     NewGoHandler(),
-			"python": NewPythonHandler(),
-		},
+	handlers := make(map[string]DependencyHandler)
+	for id, h := range getRegisteredDependencyHandlers() {
+		handlers[id] = h
 	}
+	// Fallback to built-in handlers if not registered
+	if _, ok := handlers["go"]; !ok {
+		handlers["go"] = NewGoHandler()
+	}
+	if _, ok := handlers["python"]; !ok {
+		handlers["python"] = NewPythonHandler()
+	}
+	return &DependencyWriter{handlers: handlers}
 }
 
 // AddDependencies adds required dependencies to the project

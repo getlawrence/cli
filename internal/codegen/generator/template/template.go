@@ -31,7 +31,6 @@ type TemplateGenerationStrategy struct {
 // NewTemplateGenerationStrategy creates a new template-based generation strategy
 func NewTemplateGenerationStrategy(templateEngine *templates.TemplateEngine) *TemplateGenerationStrategy {
 	registry := NewLanguageGeneratorRegistry()
-
 	registry.RegisterLanguage("python", NewPythonCodeGenerator())
 	registry.RegisterLanguage("go", NewGoCodeGenerator())
 

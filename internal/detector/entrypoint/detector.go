@@ -8,9 +8,8 @@ import (
 	"strings"
 
 	"github.com/getlawrence/cli/internal/domain"
+	langplugins "github.com/getlawrence/cli/internal/languages"
 	sitter "github.com/smacker/go-tree-sitter"
-	"github.com/smacker/go-tree-sitter/golang"
-	"github.com/smacker/go-tree-sitter/python"
 )
 
 // TreeSitterEntryDetector uses Tree-sitter for multi-language entry point detection
@@ -21,30 +20,21 @@ type TreeSitterEntryDetector struct {
 
 // NewTreeSitterEntryDetector creates a new detector with language support
 func NewTreeSitterEntryDetector() *TreeSitterEntryDetector {
-	return &TreeSitterEntryDetector{
-		languages: map[string]*sitter.Language{
-			"Go":     golang.GetLanguage(),
-			"Python": python.GetLanguage(),
-		},
-		queries: map[string]string{
-			"Go": `
-				(function_declaration 
-					name: (identifier) @func_name
-					(#eq? @func_name "main")
-				) @main_function
-			`,
-			"Python": `
-				(if_statement
-					condition: (binary_operator
-						left: (identifier) @name_var
-						right: (string) @main_str
-					)
-					(#eq? @name_var "__name__")
-					(#match? @main_str ".*__main__.*")
-				) @main_if_block
-			`,
-		},
+	d := &TreeSitterEntryDetector{
+		languages: make(map[string]*sitter.Language),
+		queries:   make(map[string]string),
 	}
+	// Populate from language plugins
+	for _, plugin := range langplugins.DefaultRegistry.All() {
+		lang := plugin.DisplayName()
+		if ts := plugin.EntryPointTreeSitterLanguage(); ts != nil {
+			d.languages[lang] = ts
+			if q := plugin.EntrypointQuery(); q != "" {
+				d.queries[lang] = q
+			}
+		}
+	}
+	return d
 }
 
 // DetectEntryPoints finds entry points in the specified language
@@ -237,17 +227,13 @@ func (d *TreeSitterEntryDetector) findPythonMainWithRegex(filePath string, conte
 
 // getFileExtensions returns file extensions for a language
 func (d *TreeSitterEntryDetector) getFileExtensions(language string) []string {
-	extensions := map[string][]string{
-		"Go":         {".go"},
-		"Python":     {".py", ".pyw"},
-		"JavaScript": {".js", ".mjs"},
-		"TypeScript": {".ts", ".tsx"},
-		"Java":       {".java"},
-		"Rust":       {".rs"},
-		"C++":        {".cpp", ".cxx", ".cc", ".hpp", ".hxx"},
-		"C":          {".c", ".h"},
+	// Resolve from plugins by display name
+	for _, plugin := range langplugins.DefaultRegistry.All() {
+		if plugin.DisplayName() == language {
+			return plugin.FileExtensions()
+		}
 	}
-	return extensions[language]
+	return nil
 }
 
 // hasValidExtension checks if file has valid extension for the language
