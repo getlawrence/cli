@@ -24,7 +24,8 @@ func Execute() error {
 
 func init() {
 	// Register all language plugins
-	languages.RegisterAllPlugins()
+	languages.DefaultRegistry.Register(languages.NewGoPlugin())
+	languages.DefaultRegistry.Register(languages.NewPythonPlugin())
 
 	// Global flags
 	rootCmd.PersistentFlags().BoolP("verbose", "v", false, "verbose output")

@@ -240,11 +240,3 @@ func (p *PythonPlugin) findMainBlockWithRegex(content []byte, analysis *types.Fi
 	}
 }
 func (p *PythonPlugin) FallbackAnalyzeImports(content []byte, analysis *types.FileAnalysis) {}
-
-// RegisterPythonPlugin registers the Python plugin with all necessary registries
-func RegisterPythonPlugin() {
-	plugin := NewPythonPlugin()
-	DefaultRegistry.Register(plugin)
-	inj.RegisterLanguageInjector("python", plugin)
-	dep.RegisterDependencyHandler("python", dep.NewPythonHandler())
-}

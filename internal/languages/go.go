@@ -263,11 +263,3 @@ func (p *GoPlugin) detectExistingOTELSetup(bodyNode *sitter.Node, content []byte
 
 // Implement required method to satisfy injector.LanguageInjector
 func (p *GoPlugin) FallbackAnalyzeImports(content []byte, analysis *types.FileAnalysis) {}
-
-// RegisterGoPlugin registers the Go plugin with all necessary registries
-func RegisterGoPlugin() {
-	plugin := NewGoPlugin()
-	DefaultRegistry.Register(plugin)
-	inj.RegisterLanguageInjector("go", plugin)
-	dep.RegisterDependencyHandler("go", dep.NewGoHandler())
-}

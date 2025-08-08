@@ -30,9 +30,3 @@ func (r *LanguageRegistry) All() map[string]LanguagePlugin {
 	}
 	return out
 }
-
-// RegisterAllPlugins registers all available language plugins
-func RegisterAllPlugins() {
-	RegisterGoPlugin()
-	RegisterPythonPlugin()
-}
