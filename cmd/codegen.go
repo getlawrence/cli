@@ -9,7 +9,6 @@ import (
 	"github.com/getlawrence/cli/internal/codegen/types"
 	"github.com/getlawrence/cli/internal/detector"
 	"github.com/getlawrence/cli/internal/detector/issues"
-	detlangs "github.com/getlawrence/cli/internal/detector/languages"
 	"github.com/spf13/cobra"
 )
 
@@ -81,10 +80,7 @@ func runCodegen(cmd *cobra.Command, args []string) error {
 	// Create analysis engine
 	codebaseAnalyzer := detector.NewCodebaseAnalyzer([]detector.IssueDetector{
 		issues.NewMissingOTelDetector(),
-	}, map[string]detector.Language{
-		"go":     detlangs.NewGoDetector(),
-		"python": detlangs.NewPythonDetector(),
-	})
+	}, map[string]detector.Language{})
 
 	// Initialize generator with existing detector system
 	codeGenerator, err := generator.NewGenerator(codebaseAnalyzer)

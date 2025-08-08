@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"github.com/getlawrence/cli/internal/languages"
 	"github.com/spf13/cobra"
 )
 
@@ -22,6 +23,9 @@ func Execute() error {
 }
 
 func init() {
+	// Register all language plugins
+	languages.RegisterAllPlugins()
+
 	// Global flags
 	rootCmd.PersistentFlags().BoolP("verbose", "v", false, "verbose output")
 	rootCmd.PersistentFlags().StringP("output", "o", "text", "output format (text, json, yaml)")

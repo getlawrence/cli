@@ -92,17 +92,13 @@ func (ca *CodebaseAnalyzer) AnalyzeCodebase(ctx context.Context, rootPath string
 	seenLanguages := make(map[string]bool)
 
 	for directory, language := range directoryLanguages {
-		languageDetector := ca.findLanguageDetector(language)
-		if languageDetector == nil {
-			// Skip if we don't have a detector for this language
-			continue
-		}
+		languageDetector := ca.findLanguageDetector(language) // may be nil (detector-optional)
 
 		// Calculate the full path for this directory
 		dirPath := ca.calculateDirectoryPath(rootPath, directory)
 		seenLanguages[language] = true
 
-		// Process each directory individually
+		// Process each directory individually (handles nil detector)
 		dirAnalysis, err := ca.processDirectory(ctx, directory, dirPath, language, languageDetector)
 		if err != nil {
 			return nil, fmt.Errorf("failed to process directory %s: %w", directory, err)
@@ -128,10 +124,17 @@ func (ca *CodebaseAnalyzer) calculateDirectoryPath(rootPath, directory string) s
 
 // processDirectory handles the complete analysis pipeline for a single directory
 func (ca *CodebaseAnalyzer) processDirectory(ctx context.Context, directory, dirPath, language string, languageDetector Language) (*DirectoryAnalysis, error) {
-	// Step 1: Collect libraries and packages
-	libs, packages, err := ca.collectLibrariesAndPackagesForDirectory(ctx, dirPath, language, languageDetector)
-	if err != nil {
-		return nil, err
+	// Step 1: Collect libraries and packages (optional)
+	var (
+		libs     []domain.Library
+		packages []domain.Package
+		err      error
+	)
+	if languageDetector != nil {
+		libs, packages, err = ca.collectLibrariesAndPackagesForDirectory(ctx, dirPath, language, languageDetector)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	entrypoint, err := ca.entrypointDetector.DetectEntryPoints(dirPath, language)
@@ -143,9 +146,11 @@ func (ca *CodebaseAnalyzer) processDirectory(ctx context.Context, directory, dir
 		EntryPoints: entrypoint,
 	}
 
-	// Step 2: Populate instrumentations
-	if err := ca.populateInstrumentationsForDirectory(ctx, dirAnalysis); err != nil {
-		return nil, fmt.Errorf("failed to populate instrumentations: %w", err)
+	// Step 2: Populate instrumentations only when packages were discovered
+	if languageDetector != nil {
+		if err := ca.populateInstrumentationsForDirectory(ctx, dirAnalysis); err != nil {
+			return nil, fmt.Errorf("failed to populate instrumentations: %w", err)
+		}
 	}
 
 	// Step 3: Run issue detectors

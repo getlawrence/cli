@@ -38,12 +38,8 @@ func NewCodeInjector() *CodeInjector {
 		handlers[strings.ToLower(id)] = h
 	}
 	// Fallback defaults
-	if _, ok := handlers["go"]; !ok {
-		handlers["go"] = NewGoHandler()
-	}
-	if _, ok := handlers["python"]; !ok {
-		handlers["python"] = NewPythonHandler()
-	}
+	// go handler is registered by plugin init; no local fallback
+	// python handler now registered by plugin init; no local fallback
 	return &CodeInjector{handlers: handlers}
 }
 

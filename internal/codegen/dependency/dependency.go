@@ -33,14 +33,70 @@ func NewDependencyWriter() *DependencyWriter {
 	for id, h := range getRegisteredDependencyHandlers() {
 		handlers[id] = h
 	}
-	// Fallback to built-in handlers if not registered
-	if _, ok := handlers["go"]; !ok {
-		handlers["go"] = NewGoHandler()
-	}
-	if _, ok := handlers["python"]; !ok {
-		handlers["python"] = NewPythonHandler()
-	}
+	// Handlers are registered by plugin init; no local fallback
 	return &DependencyWriter{handlers: handlers}
+}
+
+// GoHandler implements DependencyHandler for Go projects
+type GoHandler struct{}
+
+// PythonHandler implements DependencyHandler for Python projects
+type PythonHandler struct{}
+
+// NewGoHandler creates a new Go dependency handler
+func NewGoHandler() DependencyHandler {
+	return &GoHandler{}
+}
+
+// NewPythonHandler creates a new Python dependency handler
+func NewPythonHandler() DependencyHandler {
+	return &PythonHandler{}
+}
+
+// GoHandler methods
+func (h *GoHandler) AddDependencies(ctx context.Context, projectPath string, dependencies []Dependency, dryRun bool) error {
+	return fmt.Errorf("Go dependency handler not implemented")
+}
+func (h *GoHandler) GetCoreDependencies() []Dependency {
+	return []Dependency{}
+}
+func (h *GoHandler) GetInstrumentationDependency(instrumentation string) *Dependency {
+	return nil
+}
+func (h *GoHandler) GetComponentDependency(componentType, component string) *Dependency {
+	return nil
+}
+func (h *GoHandler) ValidateProjectStructure(projectPath string) error {
+	return fmt.Errorf("Go dependency handler not implemented")
+}
+func (h *GoHandler) GetDependencyFiles(projectPath string) []string {
+	return []string{}
+}
+func (h *GoHandler) GetLanguage() string {
+	return "go"
+}
+
+// PythonHandler methods
+func (h *PythonHandler) AddDependencies(ctx context.Context, projectPath string, dependencies []Dependency, dryRun bool) error {
+	return fmt.Errorf("Python dependency handler not implemented")
+}
+func (h *PythonHandler) GetCoreDependencies() []Dependency {
+	return []Dependency{}
+}
+func (h *PythonHandler) GetInstrumentationDependency(instrumentation string) *Dependency {
+	return nil
+}
+func (h *PythonHandler) GetComponentDependency(componentType, component string) *Dependency {
+	return nil
+}
+func (h *PythonHandler) ValidateProjectStructure(projectPath string) error {
+	return fmt.Errorf("Python dependency handler not implemented")
+}
+func (h *PythonHandler) GetDependencyFiles(projectPath string) []string {
+	return []string{}
+}
+func (h *PythonHandler) GetLanguage() string {
+	return "python"
 }
 
 // AddDependencies adds required dependencies to the project
