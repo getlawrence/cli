@@ -81,7 +81,7 @@ if __name__ == '__main__':
 		},
 		{
 			name:     "CSharp",
-			language: "c#",
+			language: "csharp",
 			filename: "Program.cs",
 			source: `using System;
 

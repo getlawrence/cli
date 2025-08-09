@@ -20,7 +20,7 @@ func NewDotNetDetector() *DotNetDetector { return &DotNetDetector{} }
 
 // Name returns the language name key used by the analyzer
 // We align with enry's C# output and overall tool usage by handling "c#" as the map key.
-func (d *DotNetDetector) Name() string { return "c#" }
+func (d *DotNetDetector) Name() string { return "csharp" }
 
 // GetOTelLibraries finds OpenTelemetry libraries in .NET projects
 func (d *DotNetDetector) GetOTelLibraries(ctx context.Context, rootPath string) ([]domain.Library, error) {
@@ -137,7 +137,7 @@ func (d *DotNetDetector) parseCsProjForOTel(path string) ([]domain.Library, erro
 			libraries = append(libraries, domain.Library{
 				Name:        name,
 				Version:     version,
-				Language:    "c#",
+				Language:    "csharp",
 				ImportPath:  name,
 				PackageFile: path,
 			})
@@ -160,7 +160,7 @@ func (d *DotNetDetector) parseCSForOTelUsings(path string) ([]domain.Library, er
 		if m := re.FindStringSubmatch(line); len(m) >= 2 {
 			libraries = append(libraries, domain.Library{
 				Name:       m[1],
-				Language:   "c#",
+				Language:   "csharp",
 				ImportPath: m[1],
 			})
 		}
@@ -186,7 +186,7 @@ func (d *DotNetDetector) parseAllFromCsProj(path string) ([]domain.Package, erro
 			packages = append(packages, domain.Package{
 				Name:        name,
 				Version:     version,
-				Language:    "c#",
+				Language:    "csharp",
 				ImportPath:  name,
 				PackageFile: path,
 			})

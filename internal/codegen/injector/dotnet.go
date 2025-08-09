@@ -17,7 +17,7 @@ type DotNetHandler struct {
 func NewDotNetHandler() *DotNetHandler {
 	return &DotNetHandler{
 		config: &types.LanguageConfig{
-			Language:       "C#",
+			Language:       "csharp",
 			FileExtensions: []string{".cs"},
 			ImportQueries: map[string]string{
 				"existing_imports": `

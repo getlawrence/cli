@@ -36,9 +36,8 @@ func NewTemplateGenerationStrategy(templateEngine *templates.TemplateEngine) *Te
 	registry.RegisterLanguage("go", NewGoCodeGenerator())
 	registry.RegisterLanguage("javascript", NewJavaScriptCodeGenerator())
 	registry.RegisterLanguage("java", NewJavaCodeGenerator())
+	registry.RegisterLanguage("csharp", NewDotNetCodeGenerator())
 	registry.RegisterLanguage("dotnet", NewDotNetCodeGenerator())
-	// Alias for detection that yields "C#"
-	registry.RegisterLanguage("c#", NewDotNetCodeGenerator())
 	registry.RegisterLanguage("ruby", NewRubyCodeGenerator())
 	registry.RegisterLanguage("php", NewPHPCodeGenerator())
 

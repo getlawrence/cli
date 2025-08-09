@@ -13,7 +13,7 @@ type DotNetHandler struct{}
 
 func NewDotNetHandler() *DotNetHandler { return &DotNetHandler{} }
 
-func (h *DotNetHandler) GetLanguage() string { return "c#" }
+func (h *DotNetHandler) GetLanguage() string { return "csharp" }
 
 func (h *DotNetHandler) AddDependencies(ctx context.Context, projectPath string, dependencies []Dependency, dryRun bool) error {
 	if len(dependencies) == 0 {
@@ -53,20 +53,20 @@ func (h *DotNetHandler) AddDependencies(ctx context.Context, projectPath string,
 
 func (h *DotNetHandler) GetCoreDependencies() []Dependency {
 	return []Dependency{
-		{Name: "OpenTelemetry", Language: "c#", ImportPath: "OpenTelemetry", Category: "core", Required: true},
-		{Name: "OpenTelemetry.Exporter.OpenTelemetryProtocol", Language: "c#", ImportPath: "OpenTelemetry.Exporter.OpenTelemetryProtocol", Category: "exporter", Required: true},
-		{Name: "OpenTelemetry.Extensions.Hosting", Language: "c#", ImportPath: "OpenTelemetry.Extensions.Hosting", Category: "core", Required: true},
+		{Name: "OpenTelemetry", Language: "csharp", ImportPath: "OpenTelemetry", Category: "core", Required: true},
+		{Name: "OpenTelemetry.Exporter.OpenTelemetryProtocol", Language: "csharp", ImportPath: "OpenTelemetry.Exporter.OpenTelemetryProtocol", Category: "exporter", Required: true},
+		{Name: "OpenTelemetry.Extensions.Hosting", Language: "csharp", ImportPath: "OpenTelemetry.Extensions.Hosting", Category: "core", Required: true},
 	}
 }
 
 func (h *DotNetHandler) GetInstrumentationDependency(instrumentation string) *Dependency {
 	m := map[string]Dependency{
-		"aspnetcore": {Name: "ASP.NET Core", Language: "c#", ImportPath: "OpenTelemetry.Instrumentation.AspNetCore", Category: "instrumentation"},
-		"httpclient": {Name: "HttpClient", Language: "c#", ImportPath: "OpenTelemetry.Instrumentation.Http", Category: "instrumentation"},
-		"grpc":       {Name: "gRPC", Language: "c#", ImportPath: "OpenTelemetry.Instrumentation.GrpcNetClient", Category: "instrumentation"},
-		"redis":      {Name: "Redis", Language: "c#", ImportPath: "OpenTelemetry.Instrumentation.StackExchangeRedis", Category: "instrumentation"},
-		"runtime":    {Name: "Runtime", Language: "c#", ImportPath: "OpenTelemetry.Instrumentation.Runtime", Category: "instrumentation"},
-		"process":    {Name: "Process", Language: "c#", ImportPath: "OpenTelemetry.Instrumentation.Process", Category: "instrumentation"},
+		"aspnetcore": {Name: "ASP.NET Core", Language: "csharp", ImportPath: "OpenTelemetry.Instrumentation.AspNetCore", Category: "instrumentation"},
+		"httpclient": {Name: "HttpClient", Language: "csharp", ImportPath: "OpenTelemetry.Instrumentation.Http", Category: "instrumentation"},
+		"grpc":       {Name: "gRPC", Language: "csharp", ImportPath: "OpenTelemetry.Instrumentation.GrpcNetClient", Category: "instrumentation"},
+		"redis":      {Name: "Redis", Language: "csharp", ImportPath: "OpenTelemetry.Instrumentation.StackExchangeRedis", Category: "instrumentation"},
+		"runtime":    {Name: "Runtime", Language: "csharp", ImportPath: "OpenTelemetry.Instrumentation.Runtime", Category: "instrumentation"},
+		"process":    {Name: "Process", Language: "csharp", ImportPath: "OpenTelemetry.Instrumentation.Process", Category: "instrumentation"},
 	}
 	if dep, ok := m[instrumentation]; ok {
 		return &dep
@@ -78,7 +78,7 @@ func (h *DotNetHandler) GetComponentDependency(componentType, component string) 
 	switch componentType {
 	case "instrumentation":
 		if component == "auto" {
-			return &Dependency{Name: "AutoInstrumentation", Language: "c#", ImportPath: "OpenTelemetry.AutoInstrumentation", Category: "instrumentation"}
+			return &Dependency{Name: "AutoInstrumentation", Language: "csharp", ImportPath: "OpenTelemetry.AutoInstrumentation", Category: "instrumentation"}
 		}
 	}
 	return nil
