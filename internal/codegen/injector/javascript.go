@@ -49,9 +49,10 @@ func NewJavaScriptHandler() *JavaScriptHandler {
                 (program) @function_start
             `,
 			},
-			ImportTemplate: `import %s from "%s"`,
+			ImportTemplate: `const { %s } = require("%s")`,
 			InitializationTemplate: `
-	const otel =require('./otel'); 
+const { setupOTel } = require('./otel'); 
+setupOTel();
 `,
 			CleanupTemplate: `await sdk.shutdown()`,
 		},
@@ -66,11 +67,7 @@ func (h *JavaScriptHandler) GetConfig() *types.LanguageConfig { return h.config 
 
 // GetRequiredImports returns the list of imports needed for OTEL in JS
 func (h *JavaScriptHandler) GetRequiredImports() []string {
-	return []string{
-		"@opentelemetry/api",
-		"@opentelemetry/sdk-node",
-		"@opentelemetry/exporter-trace-otlp-http",
-	}
+	return []string{}
 }
 
 // FormatImports formats JS import statements (ESM)
@@ -179,3 +176,7 @@ func (h *JavaScriptHandler) detectExistingOTELSetup(node *sitter.Node, content [
 
 // FallbackAnalyzeImports: no-op for JS
 func (h *JavaScriptHandler) FallbackAnalyzeImports(content []byte, analysis *types.FileAnalysis) {}
+
+// FallbackAnalyzeEntryPoints: no-op for JavaScript; default program node is already considered
+func (h *JavaScriptHandler) FallbackAnalyzeEntryPoints(content []byte, analysis *types.FileAnalysis) {
+}

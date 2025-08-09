@@ -334,15 +334,41 @@ func (s *TemplateGenerationStrategy) handleEntryPointModifications(
 	var modifiedFiles []string
 
 	for _, opp := range opportunities {
-		if opp.Type == domain.OpportunityInstallOTEL && opp.EntryPoint != nil {
+		if opp.Type == domain.OpportunityInstallOTEL {
+			entryPoint := &domain.EntryPoint{}
+			// Compute directory path from the root codebase path and the opportunity's directory
+			dirPath := req.CodebasePath
+			if opp.FilePath != "" && opp.FilePath != "root" {
+				dirPath = filepath.Join(req.CodebasePath, opp.FilePath)
+			}
+
+			// Detect best entry point(s) for this directory and language
+			eps, err := s.codeInjector.DetectEntryPoints(dirPath, strings.ToLower(opp.Language))
+			if err != nil {
+				// Best-effort: skip this opportunity if detection fails
+				continue
+			}
+			if len(eps) == 0 {
+				// No entry point found; skip modification
+				continue
+			}
+
+			// Choose the highest confidence entry point
+			best := eps[0]
+			for _, ep := range eps {
+				if ep.Confidence > best.Confidence {
+					best = ep
+				}
+			}
+			entryPoint = &best
 			files, err := s.codeInjector.InjectOtelInitialization(
 				context.Background(),
-				opp.EntryPoint,
+				entryPoint,
 				operationsData,
 				req,
 			)
 			if err != nil {
-				return nil, fmt.Errorf("failed to modify entry point %s: %w", opp.EntryPoint.FilePath, err)
+				return nil, fmt.Errorf("failed to modify entry point %s: %w", entryPoint.FilePath, err)
 			}
 			modifiedFiles = append(modifiedFiles, files...)
 		}

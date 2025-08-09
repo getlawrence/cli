@@ -386,3 +386,6 @@ func (h *GoHandler) FallbackAnalyzeImports(content []byte, analysis *types.FileA
 		}
 	}
 }
+
+// FallbackAnalyzeEntryPoints: no-op for Go since tree-sitter captures main/init reliably
+func (h *GoHandler) FallbackAnalyzeEntryPoints(content []byte, analysis *types.FileAnalysis) {}

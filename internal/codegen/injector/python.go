@@ -286,3 +286,8 @@ func (h *PythonHandler) detectExistingOTELSetup(bodyNode *sitter.Node, content [
 func (h *PythonHandler) FallbackAnalyzeImports(content []byte, analysis *types.FileAnalysis) {
 	// Intentionally empty
 }
+
+// FallbackAnalyzeEntryPoints uses regex to find the if __name__ == '__main__' block when tree-sitter misses it
+func (h *PythonHandler) FallbackAnalyzeEntryPoints(content []byte, analysis *types.FileAnalysis) {
+	h.findMainBlockWithRegex(content, analysis)
+}

@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/getlawrence/cli/internal/detector/entrypoint"
+	"github.com/getlawrence/cli/internal/codegen/injector"
 	"github.com/getlawrence/cli/internal/domain"
 )
 
@@ -52,22 +52,21 @@ type DirectoryAnalysis struct {
 	Packages                  []domain.Package             `json:"packages"`
 	AvailableInstrumentations []domain.InstrumentationInfo `json:"available_instrumentations"`
 	Issues                    []domain.Issue               `json:"issues"`
-	EntryPoints               []domain.EntryPoint          `json:"entry_points"`
 }
 
 // CodebaseAnalyzer coordinates the detection process
 type CodebaseAnalyzer struct {
-	detectors          []IssueDetector
-	languageDetectors  map[string]Language
-	entrypointDetector *entrypoint.TreeSitterEntryDetector
+	detectors         []IssueDetector
+	languageDetectors map[string]Language
+	codeInjector      *injector.CodeInjector
 }
 
 // NewCodebaseAnalyzer creates a new analysis engine
 func NewCodebaseAnalyzer(detectors []IssueDetector, languages map[string]Language) *CodebaseAnalyzer {
 	return &CodebaseAnalyzer{
-		detectors:          detectors,
-		languageDetectors:  languages,
-		entrypointDetector: entrypoint.NewTreeSitterEntryDetector(),
+		detectors:         detectors,
+		languageDetectors: languages,
+		codeInjector:      injector.NewCodeInjector(),
 	}
 }
 
@@ -134,13 +133,11 @@ func (ca *CodebaseAnalyzer) processDirectory(ctx context.Context, directory, dir
 		return nil, err
 	}
 
-	entrypoint, err := ca.entrypointDetector.DetectEntryPoints(dirPath, language)
 	dirAnalysis := &DirectoryAnalysis{
-		Directory:   directory,
-		Language:    language,
-		Libraries:   libs,
-		Packages:    packages,
-		EntryPoints: entrypoint,
+		Directory: directory,
+		Language:  language,
+		Libraries: libs,
+		Packages:  packages,
 	}
 
 	// Step 2: Populate instrumentations

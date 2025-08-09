@@ -66,5 +66,4 @@ type Opportunity struct {
 	FilePath      string          `json:"file_path"`
 	Suggestion    string          `json:"suggestion"`
 	Issue         *Issue          `json:"issue,omitempty"`
-	EntryPoint    *EntryPoint     `json:"entry_point,omitempty"`
 }
