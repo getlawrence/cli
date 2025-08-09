@@ -1,0 +1,31 @@
+// Comprehensive OpenTelemetry setup for {{.ServiceName}} (.NET)
+
+using Microsoft.Extensions.DependencyInjection;
+using OpenTelemetry;
+using OpenTelemetry.Trace;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Logs;
+using OpenTelemetry.Resources;
+
+public static class Otel
+{
+    public static void Configure(IServiceCollection services)
+    {
+        services.AddOpenTelemetry()
+            .ConfigureResource(r => r.AddService("{{.ServiceName}}"))
+            .WithTracing(b => b
+                .AddAspNetCoreInstrumentation()
+                .AddHttpClientInstrumentation()
+                .AddGrpcClientInstrumentation()
+                .AddRuntimeInstrumentation()
+                .AddProcessInstrumentation()
+                .AddOtlpExporter())
+            .WithMetrics(b => b
+                .AddAspNetCoreInstrumentation()
+                .AddRuntimeInstrumentation()
+                .AddProcessInstrumentation()
+                .AddOtlpExporter());
+    }
+}
+
+

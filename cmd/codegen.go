@@ -86,6 +86,7 @@ func runCodegen(cmd *cobra.Command, args []string) error {
 		"javascript": languages.NewJavaScriptDetector(),
 		"python":     languages.NewPythonDetector(),
 		"java":       languages.NewJavaDetector(),
+		"c#":         languages.NewDotNetDetector(),
 	})
 
 	// Initialize generator with existing detector system

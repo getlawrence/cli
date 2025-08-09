@@ -36,6 +36,7 @@ func NewTemplateGenerationStrategy(templateEngine *templates.TemplateEngine) *Te
 	registry.RegisterLanguage("go", NewGoCodeGenerator())
 	registry.RegisterLanguage("javascript", NewJavaScriptCodeGenerator())
 	registry.RegisterLanguage("java", NewJavaCodeGenerator())
+	registry.RegisterLanguage("dotnet", NewDotNetCodeGenerator())
 
 	return &TemplateGenerationStrategy{
 		templateEngine:   templateEngine,

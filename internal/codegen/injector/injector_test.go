@@ -79,6 +79,21 @@ if __name__ == '__main__':
 			expectInitSub:   "GlobalOpenTelemetry.get()",
 			expectImportSub: "import io.opentelemetry.api.GlobalOpenTelemetry;",
 		},
+		{
+			name:     "CSharp",
+			language: "c#",
+			filename: "Program.cs",
+			source: `using System;
+
+public class Program {
+    public static void Main(string[] args) {
+        Console.WriteLine("hi");
+    }
+}
+`,
+			expectInitSub:   "AddOpenTelemetry(",
+			expectImportSub: "using OpenTelemetry;",
+		},
 	}
 
 	for _, tc := range cases {

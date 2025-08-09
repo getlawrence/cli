@@ -24,6 +24,8 @@ func NewCodeInjector() *CodeInjector {
 			"javascript": NewJavaScriptHandler(),
 			"python":     NewPythonHandler(),
 			"java":       NewJavaHandler(),
+			"c#":         NewDotNetHandler(),
+			"dotnet":     NewDotNetHandler(),
 		},
 	}
 }
