@@ -38,6 +38,7 @@ func NewTemplateGenerationStrategy(templateEngine *templates.TemplateEngine) *Te
 	registry.RegisterLanguage("java", NewJavaCodeGenerator())
 	registry.RegisterLanguage("dotnet", NewDotNetCodeGenerator())
 	registry.RegisterLanguage("ruby", NewRubyCodeGenerator())
+	registry.RegisterLanguage("php", NewPHPCodeGenerator())
 
 	return &TemplateGenerationStrategy{
 		templateEngine:   templateEngine,

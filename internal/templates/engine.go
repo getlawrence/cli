@@ -104,6 +104,15 @@ func (e *TemplateEngine) GenerateInstructions(lang string, method InstallationMe
 	templateKey := fmt.Sprintf("%s_%s", lang, method)
 	tmpl, exists := e.templates[templateKey]
 	if !exists {
+		// Final fallback: if there is a generic code_gen for the language, use it
+		genericKey := fmt.Sprintf("%s_code_gen", lang)
+		if tmpl2, ok := e.templates[genericKey]; ok {
+			var buf2 bytes.Buffer
+			if err := tmpl2.Execute(&buf2, data); err != nil {
+				return "", fmt.Errorf("template execution failed: %w", err)
+			}
+			return buf2.String(), nil
+		}
 		return "", fmt.Errorf("template not found for %s with method %s", lang, method)
 	}
 

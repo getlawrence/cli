@@ -23,6 +23,7 @@ func NewDependencyWriter() *DependencyWriter {
 			"c#":         NewDotNetHandler(),
 			"dotnet":     NewDotNetHandler(),
 			"ruby":       NewRubyHandler(),
+			"php":        NewPHPHandler(),
 		},
 	}
 }

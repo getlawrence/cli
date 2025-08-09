@@ -1,0 +1,8 @@
+{
+  "name": "getlawrence/example-php",
+  "description": "Example PHP app for Lawrence CLI",
+  "type": "project",
+  "require": {}
+}
+
+
