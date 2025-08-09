@@ -16,8 +16,9 @@ type DependencyWriter struct {
 func NewDependencyWriter() *DependencyWriter {
 	return &DependencyWriter{
 		handlers: map[string]DependencyHandler{
-			"go":     NewGoHandler(),
-			"python": NewPythonHandler(),
+			"go":         NewGoHandler(),
+			"javascript": NewJavaScriptHandler(),
+			"python":     NewPythonHandler(),
 		},
 	}
 }

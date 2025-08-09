@@ -10,6 +10,7 @@ import (
 	"github.com/getlawrence/cli/internal/domain"
 	sitter "github.com/smacker/go-tree-sitter"
 	"github.com/smacker/go-tree-sitter/golang"
+	"github.com/smacker/go-tree-sitter/javascript"
 	"github.com/smacker/go-tree-sitter/python"
 )
 
@@ -23,8 +24,9 @@ type TreeSitterEntryDetector struct {
 func NewTreeSitterEntryDetector() *TreeSitterEntryDetector {
 	return &TreeSitterEntryDetector{
 		languages: map[string]*sitter.Language{
-			"Go":     golang.GetLanguage(),
-			"Python": python.GetLanguage(),
+			"Go":         golang.GetLanguage(),
+			"JavaScript": javascript.GetLanguage(),
+			"Python":     python.GetLanguage(),
 		},
 		queries: map[string]string{
 			"Go": `
@@ -33,6 +35,36 @@ func NewTreeSitterEntryDetector() *TreeSitterEntryDetector {
 					(#eq? @func_name "main")
 				) @main_function
 			`,
+			"JavaScript": `
+                ; Match common Node.js entrypoints where a server starts listening
+                (call_expression
+                  function: (member_expression
+                    object: (identifier)
+                    property: (property_identifier) @method
+                  )
+                  arguments: (arguments)
+                ) @server_listen
+                (#eq? @method "listen")
+
+                ; Also match http.createServer(...).listen(...)
+                (call_expression
+                  function: (member_expression
+                    object: (call_expression
+                      function: (member_expression
+                        object: (identifier) @httpIdent
+                        property: (property_identifier) @createServer
+                      )
+                    )
+                    property: (property_identifier) @listen2
+                  )
+                ) @server_listen
+                (#eq? @httpIdent "http")
+                (#eq? @createServer "createServer")
+                (#eq? @listen2 "listen")
+
+                ; Fallback: treat the top-level program as an entry block
+                (program) @main_block
+            `,
 			"Python": `
 				(if_statement
 					condition: (binary_operator
@@ -183,10 +215,16 @@ func (d *TreeSitterEntryDetector) analyzeFile(filePath string, lang *sitter.Lang
 			case "main_if_block":
 				entryPoint.FunctionName = "if __name__ == '__main__'"
 				entryPoint.Confidence = 1.0
+			case "server_listen":
+				entryPoint.FunctionName = "web_server"
+				entryPoint.Confidence = 0.9
+			case "program":
+				entryPoint.FunctionName = "program"
+				entryPoint.Confidence = 0.7
 			case "init_function":
 				entryPoint.FunctionName = "init"
 				entryPoint.Confidence = 0.9
-			case "http_server", "web_server", "server_listen":
+			case "http_server", "web_server":
 				entryPoint.FunctionName = "web_server"
 				entryPoint.Confidence = 0.8
 			case "async_main":

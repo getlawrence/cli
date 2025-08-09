@@ -19,8 +19,9 @@ type CodeInjector struct {
 func NewCodeInjector() *CodeInjector {
 	return &CodeInjector{
 		handlers: map[string]LanguageInjector{
-			"go":     NewGoHandler(),
-			"python": NewPythonHandler(),
+			"go":         NewGoHandler(),
+			"javascript": NewJavaScriptHandler(),
+			"python":     NewPythonHandler(),
 		},
 	}
 }
