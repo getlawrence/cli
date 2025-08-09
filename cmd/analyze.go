@@ -76,6 +76,7 @@ func runAnalyze(cmd *cobra.Command, args []string) error {
 		"go":     languages.NewGoDetector(),
 		"python": languages.NewPythonDetector(),
 		"c#":     languages.NewDotNetDetector(),
+		"ruby":   languages.NewRubyDetector(),
 	})
 
 	// Run analysis

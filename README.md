@@ -175,11 +175,15 @@ lawrence config init --global      # Create in home directory
 ## Supported Languages
 
 | Language | Library Detection | Import Analysis | Package Files |
-|----------|------------------|------------------|---------------|
-| Go       | ✅               | ✅               | go.mod, go.sum |
-| Python   | ✅               | ✅               | requirements.txt, pyproject.toml, setup.py |
+|----------|-------------------|-----------------|---------------|
+| Go       | ✅                | ✅              | go.mod, go.sum |
+| Python   | ✅                | ✅              | requirements.txt, pyproject.toml, setup.py |
+| JavaScript | ✅              | ✅              | package.json, lockfiles |
+| Java     | ✅                | ✅              | pom.xml, gradle files |
+| .NET     | ✅                | ✅              | .csproj, packages.config |
+| Ruby     | ✅                | ✅              | Gemfile, Gemfile.lock |
 
-More languages coming soon! See [Contributing](#contributing) to add support for your language.
+See [Contributing](#contributing) to add support for your language.
 
 ## Issue Categories
 

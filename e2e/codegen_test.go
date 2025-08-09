@@ -34,8 +34,8 @@ func TestCodegenTemplateDryRunOnGoSample(t *testing.T) {
 		}
 	}
 
-	// Run codegen in template dry-run mode against examples/go-sample
-	samplePath := filepath.Join(repoRoot, "examples", "go-sample")
+	// Run codegen in template dry-run mode against examples/go
+	samplePath := filepath.Join(repoRoot, "examples", "go")
 	outputDir := filepath.Join(tmpDir, "out")
 
 	{

@@ -1,0 +1,18 @@
+require 'opentelemetry-api'
+require 'opentelemetry-sdk'
+require 'opentelemetry-exporter-otlp'
+{{range .Instrumentations}}
+require 'opentelemetry-instrumentation-{{.}}'
+{{end}}
+
+OpenTelemetry::SDK.configure do |c|
+  c.use_all
+end
+
+# Basic tracer example
+tracer = OpenTelemetry.tracer_provider.tracer('{{.ServiceName}}')
+tracer.in_span('init') do |span|
+  span.add_event('initialized')
+end
+
+

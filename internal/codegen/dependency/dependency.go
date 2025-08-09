@@ -22,6 +22,7 @@ func NewDependencyWriter() *DependencyWriter {
 			"java":       NewJavaHandler(),
 			"c#":         NewDotNetHandler(),
 			"dotnet":     NewDotNetHandler(),
+			"ruby":       NewRubyHandler(),
 		},
 	}
 }

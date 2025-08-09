@@ -37,6 +37,7 @@ func NewTemplateGenerationStrategy(templateEngine *templates.TemplateEngine) *Te
 	registry.RegisterLanguage("javascript", NewJavaScriptCodeGenerator())
 	registry.RegisterLanguage("java", NewJavaCodeGenerator())
 	registry.RegisterLanguage("dotnet", NewDotNetCodeGenerator())
+	registry.RegisterLanguage("ruby", NewRubyCodeGenerator())
 
 	return &TemplateGenerationStrategy{
 		templateEngine:   templateEngine,
@@ -334,45 +335,43 @@ func (s *TemplateGenerationStrategy) handleEntryPointModifications(
 ) ([]string, error) {
 	var modifiedFiles []string
 
+	// Perform entry point modification if we plan to install OTEL or any instrumentations/components
+	shouldModify := operationsData.InstallOTEL || len(operationsData.InstallInstrumentations) > 0 || len(operationsData.InstallComponents) > 0
+	if !shouldModify {
+		return modifiedFiles, nil
+	}
+
+	// Use any opportunity as a reference for language and directory
 	for _, opp := range opportunities {
-		if opp.Type == domain.OpportunityInstallOTEL {
-			entryPoint := &domain.EntryPoint{}
-			// Compute directory path from the root codebase path and the opportunity's directory
-			dirPath := req.CodebasePath
-			if opp.FilePath != "" && opp.FilePath != "root" {
-				dirPath = filepath.Join(req.CodebasePath, opp.FilePath)
-			}
-
-			// Detect best entry point(s) for this directory and language
-			eps, err := s.codeInjector.DetectEntryPoints(dirPath, strings.ToLower(opp.Language))
-			if err != nil {
-				// Best-effort: skip this opportunity if detection fails
-				continue
-			}
-			if len(eps) == 0 {
-				// No entry point found; skip modification
-				continue
-			}
-
-			// Choose the highest confidence entry point
-			best := eps[0]
-			for _, ep := range eps {
-				if ep.Confidence > best.Confidence {
-					best = ep
-				}
-			}
-			entryPoint = &best
-			files, err := s.codeInjector.InjectOtelInitialization(
-				context.Background(),
-				entryPoint,
-				operationsData,
-				req,
-			)
-			if err != nil {
-				return nil, fmt.Errorf("failed to modify entry point %s: %w", entryPoint.FilePath, err)
-			}
-			modifiedFiles = append(modifiedFiles, files...)
+		entryPoint := &domain.EntryPoint{}
+		dirPath := req.CodebasePath
+		if opp.FilePath != "" && opp.FilePath != "root" {
+			dirPath = filepath.Join(req.CodebasePath, opp.FilePath)
 		}
+
+		eps, err := s.codeInjector.DetectEntryPoints(dirPath, strings.ToLower(opp.Language))
+		if err != nil || len(eps) == 0 {
+			continue
+		}
+
+		best := eps[0]
+		for _, ep := range eps {
+			if ep.Confidence > best.Confidence {
+				best = ep
+			}
+		}
+		entryPoint = &best
+		files, err := s.codeInjector.InjectOtelInitialization(
+			context.Background(),
+			entryPoint,
+			operationsData,
+			req,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to modify entry point %s: %w", entryPoint.FilePath, err)
+		}
+		modifiedFiles = append(modifiedFiles, files...)
+		break
 	}
 
 	return modifiedFiles, nil
