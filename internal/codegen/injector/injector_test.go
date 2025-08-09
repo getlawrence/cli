@@ -94,6 +94,27 @@ public class Program {
 			expectInitSub:   "AddOpenTelemetry(",
 			expectImportSub: "using OpenTelemetry;",
 		},
+		{
+			name:     "Ruby",
+			language: "ruby",
+			filename: "app.rb",
+			source: `# ruby app
+puts 'hi'
+`,
+			expectInitSub:   "Lawrence::OTel.setup",
+			expectImportSub: "require \"opentelemetry-sdk\"",
+		},
+		{
+			name:     "PHP",
+			language: "php",
+			filename: "index.php",
+			source: `<?php
+// php app
+echo "hi";
+`,
+			expectInitSub:   "setup_otel();",
+			expectImportSub: "require_once './otel.php';",
+		},
 	}
 
 	for _, tc := range cases {
