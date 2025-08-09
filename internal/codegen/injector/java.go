@@ -1,0 +1,182 @@
+package injector
+
+import (
+	"fmt"
+	"strings"
+
+	"github.com/getlawrence/cli/internal/codegen/types"
+	sitter "github.com/smacker/go-tree-sitter"
+	"github.com/smacker/go-tree-sitter/java"
+)
+
+// JavaHandler implements LanguageInjector for Java
+type JavaHandler struct {
+	config *types.LanguageConfig
+}
+
+// NewJavaHandler creates a new Java language handler
+func NewJavaHandler() *JavaHandler {
+	return &JavaHandler{
+		config: &types.LanguageConfig{
+			Language:       "Java",
+			FileExtensions: []string{".java"},
+			ImportQueries: map[string]string{
+				"existing_imports": `
+                (import_declaration
+                    (scoped_identifier) @import_path
+                ) @import_location
+            `,
+			},
+			FunctionQueries: map[string]string{
+				// Try to capture main method bodies
+				"main_function": `
+                (method_declaration
+                  name: (identifier) @method_name
+                  body: (block) @method_body
+                  (#eq? @method_name "main")
+                )
+            `,
+			},
+			InsertionQueries: map[string]string{
+				"optimal_insertion": `
+                (block (local_variable_declaration) @after_variables)
+                (block (expression_statement (method_invocation)) @before_function_calls)
+                (block) @function_start
+            `,
+			},
+			ImportTemplate: `import %s;`,
+			InitializationTemplate: `
+        // Initialize OpenTelemetry
+        io.opentelemetry.api.GlobalOpenTelemetry.get(); // ensure OTEL available
+`,
+			CleanupTemplate: `// no-op cleanup for basic setup`,
+		},
+	}
+}
+
+// GetLanguage returns the tree-sitter language parser for Java
+func (h *JavaHandler) GetLanguage() *sitter.Language { return java.GetLanguage() }
+
+// GetConfig returns the language configuration for Java
+func (h *JavaHandler) GetConfig() *types.LanguageConfig { return h.config }
+
+// GetRequiredImports returns the list of imports needed for OTEL in Java
+func (h *JavaHandler) GetRequiredImports() []string {
+	return []string{
+		"io.opentelemetry.api.GlobalOpenTelemetry",
+		"io.opentelemetry.api.trace.Tracer",
+		"io.opentelemetry.sdk.trace.SdkTracerProvider",
+		"io.opentelemetry.exporter.otlp.trace.OtlpGrpcSpanExporter",
+		"io.opentelemetry.sdk.trace.export.BatchSpanProcessor",
+	}
+}
+
+// FormatImports formats Java import statements
+func (h *JavaHandler) FormatImports(imports []string, hasExistingImports bool) string {
+	if len(imports) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	for _, imp := range imports {
+		b.WriteString(h.FormatSingleImport(imp))
+		b.WriteString("\n")
+	}
+	return b.String()
+}
+
+// FormatSingleImport formats a single Java import statement
+func (h *JavaHandler) FormatSingleImport(importPath string) string {
+	return fmt.Sprintf("import %s;", importPath)
+}
+
+// AnalyzeImportCapture processes an import capture from tree-sitter query for Java
+func (h *JavaHandler) AnalyzeImportCapture(captureName string, node *sitter.Node, content []byte, analysis *types.FileAnalysis) {
+	switch captureName {
+	case "import_path":
+		path := strings.TrimSpace(node.Content(content))
+		analysis.ExistingImports[path] = true
+		if strings.HasPrefix(path, "io.opentelemetry.") {
+			analysis.HasOTELImports = true
+		}
+	case "import_location":
+		analysis.ImportLocations = append(analysis.ImportLocations, types.InsertionPoint{
+			LineNumber: node.EndPoint().Row + 1,
+			Column:     node.EndPoint().Column + 1,
+			Context:    node.Content(content),
+			Priority:   2,
+		})
+	}
+}
+
+// AnalyzeFunctionCapture processes a function capture from tree-sitter query for Java
+func (h *JavaHandler) AnalyzeFunctionCapture(captureName string, node *sitter.Node, content []byte, analysis *types.FileAnalysis, config *types.LanguageConfig) {
+	switch captureName {
+	case "method_name":
+		// handled with body capture
+	case "method_body":
+		insertionPoint := h.findBestInsertionPoint(node, content, config)
+		hasOTELSetup := h.detectExistingOTELSetup(node, content)
+		entryPoint := types.EntryPointInfo{
+			Name:         "main",
+			LineNumber:   node.StartPoint().Row + 1,
+			Column:       node.StartPoint().Column + 1,
+			BodyStart:    insertionPoint,
+			BodyEnd:      types.InsertionPoint{LineNumber: node.EndPoint().Row + 1, Column: node.EndPoint().Column + 1},
+			HasOTELSetup: hasOTELSetup,
+		}
+		analysis.EntryPoints = append(analysis.EntryPoints, entryPoint)
+	}
+}
+
+// GetInsertionPointPriority returns priority for Java insertion point types
+func (h *JavaHandler) GetInsertionPointPriority(captureName string) int {
+	switch captureName {
+	case "after_variables":
+		return 3
+	case "before_function_calls":
+		return 2
+	case "function_start":
+		return 1
+	default:
+		return 1
+	}
+}
+
+func (h *JavaHandler) findBestInsertionPoint(bodyNode *sitter.Node, content []byte, config *types.LanguageConfig) types.InsertionPoint {
+	defaultPoint := types.InsertionPoint{LineNumber: bodyNode.StartPoint().Row + 1, Column: bodyNode.StartPoint().Column + 1, Priority: 1}
+	if insertQuery, exists := config.InsertionQueries["optimal_insertion"]; exists {
+		q, err := sitter.NewQuery([]byte(insertQuery), h.GetLanguage())
+		if err != nil {
+			return defaultPoint
+		}
+		defer q.Close()
+		cur := sitter.NewQueryCursor()
+		defer cur.Close()
+		cur.Exec(q, bodyNode)
+		best := defaultPoint
+		for {
+			m, ok := cur.NextMatch()
+			if !ok {
+				break
+			}
+			for _, c := range m.Captures {
+				name := q.CaptureNameForId(c.Index)
+				n := c.Node
+				p := h.GetInsertionPointPriority(name)
+				if p > best.Priority {
+					best = types.InsertionPoint{LineNumber: n.EndPoint().Row + 1, Column: n.EndPoint().Column + 1, Context: n.Content(content), Priority: p}
+				}
+			}
+		}
+		return best
+	}
+	return defaultPoint
+}
+
+func (h *JavaHandler) detectExistingOTELSetup(node *sitter.Node, content []byte) bool {
+	body := node.Content(content)
+	return strings.Contains(body, "SdkTracerProvider") || strings.Contains(body, "GlobalOpenTelemetry")
+}
+
+// FallbackAnalyzeImports: no-op for Java
+func (h *JavaHandler) FallbackAnalyzeImports(content []byte, analysis *types.FileAnalysis) {}

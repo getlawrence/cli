@@ -19,6 +19,7 @@ func NewDependencyWriter() *DependencyWriter {
 			"go":         NewGoHandler(),
 			"javascript": NewJavaScriptHandler(),
 			"python":     NewPythonHandler(),
+			"java":       NewJavaHandler(),
 		},
 	}
 }

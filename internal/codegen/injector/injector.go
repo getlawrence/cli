@@ -22,6 +22,7 @@ func NewCodeInjector() *CodeInjector {
 			"go":         NewGoHandler(),
 			"javascript": NewJavaScriptHandler(),
 			"python":     NewPythonHandler(),
+			"java":       NewJavaHandler(),
 		},
 	}
 }

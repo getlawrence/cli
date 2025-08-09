@@ -1,0 +1,17 @@
+# Java Auto Instrumentation for {{.ServiceName}}
+
+Use the OpenTelemetry Java Agent.
+
+1. Download the agent jar:
+
+```bash
+curl -L -o opentelemetry-javaagent.jar https://github.com/open-telemetry/opentelemetry-java-instrumentation/releases/latest/download/opentelemetry-javaagent.jar
+```
+
+2. Run your app with:
+
+```bash
+java -javaagent:opentelemetry-javaagent.jar -Dotel.service.name={{.ServiceName}} -jar your-app.jar
+```
+
+

@@ -10,6 +10,7 @@ import (
 	"github.com/getlawrence/cli/internal/domain"
 	sitter "github.com/smacker/go-tree-sitter"
 	"github.com/smacker/go-tree-sitter/golang"
+	tsjava "github.com/smacker/go-tree-sitter/java"
 	"github.com/smacker/go-tree-sitter/javascript"
 	"github.com/smacker/go-tree-sitter/python"
 )
@@ -27,6 +28,7 @@ func NewTreeSitterEntryDetector() *TreeSitterEntryDetector {
 			"Go":         golang.GetLanguage(),
 			"JavaScript": javascript.GetLanguage(),
 			"Python":     python.GetLanguage(),
+			"Java":       tsjava.GetLanguage(),
 		},
 		queries: map[string]string{
 			"Go": `
@@ -75,6 +77,13 @@ func NewTreeSitterEntryDetector() *TreeSitterEntryDetector {
 					(#match? @main_str ".*__main__.*")
 				) @main_if_block
 			`,
+			"Java": `
+                (method_declaration
+                  name: (identifier) @method_name
+                  body: (block) @main_function
+                  (#eq? @method_name "main")
+                )
+            `,
 		},
 	}
 }

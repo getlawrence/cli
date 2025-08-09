@@ -1,0 +1,29 @@
+// OpenTelemetry bootstrap for {{.ServiceName}} (Java)
+// Create a helper class and invoke from your main application's startup
+
+package telemetry;
+
+import io.opentelemetry.api.GlobalOpenTelemetry;
+import io.opentelemetry.exporter.otlp.trace.OtlpGrpcSpanExporter;
+import io.opentelemetry.sdk.OpenTelemetrySdk;
+import io.opentelemetry.sdk.resources.Resource;
+import io.opentelemetry.sdk.trace.SdkTracerProvider;
+import io.opentelemetry.sdk.trace.export.BatchSpanProcessor;
+import static io.opentelemetry.semconv.ResourceAttributes.SERVICE_NAME;
+
+public final class OtelBootstrap {
+  private OtelBootstrap() {}
+
+  public static OpenTelemetrySdk start() {
+    OtlpGrpcSpanExporter exporter = OtlpGrpcSpanExporter.builder().build();
+    SdkTracerProvider provider = SdkTracerProvider.builder()
+        .addSpanProcessor(BatchSpanProcessor.builder(exporter).build())
+        .setResource(Resource.getDefault().toBuilder().put(SERVICE_NAME, "{{.ServiceName}}").build())
+        .build();
+    OpenTelemetrySdk sdk = OpenTelemetrySdk.builder().setTracerProvider(provider).build();
+    GlobalOpenTelemetry.resetForTest();
+    return sdk;
+  }
+}
+
+

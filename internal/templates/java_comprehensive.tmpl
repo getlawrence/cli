@@ -1,0 +1,36 @@
+# Comprehensive OpenTelemetry setup for {{.ServiceName}} (Java)
+
+This guide installs core SDK, OTLP exporter, and common instrumentations.
+
+## Dependencies
+
+Maven (pom.xml):
+```xml
+<dependency>
+  <groupId>io.opentelemetry</groupId>
+  <artifactId>opentelemetry-api</artifactId>
+</dependency>
+<dependency>
+  <groupId>io.opentelemetry</groupId>
+  <artifactId>opentelemetry-sdk</artifactId>
+</dependency>
+<dependency>
+  <groupId>io.opentelemetry</groupId>
+  <artifactId>opentelemetry-exporter-otlp</artifactId>
+</dependency>
+```
+
+Gradle:
+```groovy
+dependencies {
+  implementation 'io.opentelemetry:opentelemetry-api'
+  implementation 'io.opentelemetry:opentelemetry-sdk'
+  implementation 'io.opentelemetry:opentelemetry-exporter-otlp'
+}
+```
+
+## Initialization
+
+Use a bootstrap similar to `OtelBootstrap` and call it early in your application startup.
+
+
