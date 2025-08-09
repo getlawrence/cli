@@ -54,7 +54,7 @@ func init() {
 	rootCmd.AddCommand(codegenCmd)
 
 	codegenCmd.Flags().StringVarP(&language, "language", "l", "",
-		"Target language (go, python, java, javascript)")
+		"Target language (go, python, javascript, java)")
 	codegenCmd.Flags().StringVarP(&method, "method", "m", "code",
 		"Installation method (code, auto, ebpf)")
 	codegenCmd.Flags().StringVarP(&agentType, "agent", "a", "",
@@ -82,8 +82,10 @@ func runCodegen(cmd *cobra.Command, args []string) error {
 	codebaseAnalyzer := detector.NewCodebaseAnalyzer([]detector.IssueDetector{
 		issues.NewMissingOTelDetector(),
 	}, map[string]detector.Language{
-		"go":     languages.NewGoDetector(),
-		"python": languages.NewPythonDetector(),
+		"go":         languages.NewGoDetector(),
+		"javascript": languages.NewJavaScriptDetector(),
+		"python":     languages.NewPythonDetector(),
+		"java":       languages.NewJavaDetector(),
 	})
 
 	// Initialize generator with existing detector system
