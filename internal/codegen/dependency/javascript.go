@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 )
 
 // JavaScriptInjector implements DependencyHandler for JavaScript/Node.js projects
@@ -84,6 +85,23 @@ func (h *JavaScriptInjector) GetInstrumentationDependency(instrumentation string
 // GetComponentDependency returns exporter/propagator components if needed
 func (h *JavaScriptInjector) GetComponentDependency(componentType, component string) *Dependency {
 	return nil
+}
+
+// ResolveInstrumentationPrerequisites expands JS instrumentation list with required prerequisites
+// For example, framework instrumentations depend on HTTP being instrumented.
+func (h *JavaScriptInjector) ResolveInstrumentationPrerequisites(instrumentations []string) []string {
+	if len(instrumentations) == 0 {
+		return instrumentations
+	}
+	seen := make(map[string]bool)
+	for _, inst := range instrumentations {
+		seen[strings.ToLower(inst)] = true
+	}
+	// Add http if express/koa present
+	if (seen["express"] || seen["koa"]) && !seen["http"] {
+		instrumentations = append(instrumentations, "http")
+	}
+	return instrumentations
 }
 
 // ValidateProjectStructure checks dependency files

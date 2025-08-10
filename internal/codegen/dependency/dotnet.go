@@ -82,6 +82,11 @@ func (h *DotNetInjector) GetComponentDependency(componentType, component string)
 	return nil
 }
 
+// ResolveInstrumentationPrerequisites for .NET currently returns the list unchanged.
+func (h *DotNetInjector) ResolveInstrumentationPrerequisites(instrumentations []string) []string {
+	return instrumentations
+}
+
 func (h *DotNetInjector) ValidateProjectStructure(projectPath string) error {
 	if _, err := h.findCsproj(projectPath); err != nil {
 		return fmt.Errorf(".csproj not found in %s", projectPath)

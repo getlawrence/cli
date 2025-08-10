@@ -36,6 +36,9 @@ func NewTemplateGenerationStrategy(templateEngine *templates.TemplateEngine) *Te
 	}
 }
 
+// NOTE: Language-specific instrumentation prerequisite resolution is handled
+// by language dependency handlers to keep this generator language-agnostic.
+
 // GetName returns the name of this strategy
 func (s *TemplateGenerationStrategy) GetName() string {
 	return "Template-based"

@@ -37,6 +37,12 @@ type DependencyHandler interface {
 
 	// GetLanguage returns the language this handler supports
 	GetLanguage() string
+
+	// ResolveInstrumentationPrerequisites allows a language handler to expand
+	// a set of requested instrumentations with any required prerequisites
+	// (e.g., "express" -> also include "http"). Implementations may return
+	// the same list if no changes are needed.
+	ResolveInstrumentationPrerequisites(instrumentations []string) []string
 }
 
 // DependencyResult represents the result of adding dependencies

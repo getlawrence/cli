@@ -196,6 +196,11 @@ func (h *PythonInjector) GetComponentDependency(componentType, component string)
 	return nil
 }
 
+// ResolveInstrumentationPrerequisites for Python currently returns the list unchanged.
+func (h *PythonInjector) ResolveInstrumentationPrerequisites(instrumentations []string) []string {
+	return instrumentations
+}
+
 // ValidateProjectStructure checks if the project has required dependency management files
 func (h *PythonInjector) ValidateProjectStructure(projectPath string) error {
 	hasDepFile := h.hasRequirementsTxt(projectPath) ||

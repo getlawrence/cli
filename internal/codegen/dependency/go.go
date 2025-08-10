@@ -234,6 +234,11 @@ func (h *GoInjector) GetComponentDependency(componentType, component string) *De
 	return nil
 }
 
+// ResolveInstrumentationPrerequisites for Go currently returns the list unchanged.
+func (h *GoInjector) ResolveInstrumentationPrerequisites(instrumentations []string) []string {
+	return instrumentations
+}
+
 // ValidateProjectStructure checks if the project has required dependency management files
 func (h *GoInjector) ValidateProjectStructure(projectPath string) error {
 	goModPath := filepath.Join(projectPath, "go.mod")

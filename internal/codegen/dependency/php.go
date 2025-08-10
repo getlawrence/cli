@@ -142,6 +142,11 @@ func (h *PHPInjector) GetInstrumentationDependency(instrumentation string) *Depe
 // GetComponentDependency returns component dependencies (none for minimal)
 func (h *PHPInjector) GetComponentDependency(componentType, component string) *Dependency { return nil }
 
+// ResolveInstrumentationPrerequisites for PHP currently returns the list unchanged.
+func (h *PHPInjector) ResolveInstrumentationPrerequisites(instrumentations []string) []string {
+	return instrumentations
+}
+
 // ValidateProjectStructure checks for composer.json presence and warns if missing
 func (h *PHPInjector) ValidateProjectStructure(projectPath string) error {
 	composerPath := filepath.Join(projectPath, "composer.json")

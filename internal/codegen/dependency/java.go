@@ -111,6 +111,11 @@ func (h *JavaInjector) GetComponentDependency(componentType, component string) *
 	return nil
 }
 
+// ResolveInstrumentationPrerequisites for Java currently returns the list unchanged.
+func (h *JavaInjector) ResolveInstrumentationPrerequisites(instrumentations []string) []string {
+	return instrumentations
+}
+
 // ValidateProjectStructure checks if the project has required dependency management files
 func (h *JavaInjector) ValidateProjectStructure(projectPath string) error {
 	if !h.hasPom(projectPath) && !h.hasGradle(projectPath) {

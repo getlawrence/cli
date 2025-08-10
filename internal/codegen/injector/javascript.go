@@ -50,12 +50,9 @@ func NewJavaScriptInjector() *JavaScriptInjector {
                 (program) @function_start
             `,
 			},
-			ImportTemplate: `const { %s } = require("%s")`,
-			InitializationTemplate: `
-const { setupOTel } = require('./otel'); 
-setupOTel();
-`,
-			CleanupTemplate: `await sdk.shutdown()`,
+			ImportTemplate:         `const { %s } = require("%s")`,
+			InitializationTemplate: `require('./otel');`,
+			CleanupTemplate:        `await sdk.shutdown()`,
 		},
 	}
 }

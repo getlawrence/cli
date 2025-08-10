@@ -41,6 +41,11 @@ func (dm *DependencyWriter) AddDependencies(
 		return fmt.Errorf("unsupported language for dependency management: %s", language)
 	}
 
+	// Expand instrumentation prerequisites via language handler
+	if len(operationsData.InstallInstrumentations) > 0 {
+		operationsData.InstallInstrumentations = handler.ResolveInstrumentationPrerequisites(operationsData.InstallInstrumentations)
+	}
+
 	// Collect all required dependencies
 	dependencies := dm.collectRequiredDependencies(operationsData, handler)
 
@@ -105,5 +110,9 @@ func (dm *DependencyWriter) GetRequiredDependencies(language string, operationsD
 		return nil, fmt.Errorf("unsupported language: %s", language)
 	}
 
+	// Expand instrumentation prerequisites
+	if len(operationsData.InstallInstrumentations) > 0 {
+		operationsData.InstallInstrumentations = handler.ResolveInstrumentationPrerequisites(operationsData.InstallInstrumentations)
+	}
 	return dm.collectRequiredDependencies(operationsData, handler), nil
 }

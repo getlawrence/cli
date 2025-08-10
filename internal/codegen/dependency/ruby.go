@@ -98,6 +98,11 @@ func (h *RubyInjector) GetComponentDependency(componentType, component string) *
 	return nil
 }
 
+// ResolveInstrumentationPrerequisites for Ruby currently returns the list unchanged.
+func (h *RubyInjector) ResolveInstrumentationPrerequisites(instrumentations []string) []string {
+	return instrumentations
+}
+
 // ValidateProjectStructure checks for Gemfile
 func (h *RubyInjector) ValidateProjectStructure(projectPath string) error {
 	if _, err := os.Stat(filepath.Join(projectPath, "Gemfile")); err != nil {
