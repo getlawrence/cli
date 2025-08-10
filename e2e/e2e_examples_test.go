@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -29,9 +30,11 @@ func TestExamplesStackCodegenAndOTEL(t *testing.T) {
 	tempRoot := t.TempDir()
 	examplesSrc := filepath.Join(repoRoot, "examples")
 	examplesDir := filepath.Join(tempRoot, "examples")
+	t.Logf("Copying examples to temp dir: %s -> %s", examplesSrc, examplesDir)
 	if err := copyDir(examplesSrc, examplesDir); err != nil {
 		t.Fatalf("failed to copy examples to temp dir: %v", err)
 	}
+	t.Logf("Copied examples to temp directory")
 
 	// Build CLI
 	tmpDir := t.TempDir()
@@ -44,36 +47,35 @@ func TestExamplesStackCodegenAndOTEL(t *testing.T) {
 	{
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		defer cancel()
+		t.Logf("Building CLI binary: %s", binaryPath)
 		cmd := exec.CommandContext(ctx, "go", "build", "-o", binaryPath, ".")
 		cmd.Dir = repoRoot
 		out, err := cmd.CombinedOutput()
 		if err != nil {
 			t.Fatalf("build failed: %v\n%s", err, string(out))
 		}
+		t.Logf("CLI build completed")
 	}
 
-	// Run codegen (template) for selected example projects outside of docker
-	projects := []string{"go", "js", "python"}
-	for _, p := range projects {
-		projPath := filepath.Join(examplesDir, p)
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-		defer cancel()
-		args := []string{"codegen", projPath, "--mode", "template"}
-		cmd := exec.CommandContext(ctx, binaryPath, args...)
-		cmd.Dir = repoRoot
-		out, err := cmd.CombinedOutput()
-		if err != nil {
-			t.Fatalf("codegen failed for %s: %v\n%s", p, err, string(out))
-		}
+	// Run codegen for the examples directory
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	t.Logf("Running codegen for examples: %s", examplesDir)
+	args := []string{"codegen", examplesDir, "--mode", "template"}
+	if err := runAndStreamOutput(t, ctx, repoRoot, binaryPath, args...); err != nil {
+		t.Fatalf("codegen failed: %v", err)
 	}
+	t.Logf("Codegen succeeded for project: %s", examplesDir)
 
 	// Ensure docker CLI is available
 	{
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
+		t.Logf("Checking docker availability")
 		if err := exec.CommandContext(ctx, "docker", "version").Run(); err != nil {
 			t.Skip("docker not available: " + err.Error())
 		}
+		t.Logf("Docker is available")
 	}
 
 	// docker compose build and up
@@ -81,23 +83,21 @@ func TestExamplesStackCodegenAndOTEL(t *testing.T) {
 	{
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 		defer cancel()
-		cmd := exec.CommandContext(ctx, "docker", "compose", "-f", composeFile, "build")
-		cmd.Dir = examplesDir
-		out, err := cmd.CombinedOutput()
-		if err != nil {
-			t.Fatalf("docker compose build failed: %v\n%s", err, string(out))
+		t.Logf("Running docker compose build (this may take a while)...")
+		if err := runAndStreamOutput(t, ctx, examplesDir, "docker", "compose", "-f", composeFile, "build"); err != nil {
+			t.Fatalf("docker compose build failed: %v", err)
 		}
+		t.Logf("docker compose build completed")
 	}
 
 	{
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
 		defer cancel()
-		cmd := exec.CommandContext(ctx, "docker", "compose", "-f", composeFile, "up", "-d")
-		cmd.Dir = examplesDir
-		out, err := cmd.CombinedOutput()
-		if err != nil {
-			t.Fatalf("docker compose up failed: %v\n%s", err, string(out))
+		t.Logf("Running docker compose up -d...")
+		if err := runAndStreamOutput(t, ctx, examplesDir, "docker", "compose", "-f", composeFile, "up", "-d"); err != nil {
+			t.Fatalf("docker compose up failed: %v", err)
 		}
+		t.Logf("docker compose up completed")
 	}
 	defer func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
@@ -108,23 +108,29 @@ func TestExamplesStackCodegenAndOTEL(t *testing.T) {
 	}()
 
 	// Give services a moment
+	t.Logf("Waiting 10s for services to start...")
 	time.Sleep(10 * time.Second)
 
 	// Stimulate each service to emit at least one request
 	hits := []struct{ url string }{
-		{"http://localhost:8080/"},
-		{"http://localhost:3000/"},
-		{"http://localhost:5001/"},
+		{"http://localhost:8080/"}, // go-service
+		{"http://localhost:3000/"}, // js-service
+		{"http://localhost:5001/"}, // python-service
+		{"http://localhost:8000/"}, // php-service
+		{"http://localhost:4567/"}, // ruby-service
+		{"http://localhost:8083/"}, // csharp-service
 	}
 	for _, h := range hits {
 		var lastErr error
 		for attempt := 0; attempt < 15; attempt++ {
 			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+			t.Logf("Hitting %s (attempt %d/15)", h.url, attempt+1)
 			cmd := exec.CommandContext(ctx, "curl", "-sf", h.url)
 			out, err := cmd.CombinedOutput()
 			cancel()
 			if err == nil {
 				lastErr = nil
+				t.Logf("Service responded OK: %s", h.url)
 				break
 			}
 			lastErr = fmt.Errorf("%v: %s", err, string(out))
@@ -153,10 +159,12 @@ func TestExamplesStackCodegenAndOTEL(t *testing.T) {
 	}
 
 	// Wait for collector to flush
+	t.Logf("Waiting 5s for collector to flush...")
 	time.Sleep(5 * time.Second)
 
 	// Verify traces file has content
 	tracesPath := filepath.Join(examplesDir, ".otel-data", "traces.jsonl")
+	t.Logf("Verifying OTEL traces at: %s", tracesPath)
 	f, err := os.Open(tracesPath)
 	if err != nil {
 		t.Fatalf("failed to open traces file: %v", err)
@@ -174,6 +182,49 @@ func TestExamplesStackCodegenAndOTEL(t *testing.T) {
 	}
 	if !found {
 		t.Fatalf("no OTEL trace signals detected in %s", tracesPath)
+	}
+	t.Logf("Detected OTEL trace signals in %s", tracesPath)
+}
+
+// runAndStreamOutput executes a command and streams its stdout/stderr to the test logs.
+func runAndStreamOutput(t *testing.T, ctx context.Context, dir string, name string, args ...string) error {
+	t.Helper()
+	cmd := exec.CommandContext(ctx, name, args...)
+	cmd.Dir = dir
+
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return err
+	}
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return err
+	}
+
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		scanAndLog(t, stdout)
+	}()
+	go func() {
+		defer wg.Done()
+		scanAndLog(t, stderr)
+	}()
+
+	wg.Wait()
+	return cmd.Wait()
+}
+
+func scanAndLog(t *testing.T, r io.Reader) {
+	t.Helper()
+	scanner := bufio.NewScanner(r)
+	for scanner.Scan() {
+		t.Logf("%s", scanner.Text())
 	}
 }
 

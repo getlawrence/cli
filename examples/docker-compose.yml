@@ -47,6 +47,56 @@ services:
     ports:
       - "5001:5000"
 
+  php-service:
+    build:
+      context: ./php
+      dockerfile: Dockerfile
+    environment:
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
+      - OTEL_SERVICE_NAME=examples-php
+    depends_on:
+      - otel-collector
+    ports:
+      - "8000:8000"
+
+  ruby-service:
+    build:
+      context: ./ruby
+      dockerfile: Dockerfile
+    environment:
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
+      - OTEL_SERVICE_NAME=examples-ruby
+    depends_on:
+      - otel-collector
+    ports:
+      - "4567:4567"
+
+  java-service:
+    profiles: ["extended"]
+    build:
+      context: ./java
+      dockerfile: Dockerfile
+    environment:
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
+      - OTEL_SERVICE_NAME=examples-java
+    depends_on:
+      - otel-collector
+    ports:
+      - "8082:8082"
+
+  csharp-service:
+    build:
+      context: ./csharp
+      dockerfile: Dockerfile
+    environment:
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
+      - OTEL_SERVICE_NAME=examples-csharp
+      - ASPNETCORE_URLS=http://0.0.0.0:8083
+    depends_on:
+      - otel-collector
+    ports:
+      - "8083:8083"
+
 networks:
   default:
     name: examples-net
