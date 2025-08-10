@@ -9,14 +9,14 @@ import (
 	"github.com/smacker/go-tree-sitter/java"
 )
 
-// JavaHandler implements LanguageInjector for Java
-type JavaHandler struct {
+// JavaInjector implements LanguageInjector for Java
+type JavaInjector struct {
 	config *types.LanguageConfig
 }
 
-// NewJavaHandler creates a new Java language handler
-func NewJavaHandler() *JavaHandler {
-	return &JavaHandler{
+// NewJavaInjector creates a new Java language handler
+func NewJavaInjector() *JavaInjector {
+	return &JavaInjector{
 		config: &types.LanguageConfig{
 			Language:       "Java",
 			FileExtensions: []string{".java"},
@@ -55,13 +55,13 @@ func NewJavaHandler() *JavaHandler {
 }
 
 // GetLanguage returns the tree-sitter language parser for Java
-func (h *JavaHandler) GetLanguage() *sitter.Language { return java.GetLanguage() }
+func (h *JavaInjector) GetLanguage() *sitter.Language { return java.GetLanguage() }
 
 // GetConfig returns the language configuration for Java
-func (h *JavaHandler) GetConfig() *types.LanguageConfig { return h.config }
+func (h *JavaInjector) GetConfig() *types.LanguageConfig { return h.config }
 
 // GetRequiredImports returns the list of imports needed for OTEL in Java
-func (h *JavaHandler) GetRequiredImports() []string {
+func (h *JavaInjector) GetRequiredImports() []string {
 	return []string{
 		"io.opentelemetry.api.GlobalOpenTelemetry",
 		"io.opentelemetry.api.trace.Tracer",
@@ -72,7 +72,7 @@ func (h *JavaHandler) GetRequiredImports() []string {
 }
 
 // FormatImports formats Java import statements
-func (h *JavaHandler) FormatImports(imports []string, hasExistingImports bool) string {
+func (h *JavaInjector) FormatImports(imports []string, hasExistingImports bool) string {
 	if len(imports) == 0 {
 		return ""
 	}
@@ -85,12 +85,12 @@ func (h *JavaHandler) FormatImports(imports []string, hasExistingImports bool) s
 }
 
 // FormatSingleImport formats a single Java import statement
-func (h *JavaHandler) FormatSingleImport(importPath string) string {
+func (h *JavaInjector) FormatSingleImport(importPath string) string {
 	return fmt.Sprintf("import %s;", importPath)
 }
 
 // AnalyzeImportCapture processes an import capture from tree-sitter query for Java
-func (h *JavaHandler) AnalyzeImportCapture(captureName string, node *sitter.Node, content []byte, analysis *types.FileAnalysis) {
+func (h *JavaInjector) AnalyzeImportCapture(captureName string, node *sitter.Node, content []byte, analysis *types.FileAnalysis) {
 	switch captureName {
 	case "import_path":
 		path := strings.TrimSpace(node.Content(content))
@@ -109,7 +109,7 @@ func (h *JavaHandler) AnalyzeImportCapture(captureName string, node *sitter.Node
 }
 
 // AnalyzeFunctionCapture processes a function capture from tree-sitter query for Java
-func (h *JavaHandler) AnalyzeFunctionCapture(captureName string, node *sitter.Node, content []byte, analysis *types.FileAnalysis, config *types.LanguageConfig) {
+func (h *JavaInjector) AnalyzeFunctionCapture(captureName string, node *sitter.Node, content []byte, analysis *types.FileAnalysis, config *types.LanguageConfig) {
 	switch captureName {
 	case "method_name":
 		// handled with body capture
@@ -129,7 +129,7 @@ func (h *JavaHandler) AnalyzeFunctionCapture(captureName string, node *sitter.No
 }
 
 // GetInsertionPointPriority returns priority for Java insertion point types
-func (h *JavaHandler) GetInsertionPointPriority(captureName string) int {
+func (h *JavaInjector) GetInsertionPointPriority(captureName string) int {
 	switch captureName {
 	case "after_variables":
 		return 3
@@ -142,7 +142,7 @@ func (h *JavaHandler) GetInsertionPointPriority(captureName string) int {
 	}
 }
 
-func (h *JavaHandler) findBestInsertionPoint(bodyNode *sitter.Node, content []byte, config *types.LanguageConfig) types.InsertionPoint {
+func (h *JavaInjector) findBestInsertionPoint(bodyNode *sitter.Node, content []byte, config *types.LanguageConfig) types.InsertionPoint {
 	defaultPoint := types.InsertionPoint{LineNumber: bodyNode.StartPoint().Row + 1, Column: bodyNode.StartPoint().Column + 1, Priority: 1}
 	if insertQuery, exists := config.InsertionQueries["optimal_insertion"]; exists {
 		q, err := sitter.NewQuery([]byte(insertQuery), h.GetLanguage())
@@ -173,13 +173,13 @@ func (h *JavaHandler) findBestInsertionPoint(bodyNode *sitter.Node, content []by
 	return defaultPoint
 }
 
-func (h *JavaHandler) detectExistingOTELSetup(node *sitter.Node, content []byte) bool {
+func (h *JavaInjector) detectExistingOTELSetup(node *sitter.Node, content []byte) bool {
 	body := node.Content(content)
 	return strings.Contains(body, "SdkTracerProvider") || strings.Contains(body, "GlobalOpenTelemetry")
 }
 
 // FallbackAnalyzeImports: no-op for Java
-func (h *JavaHandler) FallbackAnalyzeImports(content []byte, analysis *types.FileAnalysis) {}
+func (h *JavaInjector) FallbackAnalyzeImports(content []byte, analysis *types.FileAnalysis) {}
 
 // FallbackAnalyzeEntryPoints: no-op for Java; main method capture should be sufficient
-func (h *JavaHandler) FallbackAnalyzeEntryPoints(content []byte, analysis *types.FileAnalysis) {}
+func (h *JavaInjector) FallbackAnalyzeEntryPoints(content []byte, analysis *types.FileAnalysis) {}

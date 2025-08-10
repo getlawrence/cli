@@ -9,14 +9,14 @@ import (
 	rubylang "github.com/smacker/go-tree-sitter/ruby"
 )
 
-// RubyHandler implements LanguageInjector for Ruby
-type RubyHandler struct {
+// RubyInjector implements LanguageInjector for Ruby
+type RubyInjector struct {
 	config *types.LanguageConfig
 }
 
-// NewRubyHandler creates a new Ruby language handler
-func NewRubyHandler() *RubyHandler {
-	return &RubyHandler{
+// NewRubyInjector creates a new Ruby language handler
+func NewRubyInjector() *RubyInjector {
+	return &RubyInjector{
 		config: &types.LanguageConfig{
 			Language:       "Ruby",
 			FileExtensions: []string{".rb"},
@@ -51,13 +51,13 @@ Lawrence::OTel.setup
 }
 
 // GetLanguage returns the tree-sitter language for Ruby
-func (h *RubyHandler) GetLanguage() *sitter.Language { return rubylang.GetLanguage() }
+func (h *RubyInjector) GetLanguage() *sitter.Language { return rubylang.GetLanguage() }
 
 // GetConfig returns the language configuration
-func (h *RubyHandler) GetConfig() *types.LanguageConfig { return h.config }
+func (h *RubyInjector) GetConfig() *types.LanguageConfig { return h.config }
 
 // GetRequiredImports returns the list of requires needed for OTEL in Ruby
-func (h *RubyHandler) GetRequiredImports() []string {
+func (h *RubyInjector) GetRequiredImports() []string {
 	return []string{
 		"opentelemetry-sdk",
 		"opentelemetry-exporter-otlp",
@@ -65,7 +65,7 @@ func (h *RubyHandler) GetRequiredImports() []string {
 }
 
 // FormatImports formats Ruby require statements
-func (h *RubyHandler) FormatImports(imports []string, hasExistingImports bool) string {
+func (h *RubyInjector) FormatImports(imports []string, hasExistingImports bool) string {
 	if len(imports) == 0 {
 		return ""
 	}
@@ -77,12 +77,12 @@ func (h *RubyHandler) FormatImports(imports []string, hasExistingImports bool) s
 }
 
 // FormatSingleImport formats a single Ruby require
-func (h *RubyHandler) FormatSingleImport(importPath string) string {
+func (h *RubyInjector) FormatSingleImport(importPath string) string {
 	return fmt.Sprintf("require \"%s\"\n", importPath)
 }
 
 // AnalyzeImportCapture processes import captures
-func (h *RubyHandler) AnalyzeImportCapture(captureName string, node *sitter.Node, content []byte, analysis *types.FileAnalysis) {
+func (h *RubyInjector) AnalyzeImportCapture(captureName string, node *sitter.Node, content []byte, analysis *types.FileAnalysis) {
 	switch captureName {
 	case "import_path":
 		path := strings.Trim(node.Content(content), "\"'")
@@ -101,7 +101,7 @@ func (h *RubyHandler) AnalyzeImportCapture(captureName string, node *sitter.Node
 }
 
 // AnalyzeFunctionCapture marks the whole program as main block
-func (h *RubyHandler) AnalyzeFunctionCapture(captureName string, node *sitter.Node, content []byte, analysis *types.FileAnalysis, config *types.LanguageConfig) {
+func (h *RubyInjector) AnalyzeFunctionCapture(captureName string, node *sitter.Node, content []byte, analysis *types.FileAnalysis, config *types.LanguageConfig) {
 	switch captureName {
 	case "main_block":
 		insertionPoint := types.InsertionPoint{LineNumber: node.StartPoint().Row + 1, Column: node.StartPoint().Column + 1, Priority: 1}
@@ -118,7 +118,7 @@ func (h *RubyHandler) AnalyzeFunctionCapture(captureName string, node *sitter.No
 }
 
 // GetInsertionPointPriority returns priority for insertion types
-func (h *RubyHandler) GetInsertionPointPriority(captureName string) int {
+func (h *RubyInjector) GetInsertionPointPriority(captureName string) int {
 	switch captureName {
 	case "function_start":
 		return 1
@@ -128,12 +128,12 @@ func (h *RubyHandler) GetInsertionPointPriority(captureName string) int {
 }
 
 // FallbackAnalyzeImports: no-op for now
-func (h *RubyHandler) FallbackAnalyzeImports(content []byte, analysis *types.FileAnalysis) {}
+func (h *RubyInjector) FallbackAnalyzeImports(content []byte, analysis *types.FileAnalysis) {}
 
 // FallbackAnalyzeEntryPoints: no-op; treat entire file as main
-func (h *RubyHandler) FallbackAnalyzeEntryPoints(content []byte, analysis *types.FileAnalysis) {}
+func (h *RubyInjector) FallbackAnalyzeEntryPoints(content []byte, analysis *types.FileAnalysis) {}
 
-func (h *RubyHandler) detectExistingOTELSetup(node *sitter.Node, content []byte) bool {
+func (h *RubyInjector) detectExistingOTELSetup(node *sitter.Node, content []byte) bool {
 	body := node.Content(content)
 	return strings.Contains(body, "OpenTelemetry") || strings.Contains(body, "opentelemetry")
 }

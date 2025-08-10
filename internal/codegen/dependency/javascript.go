@@ -8,17 +8,17 @@ import (
 	"path/filepath"
 )
 
-// JavaScriptHandler implements DependencyHandler for JavaScript/Node.js projects
-type JavaScriptHandler struct{}
+// JavaScriptInjector implements DependencyHandler for JavaScript/Node.js projects
+type JavaScriptInjector struct{}
 
-// NewJavaScriptHandler creates a new JS dependency handler
-func NewJavaScriptHandler() *JavaScriptHandler { return &JavaScriptHandler{} }
+// NewJavaScriptInjector creates a new JS dependency handler
+func NewJavaScriptInjector() *JavaScriptInjector { return &JavaScriptInjector{} }
 
 // GetLanguage returns the language this handler supports
-func (h *JavaScriptHandler) GetLanguage() string { return "javascript" }
+func (h *JavaScriptInjector) GetLanguage() string { return "javascript" }
 
 // AddDependencies installs dependencies with npm (fallback yarn/pnpm not yet implemented)
-func (h *JavaScriptHandler) AddDependencies(ctx context.Context, projectPath string, dependencies []Dependency, dryRun bool) error {
+func (h *JavaScriptInjector) AddDependencies(ctx context.Context, projectPath string, dependencies []Dependency, dryRun bool) error {
 	// Ensure package.json exists
 	pkgJSON := filepath.Join(projectPath, "package.json")
 	if _, err := os.Stat(pkgJSON); os.IsNotExist(err) {
@@ -55,7 +55,7 @@ func (h *JavaScriptHandler) AddDependencies(ctx context.Context, projectPath str
 }
 
 // GetCoreDependencies returns the core OTEL deps for JS
-func (h *JavaScriptHandler) GetCoreDependencies() []Dependency {
+func (h *JavaScriptInjector) GetCoreDependencies() []Dependency {
 	return []Dependency{
 		{Name: "OpenTelemetry API", Language: "javascript", ImportPath: "@opentelemetry/api", Category: "core", Required: true},
 		{Name: "OpenTelemetry SDK (Node)", Language: "javascript", ImportPath: "@opentelemetry/sdk-node", Category: "core", Required: true},
@@ -64,7 +64,7 @@ func (h *JavaScriptHandler) GetCoreDependencies() []Dependency {
 }
 
 // GetInstrumentationDependency returns a specific instrumentation package
-func (h *JavaScriptHandler) GetInstrumentationDependency(instrumentation string) *Dependency {
+func (h *JavaScriptInjector) GetInstrumentationDependency(instrumentation string) *Dependency {
 	// Map known instrumentation names to @opentelemetry/instrumentation-* packages
 	m := map[string]Dependency{
 		"http":    {Name: "HTTP Instrumentation", Language: "javascript", ImportPath: "@opentelemetry/instrumentation-http", Category: "instrumentation"},
@@ -82,12 +82,12 @@ func (h *JavaScriptHandler) GetInstrumentationDependency(instrumentation string)
 }
 
 // GetComponentDependency returns exporter/propagator components if needed
-func (h *JavaScriptHandler) GetComponentDependency(componentType, component string) *Dependency {
+func (h *JavaScriptInjector) GetComponentDependency(componentType, component string) *Dependency {
 	return nil
 }
 
 // ValidateProjectStructure checks dependency files
-func (h *JavaScriptHandler) ValidateProjectStructure(projectPath string) error {
+func (h *JavaScriptInjector) ValidateProjectStructure(projectPath string) error {
 	// Best-effort: ensure package.json exists
 	if _, err := os.Stat(filepath.Join(projectPath, "package.json")); err != nil {
 		return fmt.Errorf("package.json not found in %s", projectPath)
@@ -96,6 +96,6 @@ func (h *JavaScriptHandler) ValidateProjectStructure(projectPath string) error {
 }
 
 // GetDependencyFiles returns dependency file paths
-func (h *JavaScriptHandler) GetDependencyFiles(projectPath string) []string {
+func (h *JavaScriptInjector) GetDependencyFiles(projectPath string) []string {
 	return []string{filepath.Join(projectPath, "package.json"), filepath.Join(projectPath, "package-lock.json")}
 }

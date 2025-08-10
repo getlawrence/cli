@@ -9,13 +9,13 @@ import (
 	csharp "github.com/smacker/go-tree-sitter/csharp"
 )
 
-// DotNetHandler implements LanguageInjector for C#/.NET
-type DotNetHandler struct {
+// DotNetInjector implements LanguageInjector for C#/.NET
+type DotNetInjector struct {
 	config *types.LanguageConfig
 }
 
-func NewDotNetHandler() *DotNetHandler {
-	return &DotNetHandler{
+func NewDotNetInjector() *DotNetInjector {
+	return &DotNetInjector{
 		config: &types.LanguageConfig{
 			Language:       "csharp",
 			FileExtensions: []string{".cs"},
@@ -58,10 +58,10 @@ func NewDotNetHandler() *DotNetHandler {
 	}
 }
 
-func (h *DotNetHandler) GetLanguage() *sitter.Language    { return csharp.GetLanguage() }
-func (h *DotNetHandler) GetConfig() *types.LanguageConfig { return h.config }
+func (h *DotNetInjector) GetLanguage() *sitter.Language    { return csharp.GetLanguage() }
+func (h *DotNetInjector) GetConfig() *types.LanguageConfig { return h.config }
 
-func (h *DotNetHandler) GetRequiredImports() []string {
+func (h *DotNetInjector) GetRequiredImports() []string {
 	return []string{
 		"OpenTelemetry",
 		"OpenTelemetry.Trace",
@@ -71,7 +71,7 @@ func (h *DotNetHandler) GetRequiredImports() []string {
 	}
 }
 
-func (h *DotNetHandler) FormatImports(imports []string, hasExisting bool) string {
+func (h *DotNetInjector) FormatImports(imports []string, hasExisting bool) string {
 	if len(imports) == 0 {
 		return ""
 	}
@@ -83,11 +83,11 @@ func (h *DotNetHandler) FormatImports(imports []string, hasExisting bool) string
 	return b.String()
 }
 
-func (h *DotNetHandler) FormatSingleImport(importPath string) string {
+func (h *DotNetInjector) FormatSingleImport(importPath string) string {
 	return fmt.Sprintf("using %s;", importPath)
 }
 
-func (h *DotNetHandler) AnalyzeImportCapture(captureName string, node *sitter.Node, content []byte, analysis *types.FileAnalysis) {
+func (h *DotNetInjector) AnalyzeImportCapture(captureName string, node *sitter.Node, content []byte, analysis *types.FileAnalysis) {
 	switch captureName {
 	case "import_path":
 		path := strings.TrimSpace(node.Content(content))
@@ -105,7 +105,7 @@ func (h *DotNetHandler) AnalyzeImportCapture(captureName string, node *sitter.No
 	}
 }
 
-func (h *DotNetHandler) AnalyzeFunctionCapture(captureName string, node *sitter.Node, content []byte, analysis *types.FileAnalysis, config *types.LanguageConfig) {
+func (h *DotNetInjector) AnalyzeFunctionCapture(captureName string, node *sitter.Node, content []byte, analysis *types.FileAnalysis, config *types.LanguageConfig) {
 	switch captureName {
 	case "method_name":
 		// handled together with body capture
@@ -123,7 +123,7 @@ func (h *DotNetHandler) AnalyzeFunctionCapture(captureName string, node *sitter.
 	}
 }
 
-func (h *DotNetHandler) GetInsertionPointPriority(captureName string) int {
+func (h *DotNetInjector) GetInsertionPointPriority(captureName string) int {
 	switch captureName {
 	case "after_variables":
 		return 3
@@ -136,7 +136,7 @@ func (h *DotNetHandler) GetInsertionPointPriority(captureName string) int {
 	}
 }
 
-func (h *DotNetHandler) findBestInsertionPoint(node *sitter.Node, content []byte, config *types.LanguageConfig) types.InsertionPoint {
+func (h *DotNetInjector) findBestInsertionPoint(node *sitter.Node, content []byte, config *types.LanguageConfig) types.InsertionPoint {
 	defaultPoint := types.InsertionPoint{LineNumber: node.StartPoint().Row + 1, Column: node.StartPoint().Column + 1, Priority: 1}
 	if insertQuery, ok := config.InsertionQueries["optimal_insertion"]; ok {
 		q, err := sitter.NewQuery([]byte(insertQuery), h.GetLanguage())
@@ -167,10 +167,10 @@ func (h *DotNetHandler) findBestInsertionPoint(node *sitter.Node, content []byte
 	return defaultPoint
 }
 
-func (h *DotNetHandler) detectExistingOTELSetup(node *sitter.Node, content []byte) bool {
+func (h *DotNetInjector) detectExistingOTELSetup(node *sitter.Node, content []byte) bool {
 	body := node.Content(content)
 	return strings.Contains(body, "AddOpenTelemetry(") || strings.Contains(body, "WithTracing(")
 }
 
-func (h *DotNetHandler) FallbackAnalyzeImports(content []byte, analysis *types.FileAnalysis)     {}
-func (h *DotNetHandler) FallbackAnalyzeEntryPoints(content []byte, analysis *types.FileAnalysis) {}
+func (h *DotNetInjector) FallbackAnalyzeImports(content []byte, analysis *types.FileAnalysis)     {}
+func (h *DotNetInjector) FallbackAnalyzeEntryPoints(content []byte, analysis *types.FileAnalysis) {}

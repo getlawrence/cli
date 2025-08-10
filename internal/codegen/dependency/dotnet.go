@@ -8,14 +8,14 @@ import (
 	"path/filepath"
 )
 
-// DotNetHandler implements DependencyHandler for .NET projects
-type DotNetHandler struct{}
+// DotNetInjector implements DependencyHandler for .NET projects
+type DotNetInjector struct{}
 
-func NewDotNetHandler() *DotNetHandler { return &DotNetHandler{} }
+func NewDotNetInjector() *DotNetInjector { return &DotNetInjector{} }
 
-func (h *DotNetHandler) GetLanguage() string { return "csharp" }
+func (h *DotNetInjector) GetLanguage() string { return "csharp" }
 
-func (h *DotNetHandler) AddDependencies(ctx context.Context, projectPath string, dependencies []Dependency, dryRun bool) error {
+func (h *DotNetInjector) AddDependencies(ctx context.Context, projectPath string, dependencies []Dependency, dryRun bool) error {
 	if len(dependencies) == 0 {
 		return nil
 	}
@@ -51,7 +51,7 @@ func (h *DotNetHandler) AddDependencies(ctx context.Context, projectPath string,
 	return nil
 }
 
-func (h *DotNetHandler) GetCoreDependencies() []Dependency {
+func (h *DotNetInjector) GetCoreDependencies() []Dependency {
 	return []Dependency{
 		{Name: "OpenTelemetry", Language: "csharp", ImportPath: "OpenTelemetry", Category: "core", Required: true},
 		{Name: "OpenTelemetry.Exporter.OpenTelemetryProtocol", Language: "csharp", ImportPath: "OpenTelemetry.Exporter.OpenTelemetryProtocol", Category: "exporter", Required: true},
@@ -59,7 +59,7 @@ func (h *DotNetHandler) GetCoreDependencies() []Dependency {
 	}
 }
 
-func (h *DotNetHandler) GetInstrumentationDependency(instrumentation string) *Dependency {
+func (h *DotNetInjector) GetInstrumentationDependency(instrumentation string) *Dependency {
 	m := map[string]Dependency{
 		"aspnetcore": {Name: "ASP.NET Core", Language: "csharp", ImportPath: "OpenTelemetry.Instrumentation.AspNetCore", Category: "instrumentation"},
 		"httpclient": {Name: "HttpClient", Language: "csharp", ImportPath: "OpenTelemetry.Instrumentation.Http", Category: "instrumentation"},
@@ -74,7 +74,7 @@ func (h *DotNetHandler) GetInstrumentationDependency(instrumentation string) *De
 	return nil
 }
 
-func (h *DotNetHandler) GetComponentDependency(componentType, component string) *Dependency {
+func (h *DotNetInjector) GetComponentDependency(componentType, component string) *Dependency {
 	switch componentType {
 	case "instrumentation":
 		// no auto instrumentation component support
@@ -82,21 +82,21 @@ func (h *DotNetHandler) GetComponentDependency(componentType, component string) 
 	return nil
 }
 
-func (h *DotNetHandler) ValidateProjectStructure(projectPath string) error {
+func (h *DotNetInjector) ValidateProjectStructure(projectPath string) error {
 	if _, err := h.findCsproj(projectPath); err != nil {
 		return fmt.Errorf(".csproj not found in %s", projectPath)
 	}
 	return nil
 }
 
-func (h *DotNetHandler) GetDependencyFiles(projectPath string) []string {
+func (h *DotNetInjector) GetDependencyFiles(projectPath string) []string {
 	if csproj, err := h.findCsproj(projectPath); err == nil {
 		return []string{csproj}
 	}
 	return nil
 }
 
-func (h *DotNetHandler) findCsproj(projectPath string) (string, error) {
+func (h *DotNetInjector) findCsproj(projectPath string) (string, error) {
 	entries, err := os.ReadDir(projectPath)
 	if err != nil {
 		return "", err

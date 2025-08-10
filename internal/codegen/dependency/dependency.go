@@ -16,14 +16,14 @@ type DependencyWriter struct {
 func NewDependencyWriter() *DependencyWriter {
 	return &DependencyWriter{
 		handlers: map[string]DependencyHandler{
-			"go":         NewGoHandler(),
-			"javascript": NewJavaScriptHandler(),
-			"python":     NewPythonHandler(),
-			"java":       NewJavaHandler(),
-			"csharp":     NewDotNetHandler(),
-			"dotnet":     NewDotNetHandler(),
-			"ruby":       NewRubyHandler(),
-			"php":        NewPHPHandler(),
+			"go":         NewGoInjector(),
+			"javascript": NewJavaScriptInjector(),
+			"python":     NewPythonInjector(),
+			"java":       NewJavaInjector(),
+			"csharp":     NewDotNetInjector(),
+			"dotnet":     NewDotNetInjector(),
+			"ruby":       NewRubyInjector(),
+			"php":        NewPHPInjector(),
 		},
 	}
 }

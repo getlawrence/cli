@@ -9,21 +9,21 @@ import (
 	"strings"
 )
 
-// JavaHandler implements DependencyHandler for Java projects (Maven/Gradle)
-type JavaHandler struct{}
+// JavaInjector implements DependencyHandler for Java projects (Maven/Gradle)
+type JavaInjector struct{}
 
-// NewJavaHandler creates a new Java dependency handler
-func NewJavaHandler() *JavaHandler { return &JavaHandler{} }
+// NewJavaInjector creates a new Java dependency handler
+func NewJavaInjector() *JavaInjector { return &JavaInjector{} }
 
 // GetLanguage returns the language this handler supports
-func (h *JavaHandler) GetLanguage() string { return "java" }
+func (h *JavaInjector) GetLanguage() string { return "java" }
 
 // AddDependencies adds the specified dependencies to the Java project
 // Best-effort implementation:
 // - Maven: use `mvn dependency:get` to fetch artifacts (won't modify pom.xml)
 // - Gradle: run `gradle dependencies` as a no-op to trigger resolution (won't modify build files)
 // For now, we print clear next steps and do not auto-edit build files.
-func (h *JavaHandler) AddDependencies(ctx context.Context, projectPath string, dependencies []Dependency, dryRun bool) error {
+func (h *JavaInjector) AddDependencies(ctx context.Context, projectPath string, dependencies []Dependency, dryRun bool) error {
 	if len(dependencies) == 0 {
 		return nil
 	}
@@ -70,7 +70,7 @@ func (h *JavaHandler) AddDependencies(ctx context.Context, projectPath string, d
 }
 
 // GetCoreDependencies returns the core OpenTelemetry dependencies for Java
-func (h *JavaHandler) GetCoreDependencies() []Dependency {
+func (h *JavaInjector) GetCoreDependencies() []Dependency {
 	return []Dependency{
 		{Name: "OpenTelemetry API", Language: "java", ImportPath: "io.opentelemetry:opentelemetry-api", Category: "core", Required: true},
 		{Name: "OpenTelemetry SDK", Language: "java", ImportPath: "io.opentelemetry:opentelemetry-sdk", Category: "core", Required: true},
@@ -79,7 +79,7 @@ func (h *JavaHandler) GetCoreDependencies() []Dependency {
 }
 
 // GetInstrumentationDependency returns the dependency for a specific instrumentation
-func (h *JavaHandler) GetInstrumentationDependency(instrumentation string) *Dependency {
+func (h *JavaInjector) GetInstrumentationDependency(instrumentation string) *Dependency {
 	m := map[string]Dependency{
 		"http":   {Name: "HTTP Instrumentation", Language: "java", ImportPath: "io.opentelemetry.instrumentation:opentelemetry-instrumentation-servlet", Category: "instrumentation"},
 		"spring": {Name: "Spring Boot Starter", Language: "java", ImportPath: "io.opentelemetry.instrumentation:opentelemetry-spring-boot-starter", Category: "instrumentation"},
@@ -93,7 +93,7 @@ func (h *JavaHandler) GetInstrumentationDependency(instrumentation string) *Depe
 }
 
 // GetComponentDependency returns exporter/propagator components if needed
-func (h *JavaHandler) GetComponentDependency(componentType, component string) *Dependency {
+func (h *JavaInjector) GetComponentDependency(componentType, component string) *Dependency {
 	components := map[string]map[string]Dependency{
 		"exporter": {
 			"jaeger": {Name: "Jaeger Exporter", Language: "java", ImportPath: "io.opentelemetry:opentelemetry-exporter-jaeger", Category: "exporter"},
@@ -112,7 +112,7 @@ func (h *JavaHandler) GetComponentDependency(componentType, component string) *D
 }
 
 // ValidateProjectStructure checks if the project has required dependency management files
-func (h *JavaHandler) ValidateProjectStructure(projectPath string) error {
+func (h *JavaInjector) ValidateProjectStructure(projectPath string) error {
 	if !h.hasPom(projectPath) && !h.hasGradle(projectPath) {
 		return fmt.Errorf("no pom.xml or build.gradle found in %s", projectPath)
 	}
@@ -120,7 +120,7 @@ func (h *JavaHandler) ValidateProjectStructure(projectPath string) error {
 }
 
 // GetDependencyFiles returns the paths to dependency management files
-func (h *JavaHandler) GetDependencyFiles(projectPath string) []string {
+func (h *JavaInjector) GetDependencyFiles(projectPath string) []string {
 	files := []string{}
 	if h.hasPom(projectPath) {
 		files = append(files, filepath.Join(projectPath, "pom.xml"))
@@ -132,11 +132,11 @@ func (h *JavaHandler) GetDependencyFiles(projectPath string) []string {
 }
 
 // Helpers
-func (h *JavaHandler) hasPom(projectPath string) bool {
+func (h *JavaInjector) hasPom(projectPath string) bool {
 	_, err := os.Stat(filepath.Join(projectPath, "pom.xml"))
 	return err == nil
 }
-func (h *JavaHandler) hasGradle(projectPath string) bool {
+func (h *JavaInjector) hasGradle(projectPath string) bool {
 	if _, err := os.Stat(filepath.Join(projectPath, "build.gradle")); err == nil {
 		return true
 	}
@@ -146,7 +146,7 @@ func (h *JavaHandler) hasGradle(projectPath string) bool {
 	return false
 }
 
-func (h *JavaHandler) formatCoordinate(dep Dependency) string {
+func (h *JavaInjector) formatCoordinate(dep Dependency) string {
 	// If ImportPath already contains group:artifact[:version], use it; otherwise derive from Name
 	coord := dep.ImportPath
 	if !strings.Contains(coord, ":") && strings.Contains(dep.Name, ":") {

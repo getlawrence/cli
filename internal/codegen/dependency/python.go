@@ -11,21 +11,21 @@ import (
 	"strings"
 )
 
-// PythonHandler implements DependencyHandler for Python projects
-type PythonHandler struct{}
+// PythonInjector implements DependencyHandler for Python projects
+type PythonInjector struct{}
 
-// NewPythonHandler creates a new Python dependency handler
-func NewPythonHandler() *PythonHandler {
-	return &PythonHandler{}
+// NewPythonInjector creates a new Python dependency handler
+func NewPythonInjector() *PythonInjector {
+	return &PythonInjector{}
 }
 
 // GetLanguage returns the language this handler supports
-func (h *PythonHandler) GetLanguage() string {
+func (h *PythonInjector) GetLanguage() string {
 	return "python"
 }
 
 // AddDependencies adds the specified dependencies to the Python project
-func (h *PythonHandler) AddDependencies(ctx context.Context, projectPath string, dependencies []Dependency, dryRun bool) error {
+func (h *PythonInjector) AddDependencies(ctx context.Context, projectPath string, dependencies []Dependency, dryRun bool) error {
 	// Try different dependency management approaches
 	if h.hasRequirementsTxt(projectPath) {
 		return h.addToRequirementsTxt(projectPath, dependencies, dryRun)
@@ -44,7 +44,7 @@ func (h *PythonHandler) AddDependencies(ctx context.Context, projectPath string,
 }
 
 // GetCoreDependencies returns the core OpenTelemetry dependencies for Python
-func (h *PythonHandler) GetCoreDependencies() []Dependency {
+func (h *PythonInjector) GetCoreDependencies() []Dependency {
 	return []Dependency{
 		{
 			Name:        "OpenTelemetry API",
@@ -86,7 +86,7 @@ func (h *PythonHandler) GetCoreDependencies() []Dependency {
 }
 
 // GetInstrumentationDependency returns the dependency for a specific instrumentation
-func (h *PythonHandler) GetInstrumentationDependency(instrumentation string) *Dependency {
+func (h *PythonInjector) GetInstrumentationDependency(instrumentation string) *Dependency {
 	instrumentations := map[string]Dependency{
 		"requests": {
 			Name:        "Requests Instrumentation",
@@ -160,7 +160,7 @@ func (h *PythonHandler) GetInstrumentationDependency(instrumentation string) *De
 }
 
 // GetComponentDependency returns the dependency for a specific component
-func (h *PythonHandler) GetComponentDependency(componentType, component string) *Dependency {
+func (h *PythonInjector) GetComponentDependency(componentType, component string) *Dependency {
 	components := map[string]map[string]Dependency{
 		"exporter": {
 			"jaeger": {
@@ -197,7 +197,7 @@ func (h *PythonHandler) GetComponentDependency(componentType, component string) 
 }
 
 // ValidateProjectStructure checks if the project has required dependency management files
-func (h *PythonHandler) ValidateProjectStructure(projectPath string) error {
+func (h *PythonInjector) ValidateProjectStructure(projectPath string) error {
 	hasDepFile := h.hasRequirementsTxt(projectPath) ||
 		h.hasPyprojectToml(projectPath) ||
 		h.hasSetupPy(projectPath)
@@ -210,7 +210,7 @@ func (h *PythonHandler) ValidateProjectStructure(projectPath string) error {
 }
 
 // GetDependencyFiles returns the paths to dependency management files
-func (h *PythonHandler) GetDependencyFiles(projectPath string) []string {
+func (h *PythonInjector) GetDependencyFiles(projectPath string) []string {
 	files := []string{}
 
 	if h.hasRequirementsTxt(projectPath) {
@@ -229,23 +229,23 @@ func (h *PythonHandler) GetDependencyFiles(projectPath string) []string {
 }
 
 // Helper methods for checking project structure
-func (h *PythonHandler) hasRequirementsTxt(projectPath string) bool {
+func (h *PythonInjector) hasRequirementsTxt(projectPath string) bool {
 	_, err := os.Stat(filepath.Join(projectPath, "requirements.txt"))
 	return err == nil
 }
 
-func (h *PythonHandler) hasPyprojectToml(projectPath string) bool {
+func (h *PythonInjector) hasPyprojectToml(projectPath string) bool {
 	_, err := os.Stat(filepath.Join(projectPath, "pyproject.toml"))
 	return err == nil
 }
 
-func (h *PythonHandler) hasSetupPy(projectPath string) bool {
+func (h *PythonInjector) hasSetupPy(projectPath string) bool {
 	_, err := os.Stat(filepath.Join(projectPath, "setup.py"))
 	return err == nil
 }
 
 // addToRequirementsTxt adds dependencies to requirements.txt
-func (h *PythonHandler) addToRequirementsTxt(projectPath string, dependencies []Dependency, dryRun bool) error {
+func (h *PythonInjector) addToRequirementsTxt(projectPath string, dependencies []Dependency, dryRun bool) error {
 	reqPath := filepath.Join(projectPath, "requirements.txt")
 
 	// Filter dependencies that are not already present
@@ -300,7 +300,7 @@ func (h *PythonHandler) addToRequirementsTxt(projectPath string, dependencies []
 }
 
 // addToPyprojectToml adds dependencies to pyproject.toml
-func (h *PythonHandler) addToPyprojectToml(projectPath string, dependencies []Dependency, dryRun bool) error {
+func (h *PythonInjector) addToPyprojectToml(projectPath string, dependencies []Dependency, dryRun bool) error {
 	if dryRun {
 		fmt.Printf("Would add the following Python dependencies to pyproject.toml:\n")
 		for _, dep := range dependencies {
@@ -318,7 +318,7 @@ func (h *PythonHandler) addToPyprojectToml(projectPath string, dependencies []De
 }
 
 // addWithPip installs dependencies using pip
-func (h *PythonHandler) addWithPip(ctx context.Context, projectPath string, dependencies []Dependency, dryRun bool) error {
+func (h *PythonInjector) addWithPip(ctx context.Context, projectPath string, dependencies []Dependency, dryRun bool) error {
 	if dryRun {
 		fmt.Printf("Would install the following Python dependencies with pip:\n")
 		for _, dep := range dependencies {
@@ -357,7 +357,7 @@ func (h *PythonHandler) addWithPip(ctx context.Context, projectPath string, depe
 }
 
 // createRequirementsTxt creates a new requirements.txt file with dependencies
-func (h *PythonHandler) createRequirementsTxt(projectPath string, dependencies []Dependency, dryRun bool) error {
+func (h *PythonInjector) createRequirementsTxt(projectPath string, dependencies []Dependency, dryRun bool) error {
 	reqPath := filepath.Join(projectPath, "requirements.txt")
 
 	if dryRun {
@@ -400,7 +400,7 @@ func (h *PythonHandler) createRequirementsTxt(projectPath string, dependencies [
 }
 
 // filterExistingDependenciesFromRequirements filters out dependencies already in requirements.txt
-func (h *PythonHandler) filterExistingDependenciesFromRequirements(reqPath string, dependencies []Dependency) ([]Dependency, error) {
+func (h *PythonInjector) filterExistingDependenciesFromRequirements(reqPath string, dependencies []Dependency) ([]Dependency, error) {
 	existingDeps, err := h.getExistingDependenciesFromRequirements(reqPath)
 	if err != nil {
 		return nil, err
@@ -417,7 +417,7 @@ func (h *PythonHandler) filterExistingDependenciesFromRequirements(reqPath strin
 }
 
 // getExistingDependenciesFromRequirements reads requirements.txt and returns existing dependencies
-func (h *PythonHandler) getExistingDependenciesFromRequirements(reqPath string) (map[string]bool, error) {
+func (h *PythonInjector) getExistingDependenciesFromRequirements(reqPath string) (map[string]bool, error) {
 	file, err := os.Open(reqPath)
 	if err != nil {
 		if os.IsNotExist(err) {

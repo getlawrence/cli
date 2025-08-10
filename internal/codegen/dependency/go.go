@@ -11,21 +11,21 @@ import (
 	"strings"
 )
 
-// GoHandler implements DependencyHandler for Go projects
-type GoHandler struct{}
+// GoInjector implements DependencyHandler for Go projects
+type GoInjector struct{}
 
-// NewGoHandler creates a new Go dependency handler
-func NewGoHandler() *GoHandler {
-	return &GoHandler{}
+// NewGoInjector creates a new Go dependency handler
+func NewGoInjector() *GoInjector {
+	return &GoInjector{}
 }
 
 // GetLanguage returns the language this handler supports
-func (h *GoHandler) GetLanguage() string {
+func (h *GoInjector) GetLanguage() string {
 	return "go"
 }
 
 // AddDependencies adds the specified dependencies to the Go project
-func (h *GoHandler) AddDependencies(ctx context.Context, projectPath string, dependencies []Dependency, dryRun bool) error {
+func (h *GoInjector) AddDependencies(ctx context.Context, projectPath string, dependencies []Dependency, dryRun bool) error {
 	goModPath := filepath.Join(projectPath, "go.mod")
 
 	// Check if go.mod exists
@@ -61,7 +61,7 @@ func (h *GoHandler) AddDependencies(ctx context.Context, projectPath string, dep
 }
 
 // GetCoreDependencies returns the core OpenTelemetry dependencies for Go
-func (h *GoHandler) GetCoreDependencies() []Dependency {
+func (h *GoInjector) GetCoreDependencies() []Dependency {
 	return []Dependency{
 		{
 			Name:        "OpenTelemetry API",
@@ -130,7 +130,7 @@ func (h *GoHandler) GetCoreDependencies() []Dependency {
 }
 
 // GetInstrumentationDependency returns the dependency for a specific instrumentation
-func (h *GoHandler) GetInstrumentationDependency(instrumentation string) *Dependency {
+func (h *GoInjector) GetInstrumentationDependency(instrumentation string) *Dependency {
 	instrumentations := map[string]Dependency{
 		"otelhttp": {
 			Name:        "HTTP Instrumentation",
@@ -190,7 +190,7 @@ func (h *GoHandler) GetInstrumentationDependency(instrumentation string) *Depend
 }
 
 // GetComponentDependency returns the dependency for a specific component
-func (h *GoHandler) GetComponentDependency(componentType, component string) *Dependency {
+func (h *GoInjector) GetComponentDependency(componentType, component string) *Dependency {
 	components := map[string]map[string]Dependency{
 		"exporter": {
 			"jaeger": {
@@ -235,7 +235,7 @@ func (h *GoHandler) GetComponentDependency(componentType, component string) *Dep
 }
 
 // ValidateProjectStructure checks if the project has required dependency management files
-func (h *GoHandler) ValidateProjectStructure(projectPath string) error {
+func (h *GoInjector) ValidateProjectStructure(projectPath string) error {
 	goModPath := filepath.Join(projectPath, "go.mod")
 	if _, err := os.Stat(goModPath); os.IsNotExist(err) {
 		return fmt.Errorf("go.mod not found in %s", projectPath)
@@ -244,7 +244,7 @@ func (h *GoHandler) ValidateProjectStructure(projectPath string) error {
 }
 
 // GetDependencyFiles returns the paths to dependency management files
-func (h *GoHandler) GetDependencyFiles(projectPath string) []string {
+func (h *GoInjector) GetDependencyFiles(projectPath string) []string {
 	return []string{
 		filepath.Join(projectPath, "go.mod"),
 		filepath.Join(projectPath, "go.sum"),
@@ -252,7 +252,7 @@ func (h *GoHandler) GetDependencyFiles(projectPath string) []string {
 }
 
 // filterExistingDependencies filters out dependencies that already exist in go.mod
-func (h *GoHandler) filterExistingDependencies(goModPath string, dependencies []Dependency) ([]Dependency, error) {
+func (h *GoInjector) filterExistingDependencies(goModPath string, dependencies []Dependency) ([]Dependency, error) {
 	existingDeps, err := h.getExistingDependencies(goModPath)
 	if err != nil {
 		return nil, err
@@ -269,7 +269,7 @@ func (h *GoHandler) filterExistingDependencies(goModPath string, dependencies []
 }
 
 // getExistingDependencies reads the go.mod file and returns existing dependencies
-func (h *GoHandler) getExistingDependencies(goModPath string) (map[string]bool, error) {
+func (h *GoInjector) getExistingDependencies(goModPath string) (map[string]bool, error) {
 	file, err := os.Open(goModPath)
 	if err != nil {
 		return nil, err
@@ -314,7 +314,7 @@ func (h *GoHandler) getExistingDependencies(goModPath string) (map[string]bool, 
 }
 
 // addDependenciesWithGoGet adds dependencies using the go get command
-func (h *GoHandler) addDependenciesWithGoGet(ctx context.Context, projectPath string, dependencies []Dependency) error {
+func (h *GoInjector) addDependenciesWithGoGet(ctx context.Context, projectPath string, dependencies []Dependency) error {
 	fmt.Printf("Adding %d dependencies to Go project...\n", len(dependencies))
 
 	for _, dep := range dependencies {
