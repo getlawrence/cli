@@ -27,6 +27,10 @@
         <version>3.11.0</version>
         <configuration>
           <release>17</release>
+          <compilerArgs>
+            <arg>--add-modules</arg>
+            <arg>jdk.httpserver</arg>
+          </compilerArgs>
         </configuration>
       </plugin>
       <plugin>

@@ -4,7 +4,7 @@ COPY pom.xml .
 COPY src ./src
 RUN mvn -q -e -DskipTests package
 
-FROM eclipse-temurin:17-jre
+FROM eclipse-temurin:17
 WORKDIR /app
 COPY --from=build /workspace/target/java-sample-1.0-SNAPSHOT.jar /app/app.jar
 

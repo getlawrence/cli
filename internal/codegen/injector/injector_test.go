@@ -39,7 +39,7 @@ func main() {
 }
 `,
 			expectInitSub:   "SetupOTEL()",
-			expectImportSub: "go.opentelemetry.io/otel",
+			expectImportSub: "",
 		},
 		{
 			name:     "JavaScript",

@@ -278,6 +278,22 @@ func (h *PythonInjector) addToRequirementsTxt(projectPath string, dependencies [
 	}
 	defer file.Close()
 
+	// Ensure we start on a new line if the file does not end with a newline.
+	if info, statErr := os.Stat(reqPath); statErr == nil && info.Size() > 0 {
+		// Open a separate read handle because the append handle is write-only
+		if rf, openErr := os.Open(reqPath); openErr == nil {
+			defer rf.Close()
+			var lastByte [1]byte
+			if _, readErr := rf.ReadAt(lastByte[:], info.Size()-1); readErr == nil {
+				if lastByte[0] != '\n' {
+					if _, writeErr := file.WriteString("\n"); writeErr != nil {
+						return fmt.Errorf("failed to write newline to requirements.txt: %w", writeErr)
+					}
+				}
+			}
+		}
+	}
+
 	fmt.Printf("Adding %d dependencies to requirements.txt...\n", len(neededDeps))
 
 	for _, dep := range neededDeps {
