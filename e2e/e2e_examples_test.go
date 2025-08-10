@@ -3,6 +3,7 @@ package e2e
 import (
 	"bufio"
 	"context"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -22,7 +23,14 @@ func TestExamplesStackCodegenAndOTEL(t *testing.T) {
 	}
 
 	repoRoot := findRepoRoot(t)
-	examplesDir := filepath.Join(repoRoot, "examples")
+
+	// Work entirely in a temp copy so repo files are never modified
+	tempRoot := t.TempDir()
+	examplesSrc := filepath.Join(repoRoot, "examples")
+	examplesDir := filepath.Join(tempRoot, "examples")
+	if err := copyDir(examplesSrc, examplesDir); err != nil {
+		t.Fatalf("failed to copy examples to temp dir: %v", err)
+	}
 
 	// Build CLI
 	tmpDir := t.TempDir()
@@ -94,12 +102,7 @@ func TestExamplesStackCodegenAndOTEL(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		defer cancel()
 		_ = exec.CommandContext(ctx, "docker", "compose", "-f", composeFile, "down", "-v").Run()
-		// Best-effort: restore examples directory to clean state
-		// Only run if inside a git repo
-		if err := exec.CommandContext(ctx, "git", "rev-parse", "--is-inside-work-tree").Run(); err == nil {
-			_ = exec.CommandContext(ctx, "git", "checkout", "--", "examples").Run()
-		}
-		// Remove collector data dir
+		// Remove collector data dir inside temp examples (temp dir will be removed automatically)
 		_ = os.RemoveAll(filepath.Join(examplesDir, ".otel-data"))
 	}()
 
@@ -110,7 +113,7 @@ func TestExamplesStackCodegenAndOTEL(t *testing.T) {
 	hits := []struct{ url string }{
 		{"http://localhost:8080/"},
 		{"http://localhost:3000/"},
-		{"http://localhost:5000/"},
+		{"http://localhost:5001/"},
 	}
 	for _, h := range hits {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -145,4 +148,55 @@ func TestExamplesStackCodegenAndOTEL(t *testing.T) {
 	if !found {
 		t.Fatalf("no OTEL trace signals detected in %s", tracesPath)
 	}
+}
+
+// copyDir recursively copies a directory tree from src to dst.
+// It preserves file modes and creates directories as needed.
+func copyDir(src, dst string) error {
+	srcInfo, err := os.Stat(src)
+	if err != nil {
+		return err
+	}
+	if !srcInfo.IsDir() {
+		return &os.PathError{Op: "copy", Path: src, Err: os.ErrInvalid}
+	}
+	if err := os.MkdirAll(dst, srcInfo.Mode()); err != nil {
+		return err
+	}
+	return filepath.Walk(src, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(src, path)
+		if err != nil {
+			return err
+		}
+		targetPath := filepath.Join(dst, rel)
+		if info.IsDir() {
+			return os.MkdirAll(targetPath, info.Mode())
+		}
+		// Handle symlinks
+		if info.Mode()&os.ModeSymlink != 0 {
+			linkTarget, err := os.Readlink(path)
+			if err != nil {
+				return err
+			}
+			return os.Symlink(linkTarget, targetPath)
+		}
+		if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
+			return err
+		}
+		in, err := os.Open(path)
+		if err != nil {
+			return err
+		}
+		defer in.Close()
+		out, err := os.OpenFile(targetPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, info.Mode())
+		if err != nil {
+			return err
+		}
+		defer out.Close()
+		_, err = io.Copy(out, in)
+		return err
+	})
 }

@@ -171,7 +171,17 @@ func (h *JavaScriptInjector) findBestInsertionPoint(node *sitter.Node, content [
 
 func (h *JavaScriptInjector) detectExistingOTELSetup(node *sitter.Node, content []byte) bool {
 	body := node.Content(content)
-	return strings.Contains(body, "@opentelemetry/sdk-node") || strings.Contains(body, "NodeSDK(")
+	if strings.Contains(body, "@opentelemetry/sdk-node") || strings.Contains(body, "NodeSDK(") {
+		return true
+	}
+	// Consider OTEL already set up if the bootstrap file is required or setup function is called
+	if strings.Contains(body, "require('./otel')") || strings.Contains(body, "require(\"./otel\")") {
+		return true
+	}
+	if strings.Contains(body, "setupOTel(") {
+		return true
+	}
+	return false
 }
 
 // FallbackAnalyzeImports: no-op for JS

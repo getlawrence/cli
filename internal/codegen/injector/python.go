@@ -277,9 +277,18 @@ func (h *PythonInjector) findBestInsertionPoint(bodyNode *sitter.Node, content [
 // detectExistingOTELSetup checks if OTEL initialization code already exists in Python
 func (h *PythonInjector) detectExistingOTELSetup(bodyNode *sitter.Node, content []byte) bool {
 	bodyContent := bodyNode.Content(content)
-	return strings.Contains(bodyContent, "initialize_otel") ||
+	if strings.Contains(bodyContent, "initialize_otel") ||
 		strings.Contains(bodyContent, "TracerProvider") ||
-		strings.Contains(bodyContent, "set_tracer_provider")
+		strings.Contains(bodyContent, "set_tracer_provider") {
+		return true
+	}
+	// Detect bootstrap usage inserted by our template
+	if strings.Contains(bodyContent, "from otel import init_tracer") ||
+		strings.Contains(bodyContent, "import otel") ||
+		strings.Contains(bodyContent, "init_tracer(") {
+		return true
+	}
+	return false
 }
 
 // FallbackAnalyzeImports for Python: no-op since tree-sitter captures are sufficient
