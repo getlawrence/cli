@@ -56,7 +56,7 @@ func init() {
 	codegenCmd.Flags().StringVarP(&language, "language", "l", "",
 		"Target language (go, javascript, python, java, dotnet, ruby, php)")
 	codegenCmd.Flags().StringVarP(&method, "method", "m", "code",
-		"Installation method (code, auto, ebpf)")
+		"Installation method (code)")
 	codegenCmd.Flags().StringVarP(&agentType, "agent", "a", "",
 		"Preferred coding agent (gemini, claude, openai, github)")
 	codegenCmd.Flags().BoolVar(&listAgents, "list-agents", false,
@@ -136,7 +136,7 @@ func runCodegen(cmd *cobra.Command, args []string) error {
 	}
 
 	// Validate method
-	validMethods := []string{"code", "auto", "ebpf"}
+	validMethods := []string{"code"}
 	if !contains(validMethods, method) {
 		return fmt.Errorf("invalid method %s. Valid options: %s",
 			method, strings.Join(validMethods, ", "))

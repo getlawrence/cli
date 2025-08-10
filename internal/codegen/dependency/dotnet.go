@@ -77,9 +77,7 @@ func (h *DotNetHandler) GetInstrumentationDependency(instrumentation string) *De
 func (h *DotNetHandler) GetComponentDependency(componentType, component string) *Dependency {
 	switch componentType {
 	case "instrumentation":
-		if component == "auto" {
-			return &Dependency{Name: "AutoInstrumentation", Language: "csharp", ImportPath: "OpenTelemetry.AutoInstrumentation", Category: "instrumentation"}
-		}
+		// no auto instrumentation component support
 	}
 	return nil
 }

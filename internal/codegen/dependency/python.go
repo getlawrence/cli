@@ -185,15 +185,7 @@ func (h *PythonHandler) GetComponentDependency(componentType, component string) 
 				Description: "Prometheus metrics exporter",
 			},
 		},
-		"instrumentation": {
-			"auto": {
-				Name:        "Auto Instrumentation",
-				Language:    "python",
-				ImportPath:  "opentelemetry-distro[otlp]",
-				Category:    "instrumentation",
-				Description: "Auto-instrumentation distribution",
-			},
-		},
+		"instrumentation": {},
 	}
 
 	if typeComponents, exists := components[componentType]; exists {

@@ -111,7 +111,7 @@ lawrence codegen --mode template --method code --path /path/to/project --dry-run
 
 Flags:
   -l, --language string       Target language (go, javascript, python, java, dotnet, ruby, php)
-  -m, --method string         Installation method (code, auto, ebpf) (default "code")
+  -m, --method string         Installation method (code) (default "code")
   -a, --agent string          Preferred coding agent (gemini, claude, openai, github)
       --list-agents           List available coding agents
       --list-templates        List available templates

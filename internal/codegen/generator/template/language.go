@@ -1,19 +1,9 @@
 package template
 
-import (
-	"github.com/getlawrence/cli/internal/templates"
-)
-
 // LanguageCodeGenerator defines the interface for language-specific code generation
 type LanguageCodeGenerator interface {
-	// GetSupportedMethods returns the installation methods supported by this language
-	GetSupportedMethods() []templates.InstallationMethod
-
 	// GetOutputFilename returns the appropriate output filename for the given method
-	GetOutputFilename(method templates.InstallationMethod) string
-
-	// ValidateMethod checks if the given method is supported for this language
-	ValidateMethod(method templates.InstallationMethod) error
+	GetOutputFilename() string
 
 	// GetLanguageName returns the language name for this generator
 	GetLanguageName() string

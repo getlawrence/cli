@@ -143,22 +143,13 @@ func (s *TemplateGenerationStrategy) generateCodeForLanguage(language string, op
 		return nil, fmt.Errorf("template-based code generation not supported for language: %s", language)
 	}
 
-	// Convert string method to InstallationMethod
-	method := templates.InstallationMethod(req.Method)
-
-	// Validate method is supported for this language
-	if err := languageGen.ValidateMethod(method); err != nil {
-		return nil, err
-	}
-
 	operationsData := s.analyzeOpportunities(opportunities)
-	return s.generateCodeWithLanguageGenerator(languageGen, method, operationsData, req, directory)
+	return s.generateCodeWithLanguageGenerator(languageGen, operationsData, req, directory)
 }
 
 // generateCodeWithLanguageGenerator is a generic method for generating code using any language generator
 func (s *TemplateGenerationStrategy) generateCodeWithLanguageGenerator(
 	languageGen LanguageCodeGenerator,
-	method templates.InstallationMethod,
 	operationsData *types.OperationsData,
 	req types.GenerationRequest,
 	directory string,
@@ -168,7 +159,6 @@ func (s *TemplateGenerationStrategy) generateCodeWithLanguageGenerator(
 	// Create template data
 	data := templates.TemplateData{
 		Language:          languageGen.GetLanguageName(),
-		Method:            method,
 		Instrumentations:  operationsData.InstallInstrumentations,
 		ServiceName:       serviceName,
 		InstallOTEL:       operationsData.InstallOTEL,
@@ -177,14 +167,14 @@ func (s *TemplateGenerationStrategy) generateCodeWithLanguageGenerator(
 	}
 
 	// Generate code using template
-	code, err := s.templateEngine.GenerateInstructions(languageGen.GetLanguageName(), method, data)
+	code, err := s.templateEngine.GenerateInstructions(languageGen.GetLanguageName(), data)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate %s code: %w", languageGen.GetLanguageName(), err)
 	}
 
 	// Determine output directory and filename
 	outputDir := s.determineOutputDirectory(req, directory)
-	filename := languageGen.GetOutputFilename(method)
+	filename := languageGen.GetOutputFilename()
 	outputPath := filepath.Join(outputDir, filename)
 
 	if req.Config.DryRun {

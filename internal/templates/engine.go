@@ -10,24 +10,14 @@ import (
 //go:embed *
 var templateFS embed.FS
 
-// InstallationMethod represents different OTEL installation approaches
-type InstallationMethod string
-
-const (
-	CodeInstrumentation InstallationMethod = "code"
-	AutoInstrumentation InstallationMethod = "auto"
-	EBPFInstrumentation InstallationMethod = "ebpf"
-)
-
 // TemplateData contains all data needed for template generation
 type TemplateData struct {
-	Language         string             `json:"language"`
-	Method           InstallationMethod `json:"method"`
-	Instrumentations []string           `json:"instrumentations"`
-	ServiceName      string             `json:"service_name"`
-	Samplers         []string           `json:"samplers,omitempty"`
-	ContextProps     []string           `json:"context_props,omitempty"`
-	SpanProcessors   []string           `json:"span_processors,omitempty"`
+	Language         string   `json:"language"`
+	Instrumentations []string `json:"instrumentations"`
+	ServiceName      string   `json:"service_name"`
+	Samplers         []string `json:"samplers,omitempty"`
+	ContextProps     []string `json:"context_props,omitempty"`
+	SpanProcessors   []string `json:"span_processors,omitempty"`
 
 	// New fields for extended operations
 	InstallOTEL       bool                `json:"install_otel,omitempty"`
@@ -79,9 +69,9 @@ func (e *TemplateEngine) GenerateAgentPrompt(data AgentPromptData) (string, erro
 }
 
 // GenerateInstructions creates instructions based on language and method
-func (e *TemplateEngine) GenerateInstructions(lang string, method InstallationMethod, data TemplateData) (string, error) {
+func (e *TemplateEngine) GenerateInstructions(lang string, data TemplateData) (string, error) {
 	// For template-based code generation, try code generation templates first
-	codeGenKey := fmt.Sprintf("%s_%s_gen", lang, method)
+	codeGenKey := fmt.Sprintf("%s_code_gen", lang)
 	if tmpl, exists := e.templates[codeGenKey]; exists {
 		var buf bytes.Buffer
 		if err := tmpl.Execute(&buf, data); err != nil {
@@ -101,7 +91,7 @@ func (e *TemplateEngine) GenerateInstructions(lang string, method InstallationMe
 	}
 
 	// Fallback to method-specific template
-	templateKey := fmt.Sprintf("%s_%s", lang, method)
+	templateKey := fmt.Sprintf("%s_code_gen", lang)
 	tmpl, exists := e.templates[templateKey]
 	if !exists {
 		// Final fallback: if there is a generic code_gen for the language, use it
@@ -113,7 +103,7 @@ func (e *TemplateEngine) GenerateInstructions(lang string, method InstallationMe
 			}
 			return buf2.String(), nil
 		}
-		return "", fmt.Errorf("template not found for %s with method %s", lang, method)
+		return "", fmt.Errorf("template not found for %s", lang)
 	}
 
 	var buf bytes.Buffer
@@ -126,13 +116,12 @@ func (e *TemplateEngine) GenerateInstructions(lang string, method InstallationMe
 
 // GenerateComprehensiveInstructions creates a single comprehensive instruction
 // that includes all instrumentations for a given language
-func (e *TemplateEngine) GenerateComprehensiveInstructions(lang string, method InstallationMethod, allInstrumentations []string, serviceName string) (string, error) {
+func (e *TemplateEngine) GenerateComprehensiveInstructions(lang string, allInstrumentations []string, serviceName string) (string, error) {
 	// Use comprehensive template if available
 	comprehensiveKey := fmt.Sprintf("%s_comprehensive", lang)
 	if tmpl, exists := e.templates[comprehensiveKey]; exists {
 		data := TemplateData{
 			Language:         lang,
-			Method:           method,
 			Instrumentations: allInstrumentations,
 			ServiceName:      serviceName,
 		}
@@ -145,9 +134,8 @@ func (e *TemplateEngine) GenerateComprehensiveInstructions(lang string, method I
 	}
 
 	// Fallback: generate individual instructions and combine them
-	return e.GenerateInstructions(lang, method, TemplateData{
+	return e.GenerateInstructions(lang, TemplateData{
 		Language:         lang,
-		Method:           method,
 		Instrumentations: allInstrumentations,
 		ServiceName:      serviceName,
 	})

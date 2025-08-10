@@ -91,7 +91,6 @@ func (s *AIGenerationStrategy) generateInstructionsForLanguages(languageOpportun
 		// Generate comprehensive instructions for this language
 		instruction, err := s.templateEngine.GenerateComprehensiveInstructions(
 			language,
-			templates.InstallationMethod(req.Method),
 			allInstrumentations,
 			req.CodebasePath,
 		)
