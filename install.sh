@@ -52,45 +52,54 @@ detect_platform() {
 get_latest_version() {
     info "Fetching latest release information..."
     LATEST_VERSION=$(curl -s "https://api.github.com/repos/$REPO/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
-    
     if [ -z "$LATEST_VERSION" ]; then
         error "Could not fetch the latest version"
     fi
-    
     info "Latest version: $LATEST_VERSION"
 }
 
-# Download and install the binary
+# Download and install the binary from archives
 install_binary() {
-    BINARY_NAME_WITH_EXT="$BINARY_NAME"
+    local archive_ext
+    local asset_name
+
     if [ "$OS" = "windows" ]; then
-        BINARY_NAME_WITH_EXT="$BINARY_NAME.exe"
+        archive_ext="zip"
+    else
+        archive_ext="tar.gz"
     fi
-    
-    DOWNLOAD_URL="https://github.com/$REPO/releases/download/$LATEST_VERSION/$BINARY_NAME-$OS-$ARCH"
-    if [ "$OS" = "windows" ]; then
-        DOWNLOAD_URL="$DOWNLOAD_URL.exe"
-    fi
-    
-    info "Downloading $BINARY_NAME from $DOWNLOAD_URL"
-    
-    # Create temporary directory
+
+    asset_name="${BINARY_NAME}_${LATEST_VERSION}_${OS}_${ARCH}.${archive_ext}"
+    download_url="https://github.com/${REPO}/releases/download/${LATEST_VERSION}/${asset_name}"
+
+    info "Downloading ${asset_name} from ${download_url}"
+
     TMP_DIR=$(mktemp -d)
-    TMP_FILE="$TMP_DIR/$BINARY_NAME_WITH_EXT"
-    
-    # Download the binary
+    ARCHIVE_PATH="${TMP_DIR}/${asset_name}"
+
     if command -v curl >/dev/null 2>&1; then
-        curl -L "$DOWNLOAD_URL" -o "$TMP_FILE" || error "Failed to download $BINARY_NAME"
+        curl -fL "${download_url}" -o "${ARCHIVE_PATH}" || error "Failed to download ${asset_name}"
     elif command -v wget >/dev/null 2>&1; then
-        wget "$DOWNLOAD_URL" -O "$TMP_FILE" || error "Failed to download $BINARY_NAME"
+        wget -O "${ARCHIVE_PATH}" "${download_url}" || error "Failed to download ${asset_name}"
     else
         error "Neither curl nor wget is available"
     fi
-    
-    # Make it executable
-    chmod +x "$TMP_FILE"
-    
-    # Determine installation directory
+
+    info "Extracting archive"
+    if [ "$archive_ext" = "zip" ]; then
+        if ! command -v unzip >/dev/null 2>&1; then
+            error "unzip is required to extract zip archives"
+        fi
+        unzip -q "${ARCHIVE_PATH}" -d "${TMP_DIR}"
+        BIN_PATH="${TMP_DIR}/${BINARY_NAME}.exe"
+    else
+        tar -xzf "${ARCHIVE_PATH}" -C "${TMP_DIR}"
+        BIN_PATH="${TMP_DIR}/${BINARY_NAME}"
+    fi
+
+    [ -f "$BIN_PATH" ] || error "Binary not found in archive"
+    chmod +x "$BIN_PATH"
+
     if [ -w "/usr/local/bin" ]; then
         INSTALL_DIR="/usr/local/bin"
     elif [ -w "$HOME/.local/bin" ]; then
@@ -100,21 +109,18 @@ install_binary() {
         INSTALL_DIR="$HOME/bin"
         mkdir -p "$INSTALL_DIR"
     fi
-    
-    # Install the binary
-    info "Installing $BINARY_NAME to $INSTALL_DIR"
-    mv "$TMP_FILE" "$INSTALL_DIR/$BINARY_NAME"
-    
-    # Clean up
+
+    info "Installing ${BINARY_NAME} to ${INSTALL_DIR}"
+    mv "$BIN_PATH" "$INSTALL_DIR/${BINARY_NAME}"
+
     rm -rf "$TMP_DIR"
-    
-    info "$BINARY_NAME installed successfully to $INSTALL_DIR"
-    
-    # Check if the installation directory is in PATH
+
+    info "${BINARY_NAME} installed successfully to ${INSTALL_DIR}"
+
     if [[ ":$PATH:" != *":$INSTALL_DIR:"* ]]; then
         warn "$INSTALL_DIR is not in your PATH"
         warn "Add the following line to your shell profile (~/.bashrc, ~/.zshrc, etc.):"
-        warn "export PATH=\"$INSTALL_DIR:\$PATH\""
+        warn "export PATH=\"$INSTALL_DIR:$PATH\""
     fi
 }
 
@@ -129,17 +135,13 @@ verify_installation() {
     fi
 }
 
-# Main installation flow
 main() {
     info "Installing Lawrence CLI..."
-    
     detect_platform
     get_latest_version
     install_binary
     verify_installation
-    
     info "Installation complete!"
 }
 
-# Run the installation
 main "$@"

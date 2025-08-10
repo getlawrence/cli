@@ -73,11 +73,13 @@ func runAnalyze(cmd *cobra.Command, args []string) error {
 	codebaseAnalyzer := detector.NewCodebaseAnalyzer([]detector.IssueDetector{
 		issues.NewMissingOTelDetector(),
 	}, map[string]detector.Language{
-		"go":     languages.NewGoDetector(),
-		"python": languages.NewPythonDetector(),
-		"csharp": languages.NewDotNetDetector(),
-		"ruby":   languages.NewRubyDetector(),
-		"php":    languages.NewPHPDetector(),
+		"go":         languages.NewGoDetector(),
+		"python":     languages.NewPythonDetector(),
+		"javascript": languages.NewJavaScriptDetector(),
+		"java":       languages.NewJavaDetector(),
+		"csharp":     languages.NewDotNetDetector(),
+		"ruby":       languages.NewRubyDetector(),
+		"php":        languages.NewPHPDetector(),
 	})
 
 	// Run analysis
