@@ -20,6 +20,7 @@ func NewJavaScriptInjector() *JavaScriptInjector {
 		config: &types.LanguageConfig{
 			Language:       "JavaScript",
 			FileExtensions: []string{".js", ".mjs"},
+			InitAtTop:      true,
 			ImportQueries: map[string]string{
 				"existing_imports": `
                 (import_statement (string) @import_path) @import_location

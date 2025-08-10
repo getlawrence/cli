@@ -382,6 +382,19 @@ func (ci *CodeInjector) generateInitializationModification(
 
 	initCode := ci.generateFromTemplate(config.InitializationTemplate, templateData)
 
+	// Some languages/runtimes require bootstrap at the very top (e.g., Node.js instrumentation)
+	if config.InitAtTop {
+		return types.CodeModification{
+			Type:         types.ModificationAddInit,
+			Language:     config.Language,
+			LineNumber:   1,
+			Column:       1,
+			InsertBefore: true,
+			InsertAfter:  false,
+			Content:      initCode,
+		}
+	}
+
 	return types.CodeModification{
 		Type:         types.ModificationAddInit,
 		Language:     config.Language,

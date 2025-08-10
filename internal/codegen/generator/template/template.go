@@ -76,12 +76,13 @@ func (s *TemplateGenerationStrategy) GenerateCode(ctx context.Context, opportuni
 		languageOpportunities := s.groupOpportunitiesByLanguage(opps)
 
 		for language, langOpportunities := range languageOpportunities {
+			normalizedLanguage := normalizeLanguageForGeneration(language)
 			operationsData := s.analyzeOpportunities(langOpportunities)
-			operationsSummary = append(operationsSummary, s.createOperationsSummary(language, operationsData)...)
+			operationsSummary = append(operationsSummary, s.createOperationsSummary(normalizedLanguage, operationsData)...)
 			dependencyPath := s.determineOutputDirectory(req, directory)
 
-			if err := s.addDependencies(ctx, dependencyPath, language, operationsData, req); err != nil {
-				fmt.Printf("Warning: failed to add dependencies for %s: %v\n", language, err)
+			if err := s.addDependencies(ctx, dependencyPath, normalizedLanguage, operationsData, req); err != nil {
+				fmt.Printf("Warning: failed to add dependencies for %s: %v\n", normalizedLanguage, err)
 			}
 
 			// Handle entry point modifications
@@ -93,9 +94,9 @@ func (s *TemplateGenerationStrategy) GenerateCode(ctx context.Context, opportuni
 			}
 
 			// Handle regular file generation
-			files, err := s.generateCodeForLanguage(language, langOpportunities, req, directory)
+			files, err := s.generateCodeForLanguage(normalizedLanguage, langOpportunities, req, directory)
 			if err != nil {
-				fmt.Printf("Warning: failed to generate code for %s: %v\n", language, err)
+				fmt.Printf("Warning: failed to generate code for %s: %v\n", normalizedLanguage, err)
 				continue
 			}
 			generatedFiles = append(generatedFiles, files...)
@@ -302,6 +303,17 @@ func (s *TemplateGenerationStrategy) groupOpportunitiesByLanguage(opportunities 
 	}
 
 	return grouped
+}
+
+// normalizeLanguageForGeneration maps language aliases to the canonical identifiers used by
+// dependency management, templates, and injectors.
+func normalizeLanguageForGeneration(language string) string {
+	switch strings.ToLower(language) {
+	case "js", "node", "nodejs":
+		return "javascript"
+	default:
+		return strings.ToLower(language)
+	}
 }
 
 // handleEntryPointModifications processes entry point modification opportunities

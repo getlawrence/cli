@@ -35,4 +35,7 @@ type LanguageConfig struct {
 	ImportTemplate         string            `json:"import_template"`         // How to format imports
 	InitializationTemplate string            `json:"initialization_template"` // How to format OTEL initialization
 	CleanupTemplate        string            `json:"cleanup_template"`        // How to format cleanup code
+	// InitAtTop indicates the initialization snippet must be placed at the very top of the file
+	// before any other imports/requires. Useful for languages/runtimes that require early bootstrap.
+	InitAtTop bool `json:"init_at_top,omitempty"`
 }
