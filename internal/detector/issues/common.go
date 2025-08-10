@@ -64,30 +64,6 @@ func (m *MissingOTelDetector) Detect(ctx context.Context, directory *detector.Di
 			},
 		})
 	}
-
-	// Case 2: OpenTelemetry libraries exist but entry points are not instrumented
-	if len(directory.Libraries) > 0 && len(directory.EntryPoints) > 0 {
-		for _, entryPoint := range directory.EntryPoints {
-			if entryPoint.Confidence >= 0.8 && !m.hasOTELInitialization(entryPoint) {
-				issues = append(issues, domain.Issue{
-					ID:          fmt.Sprintf("%s_uninstrumented_entrypoint_%s", m.ID(), entryPoint.FunctionName),
-					Title:       "Entry point not instrumented with OpenTelemetry",
-					Description: fmt.Sprintf("Entry point '%s' in %s does not have OpenTelemetry initialization code", entryPoint.FunctionName, entryPoint.FilePath),
-					Severity:    domain.SeverityInfo,
-					Category:    m.Category(),
-					Suggestion:  "Add OpenTelemetry initialization code to instrument this entry point",
-					Language:    directory.Language,
-					File:        entryPoint.FilePath,
-					Line:        int(entryPoint.LineNumber),
-					References: []string{
-						"https://opentelemetry.io/docs/instrumentation/",
-						"https://opentelemetry.io/docs/getting-started/",
-					},
-				})
-			}
-		}
-	}
-
 	return issues, nil
 }
 

@@ -3,6 +3,7 @@ package injector
 import (
 	"context"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -23,8 +24,110 @@ func NewCodeInjector() *CodeInjector {
 			"javascript": NewJavaScriptHandler(),
 			"python":     NewPythonHandler(),
 			"java":       NewJavaHandler(),
+			"csharp":     NewDotNetHandler(),
+			"dotnet":     NewDotNetHandler(),
+			"ruby":       NewRubyHandler(),
+			"php":        NewPHPHandler(),
 		},
 	}
+}
+
+// DetectEntryPoints scans a project directory for entry points using language handlers.
+// Returns at most one best entry point per directory.
+func (ci *CodeInjector) DetectEntryPoints(projectPath string, language string) ([]domain.EntryPoint, error) {
+	handler, ok := ci.handlers[strings.ToLower(language)]
+	if !ok {
+		return nil, fmt.Errorf("unsupported language: %s", language)
+	}
+
+	config := handler.GetConfig()
+	validExts := make(map[string]bool)
+	for _, ext := range config.FileExtensions {
+		validExts[strings.ToLower(ext)] = true
+	}
+
+	// Best entrypoint per directory
+	dirBest := make(map[string]domain.EntryPoint)
+
+	walkFn := func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			// Skip hidden and common vendor/build directories
+			name := d.Name()
+			if strings.HasPrefix(name, ".") {
+				return filepath.SkipDir
+			}
+			switch name {
+			case "node_modules", "vendor", ".git", "__pycache__", ".venv", "venv", "dist", "build", "target", "out":
+				return filepath.SkipDir
+			}
+			return nil
+		}
+
+		// Defensive: if file resides under ignored directories, skip it
+		if rel, relErr := filepath.Rel(projectPath, path); relErr == nil {
+			parts := strings.Split(rel, string(filepath.Separator))
+			for _, part := range parts {
+				if strings.HasPrefix(part, ".") {
+					return nil
+				}
+				switch part {
+				case "node_modules", "vendor", ".git", "__pycache__", ".venv", "venv", "dist", "build", "target", "out":
+					return nil
+				}
+			}
+		}
+		ext := strings.ToLower(filepath.Ext(path))
+		if !validExts[ext] {
+			return nil
+		}
+
+		analysis, err := ci.analyzeFile(path, handler)
+		if err != nil {
+			// best-effort: skip unreadable/unparseable files
+			return nil
+		}
+
+		if len(analysis.EntryPoints) == 0 {
+			return nil
+		}
+
+		// Choose first entry point as best for the file, assign confidence
+		epInfo := analysis.EntryPoints[0]
+		confidence := 0.8
+		if strings.EqualFold(epInfo.Name, "main") || strings.Contains(strings.ToLower(epInfo.Name), "main") {
+			confidence = 1.0
+		}
+		dir := filepath.Dir(path)
+
+		entry := domain.EntryPoint{
+			FilePath:     path,
+			Language:     config.Language,
+			FunctionName: epInfo.Name,
+			LineNumber:   epInfo.BodyStart.LineNumber,
+			Column:       epInfo.BodyStart.Column,
+			NodeType:     "main_function",
+			Confidence:   confidence,
+			Context:      "",
+		}
+
+		if existing, exists := dirBest[dir]; !exists || entry.Confidence > existing.Confidence {
+			dirBest[dir] = entry
+		}
+		return nil
+	}
+
+	if err := filepath.WalkDir(projectPath, walkFn); err != nil {
+		return nil, err
+	}
+
+	var result []domain.EntryPoint
+	for _, ep := range dirBest {
+		result = append(result, ep)
+	}
+	return result, nil
 }
 
 func (ci *CodeInjector) InjectOtelInitialization(ctx context.Context,
@@ -165,68 +268,12 @@ func (ci *CodeInjector) analyzeEntryPoints(tree *sitter.Tree, content []byte, ha
 		}
 	}
 
+	// If no entry points found via tree-sitter, allow language-specific fallback
+	if len(analysis.EntryPoints) == 0 {
+		handler.FallbackAnalyzeEntryPoints(content, analysis)
+	}
+
 	return nil
-}
-
-// findBestInsertionPoint finds the optimal location to insert OTEL initialization code
-func (ci *CodeInjector) findBestInsertionPoint(bodyNode *sitter.Node, content []byte, handler LanguageInjector) types.InsertionPoint {
-	config := handler.GetConfig()
-	// Default to the beginning of the function body
-	defaultPoint := types.InsertionPoint{
-		LineNumber: bodyNode.StartPoint().Row + 1,
-		Column:     bodyNode.StartPoint().Column + 1,
-		Priority:   1,
-	}
-
-	// Use language-specific insertion query if available
-	if insertQuery, exists := config.InsertionQueries["optimal_insertion"]; exists {
-		query, err := sitter.NewQuery([]byte(insertQuery), handler.GetLanguage())
-		if err != nil {
-			return defaultPoint
-		}
-		defer query.Close()
-
-		cursor := sitter.NewQueryCursor()
-		defer cursor.Close()
-
-		cursor.Exec(query, bodyNode)
-
-		bestPoint := defaultPoint
-		for {
-			match, ok := cursor.NextMatch()
-			if !ok {
-				break
-			}
-
-			for _, capture := range match.Captures {
-				captureName := query.CaptureNameForId(capture.Index)
-				node := capture.Node
-
-				var priority int
-				switch captureName {
-				case "after_variables":
-					priority = 3 // High priority - after variable declarations
-				case "before_function_calls":
-					priority = 2 // Medium priority - before function calls
-				case "function_start":
-					priority = 1 // Low priority - start of function
-				}
-
-				if priority > bestPoint.Priority {
-					bestPoint = types.InsertionPoint{
-						LineNumber: node.EndPoint().Row + 1,
-						Column:     node.EndPoint().Column + 1,
-						Context:    node.Content(content),
-						Priority:   priority,
-					}
-				}
-			}
-		}
-
-		return bestPoint
-	}
-
-	return defaultPoint
 }
 
 // generateModifications creates the list of modifications to apply

@@ -4,12 +4,11 @@ Lawrence is a CLI tool for analyzing codebases to detect OpenTelemetry deploymen
 
 ## Features
 
-🔍 **Multi-Language Support**: Analyze Go, Python, and more programming languages
+🔍 **Multi-Language Support**: Analyze Go, Python, JavaScript, Java, .NET, Ruby, PHP
 📦 **Library Detection**: Automatically detect OpenTelemetry libraries and versions
 ⚠️ **Issue Detection**: Find common problems and get actionable recommendations
 🔧 **Extensible**: Add custom detectors and language support
 📊 **Multiple Output Formats**: Text, JSON output options
-⚙️ **Configurable**: Customize analysis behavior with configuration files
 
 ## Installation
 
@@ -34,8 +33,7 @@ export PATH=$PATH:$(go env GOPATH)/bin
 ### Using Homebrew (macOS/Linux)
 
 ```bash
-# Add our tap (once available)
-brew tap getlawrence/tap
+brew tap getlawrence/homebrew-tap
 brew install lawrence
 ```
 
@@ -45,7 +43,7 @@ Download the latest release from the [releases page](https://github.com/getlawre
 
 Available for:
 - Linux (x64, ARM64)
-- macOS (x64, ARM64) 
+- macOS (x64, ARM64)
 - Windows (x64, ARM64)
 
 ### Using Docker
@@ -101,97 +99,41 @@ Flags:
   -d, --detailed              Show detailed analysis including file-level information
   -l, --languages strings     Limit analysis to specific languages (go, python, java, etc.)
       --categories strings    Limit issues to specific categories
-  -o, --output string         Output format (text, json, yaml) (default "text")
+  -o, --output string         Output format (text, json) (default "text")
 ```
 
-### `list`
+### `codegen`
 
-List supported languages and issue categories.
+Analyze a codebase and generate OpenTelemetry instrumentation using AI or templates.
 
 ```bash
-lawrence list languages     # Show supported programming languages
-lawrence list categories    # Show available issue categories  
-lawrence list detectors     # Show all available issue detectors
-```
+lawrence codegen --mode template --method code --path /path/to/project --dry-run
 
-### `config`
-
-Manage configuration files.
-
-```bash
-lawrence config init        # Create default configuration file
-lawrence config show        # Display current configuration
-lawrence config path        # Show configuration file path
-```
-
-## Configuration
-
-Lawrence supports configuration files to customize its behavior. Configuration files are searched in the following order:
-
-1. File specified with `--config` flag
-2. `.lawrence.json` in current directory
-3. `.lawrence.yaml` in current directory
-4. `~/.lawrence.json` in home directory
-
-### Create Configuration File
-
-```bash
-lawrence config init                # Create in current directory
-lawrence config init --global      # Create in home directory
-```
-
-### Sample Configuration
-
-```json
-{
-  "analysis": {
-    "exclude_paths": [".git", "node_modules", "vendor"],
-    "max_depth": 10,
-    "follow_symlinks": false,
-    "min_severity": "info"
-  },
-  "output": {
-    "format": "text",
-    "detailed": false,
-    "color": true
-  },
-  "languages": {
-    "go": {
-      "enabled": true,
-      "file_patterns": ["**/*.go"],
-      "package_files": ["go.mod", "go.sum"],
-      "otel_patterns": ["go.opentelemetry.io/*"]
-    },
-    "python": {
-      "enabled": true,
-      "file_patterns": ["**/*.py"],
-      "package_files": ["requirements.txt", "pyproject.toml"],
-      "otel_patterns": ["opentelemetry*"]
-    }
-  }
-}
+Flags:
+  -l, --language string       Target language (go, javascript, python, java, dotnet, ruby, php)
+  -m, --method string         Installation method (code, auto, ebpf) (default "code")
+  -a, --agent string          Preferred coding agent (gemini, claude, openai, github)
+      --list-agents           List available coding agents
+      --list-templates        List available templates
+      --list-strategies       List available generation strategies
+      --mode string           Generation mode (ai, template)
+  -o, --output string         Output directory (template mode)
+      --dry-run               Show what would be generated without writing files
 ```
 
 ## Supported Languages
 
-| Language | Library Detection | Import Analysis | Package Files |
-|----------|------------------|------------------|---------------|
-| Go       | ✅               | ✅               | go.mod, go.sum |
-| Python   | ✅               | ✅               | requirements.txt, pyproject.toml, setup.py |
+| Language   | Library Detection | Import Analysis | Package Files |
+|------------|-------------------|-----------------|---------------|
+| Go         | ✅                | ✅              | go.mod, go.sum |
+| Python     | ✅                | ✅              | requirements.txt, pyproject.toml, setup.py |
+| JavaScript | ✅                | ✅              | package.json, lockfiles |
+| Java       | ✅                | ✅              | pom.xml, gradle files |
+| .NET       | ✅                | ✅              | .csproj, packages.config |
+| Ruby       | ✅                | ✅              | Gemfile, Gemfile.lock |
+| PHP        | ✅                | ✅              | composer.json, composer.lock |
 
-More languages coming soon! See [Contributing](#contributing) to add support for your language.
-
-## Issue Categories
-
-Lawrence detects issues in the following categories:
-
-- **missing_library**: Missing OpenTelemetry libraries or dependencies
-- **configuration**: Configuration issues and misconfigurations  
-- **instrumentation**: Instrumentation coverage and completeness
-- **performance**: Performance-related issues and optimizations
-- **security**: Security concerns and vulnerabilities
-- **best_practice**: Best practice violations and recommendations
-- **deprecated**: Deprecated features and outdated libraries
+See [Contributing](#contributing) to add support for your language.
 
 ## Examples
 
@@ -239,49 +181,6 @@ $ lawrence analyze --output json
   },
   "issues": [...]
 }
-```
-
-## Contributing
-
-We welcome contributions! Here's how you can help:
-
-### Adding Language Support
-
-1. Create a new detector in `internal/detector/languages/`
-2. Implement the `Language` interface
-3. Register the detector in `cmd/analyze.go`
-4. Add tests and documentation
-
-### Adding Issue Detectors
-
-1. Create a new detector in `internal/detector/issues/`
-2. Implement the `IssueDetector` interface
-3. Register the detector in `cmd/analyze.go`
-4. Add tests and documentation
-
-### Example: Adding Java Support
-
-```go
-// internal/detector/languages/java.go
-package languages
-
-import (
-    "context"
-    "github.com/getlawrence/cli/internal/detector"
-)
-
-type JavaDetector struct{}
-
-func (j *JavaDetector) Name() string {
-    return "java"
-}
-
-func (j *JavaDetector) Detect(ctx context.Context, rootPath string) (bool, error) {
-    // Check for pom.xml, build.gradle, etc.
-    // Return true if Java project detected
-}
-
-// Implement other interface methods...
 ```
 
 ## License

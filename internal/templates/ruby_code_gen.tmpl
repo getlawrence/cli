@@ -1,0 +1,62 @@
+#!/usr/bin/env ruby
+# OpenTelemetry instrumentation for {{.ServiceName}}
+
+require 'logger'
+require 'opentelemetry-api'
+require 'opentelemetry-sdk'
+require 'opentelemetry-exporter-otlp'
+{{range .Instrumentations}}
+require 'opentelemetry-instrumentation-{{.}}'
+{{end}}
+
+module Lawrence
+  module OTel
+    def self.setup
+      logger = Logger.new($stdout)
+
+      resource = OpenTelemetry::SDK::Resources::Resource.create(
+        'service.name' => ENV.fetch('OTEL_SERVICE_NAME', '{{.ServiceName}}'),
+        'service.version' => ENV.fetch('OTEL_SERVICE_VERSION', '1.0.0'),
+        'deployment.environment' => ENV.fetch('OTEL_DEPLOYMENT_ENVIRONMENT', 'development')
+      )
+
+      exporter = OpenTelemetry::Exporter::OTLP::Exporter.new(
+        endpoint: ENV.fetch('OTEL_EXPORTER_OTLP_ENDPOINT', 'http://localhost:4318')
+      )
+
+      span_processor = OpenTelemetry::SDK::Trace::Export::BatchSpanProcessor.new(exporter)
+      tracer_provider = OpenTelemetry::SDK::Trace::TracerProvider.new(
+        resource: resource,
+        span_processor: span_processor
+      )
+
+      OpenTelemetry.logger = logger
+      OpenTelemetry::SDK.configure do |c|
+        c.use_all # enables default instrumentations when available
+        c.add_span_processor span_processor
+        c.resource = resource
+        c.tracer_provider = tracer_provider
+      end
+
+      # Explicitly activate requested instrumentations
+      begin
+{{range .Instrumentations}}
+        require 'opentelemetry-instrumentation-{{.}}'
+{{end}}
+      rescue => e
+        logger.warn("Failed to load some instrumentations: #{e}")
+      end
+
+      tracer_provider
+    end
+
+    def self.tracer
+      OpenTelemetry.tracer_provider.tracer('{{.ServiceName}}')
+    end
+  end
+end
+
+# Initialize on require
+Lawrence::OTel.setup
+
+

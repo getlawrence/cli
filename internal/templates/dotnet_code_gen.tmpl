@@ -1,0 +1,26 @@
+// OpenTelemetry bootstrap for {{.ServiceName}} (.NET)
+
+using Microsoft.Extensions.DependencyInjection;
+using OpenTelemetry;
+using OpenTelemetry.Trace;
+using OpenTelemetry.Resources;
+
+public static class Otel
+{
+    public static void Configure(IServiceCollection services)
+    {
+        var endpoint = Environment.GetEnvironmentVariable("OTEL_EXPORTER_OTLP_ENDPOINT") ?? "http://localhost:4318";
+
+        services.AddOpenTelemetry()
+            .WithTracing(tracing => tracing
+                .SetResourceBuilder(ResourceBuilder.CreateDefault().AddService("{{.ServiceName}}"))
+                .AddAspNetCoreInstrumentation()
+                .AddHttpClientInstrumentation()
+                .AddGrpcClientInstrumentation()
+                .AddRuntimeInstrumentation()
+                .AddProcessInstrumentation()
+                .AddOtlpExporter());
+    }
+}
+
+

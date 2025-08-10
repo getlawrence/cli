@@ -20,6 +20,10 @@ func NewDependencyWriter() *DependencyWriter {
 			"javascript": NewJavaScriptHandler(),
 			"python":     NewPythonHandler(),
 			"java":       NewJavaHandler(),
+			"csharp":     NewDotNetHandler(),
+			"dotnet":     NewDotNetHandler(),
+			"ruby":       NewRubyHandler(),
+			"php":        NewPHPHandler(),
 		},
 	}
 }

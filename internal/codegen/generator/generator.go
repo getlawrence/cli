@@ -155,16 +155,11 @@ func (g *Generator) convertIssuesToOpportunities(analysis *detector.Analysis) []
 			switch issue.Category {
 			case domain.CategoryMissingOtel:
 				if !addedInstallForDir {
-					for _, entryPoint := range dirAnalysis.EntryPoints {
-						if entryPoint.Confidence >= 0.8 {
-							opportunities = append(opportunities, domain.Opportunity{
-								Type:       domain.OpportunityInstallOTEL,
-								Language:   issue.Language,
-								FilePath:   dirAnalysis.Directory,
-								EntryPoint: &entryPoint,
-							})
-						}
-					}
+					opportunities = append(opportunities, domain.Opportunity{
+						Type:     domain.OpportunityInstallOTEL,
+						Language: issue.Language,
+						FilePath: dirAnalysis.Directory,
+					})
 					addedInstallForDir = true
 				}
 			}

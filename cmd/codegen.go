@@ -54,7 +54,7 @@ func init() {
 	rootCmd.AddCommand(codegenCmd)
 
 	codegenCmd.Flags().StringVarP(&language, "language", "l", "",
-		"Target language (go, python, javascript, java)")
+		"Target language (go, javascript, python, java, dotnet, ruby, php)")
 	codegenCmd.Flags().StringVarP(&method, "method", "m", "code",
 		"Installation method (code, auto, ebpf)")
 	codegenCmd.Flags().StringVarP(&agentType, "agent", "a", "",
@@ -86,6 +86,9 @@ func runCodegen(cmd *cobra.Command, args []string) error {
 		"javascript": languages.NewJavaScriptDetector(),
 		"python":     languages.NewPythonDetector(),
 		"java":       languages.NewJavaDetector(),
+		"csharp":     languages.NewDotNetDetector(),
+		"ruby":       languages.NewRubyDetector(),
+		"php":        languages.NewPHPDetector(),
 	})
 
 	// Initialize generator with existing detector system

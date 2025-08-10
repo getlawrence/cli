@@ -8,25 +8,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- Initial CLI implementation with analyze, list, and config commands
-- Support for Go and Python project detection
-- OTEL instrumentation analysis and recommendations
-- Configuration management for project settings
+- TBD
 
 ### Changed
-
-### Deprecated
-
-### Removed
+- TBD
 
 ### Fixed
+- TBD
 
 ### Security
+- TBD
 
-## [v0.1.0] - 2025-08-05
+## [v0.1.0-beta.1] - 2025-08-10
 
 ### Added
-- Initial release of Lawrence CLI
-- Basic project structure and commands
-- Go and Python language support
-- OTEL instrumentation detection
+- Initial CLI implementation with `analyze` and `codegen` commands
+- Support for Go, Python, JavaScript, Java, .NET, Ruby, PHP detection
+- OTEL instrumentation analysis and recommendations
+- Template-based code generation with `--dry-run`
+- GoReleaser config and GitHub Actions workflow for releases
+- Homebrew tap publishing via GoReleaser
+- Install script for prebuilt archives
+
+### Changed
+- Updated README to reflect implemented commands and installation paths
+
+### Fixed
+- Improved Homebrew formula test to assert `--version`

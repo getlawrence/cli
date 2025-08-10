@@ -180,3 +180,6 @@ func (h *JavaHandler) detectExistingOTELSetup(node *sitter.Node, content []byte)
 
 // FallbackAnalyzeImports: no-op for Java
 func (h *JavaHandler) FallbackAnalyzeImports(content []byte, analysis *types.FileAnalysis) {}
+
+// FallbackAnalyzeEntryPoints: no-op for Java; main method capture should be sufficient
+func (h *JavaHandler) FallbackAnalyzeEntryPoints(content []byte, analysis *types.FileAnalysis) {}
