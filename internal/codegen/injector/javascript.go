@@ -9,17 +9,18 @@ import (
 	"github.com/smacker/go-tree-sitter/javascript"
 )
 
-// JavaScriptHandler implements LanguageInjector for JavaScript
-type JavaScriptHandler struct {
+// JavaScriptInjector implements LanguageInjector for JavaScript
+type JavaScriptInjector struct {
 	config *types.LanguageConfig
 }
 
-// NewJavaScriptHandler creates a new handler
-func NewJavaScriptHandler() *JavaScriptHandler {
-	return &JavaScriptHandler{
+// NewJavaScriptInjector creates a new handler
+func NewJavaScriptInjector() *JavaScriptInjector {
+	return &JavaScriptInjector{
 		config: &types.LanguageConfig{
 			Language:       "JavaScript",
 			FileExtensions: []string{".js", ".mjs"},
+			InitAtTop:      true,
 			ImportQueries: map[string]string{
 				"existing_imports": `
                 (import_statement (string) @import_path) @import_location
@@ -49,29 +50,26 @@ func NewJavaScriptHandler() *JavaScriptHandler {
                 (program) @function_start
             `,
 			},
-			ImportTemplate: `const { %s } = require("%s")`,
-			InitializationTemplate: `
-const { setupOTel } = require('./otel'); 
-setupOTel();
-`,
-			CleanupTemplate: `await sdk.shutdown()`,
+			ImportTemplate:         `const { %s } = require("%s")`,
+			InitializationTemplate: `require('./otel');`,
+			CleanupTemplate:        `await sdk.shutdown()`,
 		},
 	}
 }
 
 // GetLanguage returns the tree-sitter language for JavaScript
-func (h *JavaScriptHandler) GetLanguage() *sitter.Language { return javascript.GetLanguage() }
+func (h *JavaScriptInjector) GetLanguage() *sitter.Language { return javascript.GetLanguage() }
 
 // GetConfig returns the language configuration
-func (h *JavaScriptHandler) GetConfig() *types.LanguageConfig { return h.config }
+func (h *JavaScriptInjector) GetConfig() *types.LanguageConfig { return h.config }
 
 // GetRequiredImports returns the list of imports needed for OTEL in JS
-func (h *JavaScriptHandler) GetRequiredImports() []string {
+func (h *JavaScriptInjector) GetRequiredImports() []string {
 	return []string{}
 }
 
 // FormatImports formats JS import statements (ESM)
-func (h *JavaScriptHandler) FormatImports(imports []string, hasExisting bool) string {
+func (h *JavaScriptInjector) FormatImports(imports []string, hasExisting bool) string {
 	if len(imports) == 0 {
 		return ""
 	}
@@ -83,12 +81,12 @@ func (h *JavaScriptHandler) FormatImports(imports []string, hasExisting bool) st
 }
 
 // FormatSingleImport formats a single JS import
-func (h *JavaScriptHandler) FormatSingleImport(importPath string) string {
+func (h *JavaScriptInjector) FormatSingleImport(importPath string) string {
 	return fmt.Sprintf("import \"%s\"\n", importPath)
 }
 
 // AnalyzeImportCapture records imports
-func (h *JavaScriptHandler) AnalyzeImportCapture(captureName string, node *sitter.Node, content []byte, analysis *types.FileAnalysis) {
+func (h *JavaScriptInjector) AnalyzeImportCapture(captureName string, node *sitter.Node, content []byte, analysis *types.FileAnalysis) {
 	switch captureName {
 	case "import_path", "require_path":
 		path := strings.Trim(node.Content(content), "\"'")
@@ -107,7 +105,7 @@ func (h *JavaScriptHandler) AnalyzeImportCapture(captureName string, node *sitte
 }
 
 // AnalyzeFunctionCapture finds entry blocks
-func (h *JavaScriptHandler) AnalyzeFunctionCapture(captureName string, node *sitter.Node, content []byte, analysis *types.FileAnalysis, config *types.LanguageConfig) {
+func (h *JavaScriptInjector) AnalyzeFunctionCapture(captureName string, node *sitter.Node, content []byte, analysis *types.FileAnalysis, config *types.LanguageConfig) {
 	switch captureName {
 	case "server_listen", "main_block":
 		insertionPoint := h.findBestInsertionPoint(node, content, config)
@@ -125,7 +123,7 @@ func (h *JavaScriptHandler) AnalyzeFunctionCapture(captureName string, node *sit
 }
 
 // GetInsertionPointPriority for JS
-func (h *JavaScriptHandler) GetInsertionPointPriority(captureName string) int {
+func (h *JavaScriptInjector) GetInsertionPointPriority(captureName string) int {
 	switch captureName {
 	case "after_variables":
 		return 3
@@ -138,7 +136,7 @@ func (h *JavaScriptHandler) GetInsertionPointPriority(captureName string) int {
 	}
 }
 
-func (h *JavaScriptHandler) findBestInsertionPoint(node *sitter.Node, content []byte, config *types.LanguageConfig) types.InsertionPoint {
+func (h *JavaScriptInjector) findBestInsertionPoint(node *sitter.Node, content []byte, config *types.LanguageConfig) types.InsertionPoint {
 	defaultPoint := types.InsertionPoint{LineNumber: node.StartPoint().Row + 1, Column: node.StartPoint().Column + 1, Priority: 1}
 	if insertQuery, ok := config.InsertionQueries["optimal_insertion"]; ok {
 		q, err := sitter.NewQuery([]byte(insertQuery), h.GetLanguage())
@@ -169,14 +167,24 @@ func (h *JavaScriptHandler) findBestInsertionPoint(node *sitter.Node, content []
 	return defaultPoint
 }
 
-func (h *JavaScriptHandler) detectExistingOTELSetup(node *sitter.Node, content []byte) bool {
+func (h *JavaScriptInjector) detectExistingOTELSetup(node *sitter.Node, content []byte) bool {
 	body := node.Content(content)
-	return strings.Contains(body, "@opentelemetry/sdk-node") || strings.Contains(body, "NodeSDK(")
+	if strings.Contains(body, "@opentelemetry/sdk-node") || strings.Contains(body, "NodeSDK(") {
+		return true
+	}
+	// Consider OTEL already set up if the bootstrap file is required or setup function is called
+	if strings.Contains(body, "require('./otel')") || strings.Contains(body, "require(\"./otel\")") {
+		return true
+	}
+	if strings.Contains(body, "setupOTel(") {
+		return true
+	}
+	return false
 }
 
 // FallbackAnalyzeImports: no-op for JS
-func (h *JavaScriptHandler) FallbackAnalyzeImports(content []byte, analysis *types.FileAnalysis) {}
+func (h *JavaScriptInjector) FallbackAnalyzeImports(content []byte, analysis *types.FileAnalysis) {}
 
 // FallbackAnalyzeEntryPoints: no-op for JavaScript; default program node is already considered
-func (h *JavaScriptHandler) FallbackAnalyzeEntryPoints(content []byte, analysis *types.FileAnalysis) {
+func (h *JavaScriptInjector) FallbackAnalyzeEntryPoints(content []byte, analysis *types.FileAnalysis) {
 }

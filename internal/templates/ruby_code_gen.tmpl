@@ -24,30 +24,16 @@ module Lawrence
         endpoint: ENV.fetch('OTEL_EXPORTER_OTLP_ENDPOINT', 'http://localhost:4318')
       )
 
-      span_processor = OpenTelemetry::SDK::Trace::Export::BatchSpanProcessor.new(exporter)
-      tracer_provider = OpenTelemetry::SDK::Trace::TracerProvider.new(
-        resource: resource,
-        span_processor: span_processor
-      )
-
       OpenTelemetry.logger = logger
       OpenTelemetry::SDK.configure do |c|
-        c.use_all # enables default instrumentations when available
-        c.add_span_processor span_processor
         c.resource = resource
-        c.tracer_provider = tracer_provider
+        c.add_span_processor(
+          OpenTelemetry::SDK::Trace::Export::BatchSpanProcessor.new(exporter: exporter)
+        )
+        c.use_all # enables default instrumentations when available
       end
 
-      # Explicitly activate requested instrumentations
-      begin
-{{range .Instrumentations}}
-        require 'opentelemetry-instrumentation-{{.}}'
-{{end}}
-      rescue => e
-        logger.warn("Failed to load some instrumentations: #{e}")
-      end
-
-      tracer_provider
+      OpenTelemetry.tracer_provider
     end
 
     def self.tracer

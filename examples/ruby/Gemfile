@@ -1,8 +1,4 @@
 source 'https://rubygems.org'
 
 gem 'sinatra', '~> 3.0'
-gem 'opentelemetry-api'
-gem 'opentelemetry-sdk'
-gem 'opentelemetry-exporter-otlp'
-
-
+gem "puma", "~> 6.6"

@@ -9,14 +9,14 @@ import (
 	"github.com/smacker/go-tree-sitter/golang"
 )
 
-// GoHandler implements LanguageHandler for Go
-type GoHandler struct {
+// GoInjector implements LanguageHandler for Go
+type GoInjector struct {
 	config *types.LanguageConfig
 }
 
-// NewGoHandler creates a new Go language handler
-func NewGoHandler() *GoHandler {
-	return &GoHandler{
+// NewGoInjector creates a new Go language handler
+func NewGoInjector() *GoInjector {
+	return &GoInjector{
 		config: &types.LanguageConfig{
 			Language:       "Go",
 			FileExtensions: []string{".go"},
@@ -90,29 +90,27 @@ func NewGoHandler() *GoHandler {
 }
 
 // GetLanguage returns the tree-sitter language parser for Go
-func (h *GoHandler) GetLanguage() *sitter.Language {
+func (h *GoInjector) GetLanguage() *sitter.Language {
 	return golang.GetLanguage()
 }
 
 // GetConfig returns the language configuration for Go
-func (h *GoHandler) GetConfig() *types.LanguageConfig {
+func (h *GoInjector) GetConfig() *types.LanguageConfig {
 	return h.config
 }
 
 // GetRequiredImports returns the list of imports needed for OTEL in Go
-func (h *GoHandler) GetRequiredImports() []string {
+func (h *GoInjector) GetRequiredImports() []string {
+	// Only import what the injected initialization snippet directly uses.
+	// The generated OTEL helper lives in the same package, so no OTEL imports are needed here.
 	return []string{
-		"go.opentelemetry.io/otel",
-		"go.opentelemetry.io/otel/trace",
-		"go.opentelemetry.io/otel/sdk/trace",
-		"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp",
 		"context",
 		"log",
 	}
 }
 
 // FormatImports formats Go import statements
-func (h *GoHandler) FormatImports(imports []string, hasExistingImports bool) string {
+func (h *GoInjector) FormatImports(imports []string, hasExistingImports bool) string {
 	if len(imports) == 0 {
 		return ""
 	}
@@ -137,12 +135,12 @@ func (h *GoHandler) FormatImports(imports []string, hasExistingImports bool) str
 }
 
 // FormatSingleImport formats a single Go import statement
-func (h *GoHandler) FormatSingleImport(importPath string) string {
+func (h *GoInjector) FormatSingleImport(importPath string) string {
 	return fmt.Sprintf("\"%s\"", importPath)
 }
 
 // AnalyzeImportCapture processes an import capture from tree-sitter query for Go
-func (h *GoHandler) AnalyzeImportCapture(captureName string, node *sitter.Node, content []byte, analysis *types.FileAnalysis) {
+func (h *GoInjector) AnalyzeImportCapture(captureName string, node *sitter.Node, content []byte, analysis *types.FileAnalysis) {
 	switch captureName {
 	case "import_path":
 		// Extract import path without quotes
@@ -177,7 +175,7 @@ func (h *GoHandler) AnalyzeImportCapture(captureName string, node *sitter.Node, 
 }
 
 // AnalyzeFunctionCapture processes a function capture from tree-sitter query for Go
-func (h *GoHandler) AnalyzeFunctionCapture(captureName string, node *sitter.Node, content []byte, analysis *types.FileAnalysis, config *types.LanguageConfig) {
+func (h *GoInjector) AnalyzeFunctionCapture(captureName string, node *sitter.Node, content []byte, analysis *types.FileAnalysis, config *types.LanguageConfig) {
 	switch captureName {
 	case "function_name":
 		functionName := node.Content(content)
@@ -228,7 +226,7 @@ func (h *GoHandler) AnalyzeFunctionCapture(captureName string, node *sitter.Node
 }
 
 // GetInsertionPointPriority returns priority for Go insertion point types
-func (h *GoHandler) GetInsertionPointPriority(captureName string) int {
+func (h *GoInjector) GetInsertionPointPriority(captureName string) int {
 	switch captureName {
 	case "function_start":
 		return 100 // Highest priority - always start of function
@@ -244,7 +242,7 @@ func (h *GoHandler) GetInsertionPointPriority(captureName string) int {
 }
 
 // findBestInsertionPoint finds the optimal location to insert OTEL initialization code in Go
-func (h *GoHandler) findBestInsertionPoint(bodyNode *sitter.Node, content []byte, config *types.LanguageConfig) types.InsertionPoint {
+func (h *GoInjector) findBestInsertionPoint(bodyNode *sitter.Node, content []byte, config *types.LanguageConfig) types.InsertionPoint {
 	// Default to the beginning of the function body
 	defaultPoint := types.InsertionPoint{
 		LineNumber: bodyNode.StartPoint().Row + 1,
@@ -306,7 +304,7 @@ func (h *GoHandler) findBestInsertionPoint(bodyNode *sitter.Node, content []byte
 }
 
 // detectExistingOTELSetup checks if OTEL initialization code already exists in Go
-func (h *GoHandler) detectExistingOTELSetup(bodyNode *sitter.Node, content []byte) bool {
+func (h *GoInjector) detectExistingOTELSetup(bodyNode *sitter.Node, content []byte) bool {
 	bodyContent := bodyNode.Content(content)
 	return strings.Contains(bodyContent, "trace.NewTracerProvider") ||
 		strings.Contains(bodyContent, "otel.SetTracerProvider") ||
@@ -315,7 +313,7 @@ func (h *GoHandler) detectExistingOTELSetup(bodyNode *sitter.Node, content []byt
 }
 
 // FallbackAnalyzeImports provides Go-specific import analysis when tree-sitter yields no insertion points
-func (h *GoHandler) FallbackAnalyzeImports(content []byte, analysis *types.FileAnalysis) {
+func (h *GoInjector) FallbackAnalyzeImports(content []byte, analysis *types.FileAnalysis) {
 	// Only apply if this is Go
 	if analysis.Language != "Go" {
 		return
@@ -388,4 +386,4 @@ func (h *GoHandler) FallbackAnalyzeImports(content []byte, analysis *types.FileA
 }
 
 // FallbackAnalyzeEntryPoints: no-op for Go since tree-sitter captures main/init reliably
-func (h *GoHandler) FallbackAnalyzeEntryPoints(content []byte, analysis *types.FileAnalysis) {}
+func (h *GoInjector) FallbackAnalyzeEntryPoints(content []byte, analysis *types.FileAnalysis) {}

@@ -16,14 +16,14 @@ type DependencyWriter struct {
 func NewDependencyWriter() *DependencyWriter {
 	return &DependencyWriter{
 		handlers: map[string]DependencyHandler{
-			"go":         NewGoHandler(),
-			"javascript": NewJavaScriptHandler(),
-			"python":     NewPythonHandler(),
-			"java":       NewJavaHandler(),
-			"csharp":     NewDotNetHandler(),
-			"dotnet":     NewDotNetHandler(),
-			"ruby":       NewRubyHandler(),
-			"php":        NewPHPHandler(),
+			"go":         NewGoInjector(),
+			"javascript": NewJavaScriptInjector(),
+			"python":     NewPythonInjector(),
+			"java":       NewJavaInjector(),
+			"csharp":     NewDotNetInjector(),
+			"dotnet":     NewDotNetInjector(),
+			"ruby":       NewRubyInjector(),
+			"php":        NewPHPInjector(),
 		},
 	}
 }
@@ -39,6 +39,11 @@ func (dm *DependencyWriter) AddDependencies(
 	handler, exists := dm.handlers[language]
 	if !exists {
 		return fmt.Errorf("unsupported language for dependency management: %s", language)
+	}
+
+	// Expand instrumentation prerequisites via language handler
+	if len(operationsData.InstallInstrumentations) > 0 {
+		operationsData.InstallInstrumentations = handler.ResolveInstrumentationPrerequisites(operationsData.InstallInstrumentations)
 	}
 
 	// Collect all required dependencies
@@ -105,5 +110,9 @@ func (dm *DependencyWriter) GetRequiredDependencies(language string, operationsD
 		return nil, fmt.Errorf("unsupported language: %s", language)
 	}
 
+	// Expand instrumentation prerequisites
+	if len(operationsData.InstallInstrumentations) > 0 {
+		operationsData.InstallInstrumentations = handler.ResolveInstrumentationPrerequisites(operationsData.InstallInstrumentations)
+	}
 	return dm.collectRequiredDependencies(operationsData, handler), nil
 }

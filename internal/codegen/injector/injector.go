@@ -20,14 +20,14 @@ type CodeInjector struct {
 func NewCodeInjector() *CodeInjector {
 	return &CodeInjector{
 		handlers: map[string]LanguageInjector{
-			"go":         NewGoHandler(),
-			"javascript": NewJavaScriptHandler(),
-			"python":     NewPythonHandler(),
-			"java":       NewJavaHandler(),
-			"csharp":     NewDotNetHandler(),
-			"dotnet":     NewDotNetHandler(),
-			"ruby":       NewRubyHandler(),
-			"php":        NewPHPHandler(),
+			"go":         NewGoInjector(),
+			"javascript": NewJavaScriptInjector(),
+			"python":     NewPythonInjector(),
+			"java":       NewJavaInjector(),
+			"csharp":     NewDotNetInjector(),
+			"dotnet":     NewDotNetInjector(),
+			"ruby":       NewRubyInjector(),
+			"php":        NewPHPInjector(),
 		},
 	}
 }
@@ -317,8 +317,9 @@ func (ci *CodeInjector) generateImportModifications(
 ) []types.CodeModification {
 	var modifications []types.CodeModification
 
+	// Only import language-required paths. Instrumentations are handled via
+	// generated bootstrap files (e.g., otel.js) rather than direct imports here.
 	requiredImports := handler.GetRequiredImports()
-	requiredImports = append(requiredImports, operationsData.InstallInstrumentations...)
 	newImports := make([]string, 0)
 
 	// Collect imports that need to be added
@@ -381,6 +382,19 @@ func (ci *CodeInjector) generateInitializationModification(
 	}
 
 	initCode := ci.generateFromTemplate(config.InitializationTemplate, templateData)
+
+	// Some languages/runtimes require bootstrap at the very top (e.g., Node.js instrumentation)
+	if config.InitAtTop {
+		return types.CodeModification{
+			Type:         types.ModificationAddInit,
+			Language:     config.Language,
+			LineNumber:   1,
+			Column:       1,
+			InsertBefore: true,
+			InsertAfter:  false,
+			Content:      initCode,
+		}
+	}
 
 	return types.CodeModification{
 		Type:         types.ModificationAddInit,

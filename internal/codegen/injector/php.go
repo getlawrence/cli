@@ -9,14 +9,14 @@ import (
 	"github.com/smacker/go-tree-sitter/php"
 )
 
-// PHPHandler implements LanguageInjector for PHP
-type PHPHandler struct {
+// PHPInjector implements LanguageInjector for PHP
+type PHPInjector struct {
 	config *types.LanguageConfig
 }
 
-// NewPHPHandler creates a new PHP handler
-func NewPHPHandler() *PHPHandler {
-	return &PHPHandler{
+// NewPHPInjector creates a new PHP handler
+func NewPHPInjector() *PHPInjector {
+	return &PHPInjector{
 		config: &types.LanguageConfig{
 			Language:       "PHP",
 			FileExtensions: []string{".php"},
@@ -37,12 +37,12 @@ func NewPHPHandler() *PHPHandler {
 	}
 }
 
-func (h *PHPHandler) GetLanguage() *sitter.Language    { return php.GetLanguage() }
-func (h *PHPHandler) GetConfig() *types.LanguageConfig { return h.config }
+func (h *PHPInjector) GetLanguage() *sitter.Language    { return php.GetLanguage() }
+func (h *PHPInjector) GetConfig() *types.LanguageConfig { return h.config }
 
-func (h *PHPHandler) GetRequiredImports() []string { return []string{"./otel.php"} }
+func (h *PHPInjector) GetRequiredImports() []string { return []string{"./otel.php"} }
 
-func (h *PHPHandler) FormatImports(imports []string, hasExisting bool) string {
+func (h *PHPInjector) FormatImports(imports []string, hasExisting bool) string {
 	if len(imports) == 0 {
 		return ""
 	}
@@ -53,15 +53,15 @@ func (h *PHPHandler) FormatImports(imports []string, hasExisting bool) string {
 	return b.String()
 }
 
-func (h *PHPHandler) FormatSingleImport(importPath string) string {
+func (h *PHPInjector) FormatSingleImport(importPath string) string {
 	return fmt.Sprintf("require_once '%s';\n", importPath)
 }
 
-func (h *PHPHandler) AnalyzeImportCapture(captureName string, node *sitter.Node, content []byte, analysis *types.FileAnalysis) {
+func (h *PHPInjector) AnalyzeImportCapture(captureName string, node *sitter.Node, content []byte, analysis *types.FileAnalysis) {
 	// No-op: we rely on fallback scanning for now
 }
 
-func (h *PHPHandler) AnalyzeFunctionCapture(captureName string, node *sitter.Node, content []byte, analysis *types.FileAnalysis, config *types.LanguageConfig) {
+func (h *PHPInjector) AnalyzeFunctionCapture(captureName string, node *sitter.Node, content []byte, analysis *types.FileAnalysis, config *types.LanguageConfig) {
 	switch captureName {
 	case "main_block":
 		// Use beginning of program as insertion point
@@ -78,10 +78,10 @@ func (h *PHPHandler) AnalyzeFunctionCapture(captureName string, node *sitter.Nod
 	}
 }
 
-func (h *PHPHandler) GetInsertionPointPriority(captureName string) int { return 1 }
+func (h *PHPInjector) GetInsertionPointPriority(captureName string) int { return 1 }
 
 // FallbackAnalyzeImports: try to place require after opening tag if no locations found
-func (h *PHPHandler) FallbackAnalyzeImports(content []byte, analysis *types.FileAnalysis) {
+func (h *PHPInjector) FallbackAnalyzeImports(content []byte, analysis *types.FileAnalysis) {
 	text := string(content)
 	lines := strings.Split(text, "\n")
 	line := 1
@@ -95,7 +95,7 @@ func (h *PHPHandler) FallbackAnalyzeImports(content []byte, analysis *types.File
 }
 
 // FallbackAnalyzeEntryPoints: if none detected, treat file start as entry
-func (h *PHPHandler) FallbackAnalyzeEntryPoints(content []byte, analysis *types.FileAnalysis) {
+func (h *PHPInjector) FallbackAnalyzeEntryPoints(content []byte, analysis *types.FileAnalysis) {
 	if len(analysis.EntryPoints) > 0 {
 		return
 	}

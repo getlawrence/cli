@@ -1,14 +1,16 @@
-# Lawrence - OpenTelemetry Codebase Analyzer
+# Lawrence CLI – Detect, Analyze, and Auto-Instrument OpenTelemetry Code
 
-Lawrence is a CLI tool for analyzing codebases to detect OpenTelemetry deployments and troubleshoot common issues across multiple programming languages.
+Lawrence CLI helps you quickly identify which programming languages and OpenTelemetry libraries a project uses, detect common misconfigurations, and produce actionable findings in text or JSON.
+It can then generate instrumentation code using built-in templates or your preferred coding agent (GitHub Copilot CLI, Gemini, Claude, OpenAI).
+Run in dry-run mode to preview changes or output ready-to-use scaffolding for immediate integration.
 
 ## Features
 
-🔍 **Multi-Language Support**: Analyze Go, Python, JavaScript, Java, .NET, Ruby, PHP
-📦 **Library Detection**: Automatically detect OpenTelemetry libraries and versions
-⚠️ **Issue Detection**: Find common problems and get actionable recommendations
-🔧 **Extensible**: Add custom detectors and language support
-📊 **Multiple Output Formats**: Text, JSON output options
+- 🔍 **Multi-Language Support**: Analyze Go, Python, JavaScript, Java, .NET, Ruby, PHP
+- 📦 **Library Detection**: Automatically detect OpenTelemetry libraries and versions
+- ⚠️ **Issue Detection**: Find common problems and get actionable recommendations
+- 🔧 **Extensible**: Add custom detectors and language support
+- 📊 **Multiple Output Formats**: Text, JSON output options
 
 ## Installation
 
@@ -107,11 +109,10 @@ Flags:
 Analyze a codebase and generate OpenTelemetry instrumentation using AI or templates.
 
 ```bash
-lawrence codegen --mode template --method code --path /path/to/project --dry-run
+lawrence codegen [path] --mode template --dry-run
 
 Flags:
   -l, --language string       Target language (go, javascript, python, java, dotnet, ruby, php)
-  -m, --method string         Installation method (code, auto, ebpf) (default "code")
   -a, --agent string          Preferred coding agent (gemini, claude, openai, github)
       --list-agents           List available coding agents
       --list-templates        List available templates

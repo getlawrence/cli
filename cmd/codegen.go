@@ -3,7 +3,7 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"strings"
+	"path/filepath"
 
 	"github.com/getlawrence/cli/internal/codegen/generator"
 	"github.com/getlawrence/cli/internal/codegen/types"
@@ -39,15 +39,15 @@ This command will:
 
 var (
 	language       string
-	method         string
 	agentType      string
-	codebasePath   string
 	listAgents     bool
 	listTemplates  bool
 	listStrategies bool
 	generationMode string
 	outputDir      string
 	dryRun         bool
+	showPrompt     bool
+	savePrompt     string
 )
 
 func init() {
@@ -55,12 +55,8 @@ func init() {
 
 	codegenCmd.Flags().StringVarP(&language, "language", "l", "",
 		"Target language (go, javascript, python, java, dotnet, ruby, php)")
-	codegenCmd.Flags().StringVarP(&method, "method", "m", "code",
-		"Installation method (code, auto, ebpf)")
 	codegenCmd.Flags().StringVarP(&agentType, "agent", "a", "",
 		"Preferred coding agent (gemini, claude, openai, github)")
-	codegenCmd.Flags().StringVarP(&codebasePath, "path", "p", ".",
-		"Path to codebase")
 	codegenCmd.Flags().BoolVar(&listAgents, "list-agents", false,
 		"List available coding agents")
 	codegenCmd.Flags().BoolVar(&listTemplates, "list-templates", false,
@@ -73,10 +69,26 @@ func init() {
 		"Output directory for generated files (template mode only)")
 	codegenCmd.Flags().BoolVar(&dryRun, "dry-run", false,
 		"Show what would be generated without writing files (template mode only)")
+	// AI mode flags
+	codegenCmd.Flags().BoolVar(&showPrompt, "show-prompt", false,
+		"Print the generated agent prompt before execution (AI mode only)")
+	codegenCmd.Flags().StringVar(&savePrompt, "save-prompt", "",
+		"Save the generated agent prompt to the given file path (AI mode only)")
 }
 
 func runCodegen(cmd *cobra.Command, args []string) error {
 	ctx := context.Background()
+
+	targetPath := "."
+	if len(args) > 0 {
+		targetPath = args[0]
+	}
+
+	// Convert to absolute path
+	absPath, err := filepath.Abs(targetPath)
+	if err != nil {
+		return fmt.Errorf("failed to resolve path: %w", err)
+	}
 
 	// Create analysis engine
 	codebaseAnalyzer := detector.NewCodebaseAnalyzer([]detector.IssueDetector{
@@ -126,23 +138,17 @@ func runCodegen(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("agent type is required for AI mode. Use --list-agents to see available options")
 	}
 
-	// Validate method
-	validMethods := []string{"code", "auto", "ebpf"}
-	if !contains(validMethods, method) {
-		return fmt.Errorf("invalid method %s. Valid options: %s",
-			method, strings.Join(validMethods, ", "))
-	}
-
 	req := types.GenerationRequest{
-		CodebasePath: codebasePath,
+		CodebasePath: absPath,
 		Language:     language,
-		Method:       method,
-		AgentType:    agentType, // Deprecated field for backward compatibility
+		AgentType:    agentType,
 		Config: types.StrategyConfig{
 			Mode:            mode,
 			AgentType:       agentType,
 			OutputDirectory: outputDir,
 			DryRun:          dryRun,
+			ShowPrompt:      showPrompt,
+			SavePrompt:      savePrompt,
 		},
 	}
 

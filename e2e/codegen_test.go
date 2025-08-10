@@ -43,9 +43,8 @@ func TestCodegenTemplateDryRunOnGoSample(t *testing.T) {
 		defer cancel()
 		args := []string{
 			"codegen",
+			samplePath,
 			"--mode", "template",
-			"--method", "code",
-			"--path", samplePath,
 			"--output", outputDir,
 			"--dry-run",
 		}
@@ -111,9 +110,8 @@ func TestCodegenTemplateDryRunOnOtherSamples(t *testing.T) {
 			defer cancel()
 			args := []string{
 				"codegen",
+				samplePath,
 				"--mode", "template",
-				"--method", "code",
-				"--path", samplePath,
 				"--dry-run",
 			}
 			cmd := exec.CommandContext(ctx, binaryPath, args...)

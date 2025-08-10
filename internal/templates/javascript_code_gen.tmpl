@@ -1,20 +1,34 @@
-// OpenTelemetry bootstrap for {{.ServiceName}} (JavaScript/Node.js)
+// OpenTelemetry bootstrap for {{.ServiceName}} (JavaScript/Node.js, CommonJS)
 
 // Install packages:
 // npm install @opentelemetry/api @opentelemetry/sdk-node @opentelemetry/exporter-trace-otlp-http{{range .Instrumentations}} @opentelemetry/instrumentation-{{.}}{{end}}
 
-// Create file: telemetry/otel.js and import it at process start
+// Create file: otel.js and require it at process start
 
-export async function setupOTel() {
-  const { NodeSDK } = await import("@opentelemetry/sdk-node");
-  const { OTLPTraceExporter } = await import("@opentelemetry/exporter-trace-otlp-http");
+const { NodeSDK } = require("@opentelemetry/sdk-node");
+const { OTLPTraceExporter } = require("@opentelemetry/exporter-trace-otlp-http");
+{{- if .Instrumentations }}
+const instrumentations = [];
+{{- range .Instrumentations }}
+{{- if eq . "express" }}
+instrumentations.push(new (require("@opentelemetry/instrumentation-express").ExpressInstrumentation)());
+{{- else if eq . "http" }}
+instrumentations.push(new (require("@opentelemetry/instrumentation-http").HttpInstrumentation)());
+{{- else if eq . "koa" }}
+instrumentations.push(new (require("@opentelemetry/instrumentation-koa").KoaInstrumentation)());
+{{- else }}
+// TODO: add support for {{.}} instrumentation
+{{- end }}
+{{- end }}
+{{- end }}
 
-  const sdk = new NodeSDK({
-    traceExporter: new OTLPTraceExporter(),
-  });
-  await sdk.start();
-  process.on("SIGTERM", async () => { await sdk.shutdown(); });
-  return sdk;
-}
+const sdk = new NodeSDK({
+  traceExporter: new OTLPTraceExporter({}),
+  {{- if .Instrumentations }}
+  instrumentations,
+  {{- end }}
+});
 
+sdk.start();
 
+process.on("SIGTERM", async () => { await sdk.shutdown(); });

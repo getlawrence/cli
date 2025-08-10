@@ -24,30 +24,20 @@ const (
 type TemplateGenerationStrategy struct {
 	templateEngine   *templates.TemplateEngine
 	codeInjector     *injector.CodeInjector
-	languageRegistry *LanguageGeneratorRegistry
 	dependencyWriter *dependency.DependencyWriter
 }
 
 // NewTemplateGenerationStrategy creates a new template-based generation strategy
 func NewTemplateGenerationStrategy(templateEngine *templates.TemplateEngine) *TemplateGenerationStrategy {
-	registry := NewLanguageGeneratorRegistry()
-
-	registry.RegisterLanguage("python", NewPythonCodeGenerator())
-	registry.RegisterLanguage("go", NewGoCodeGenerator())
-	registry.RegisterLanguage("javascript", NewJavaScriptCodeGenerator())
-	registry.RegisterLanguage("java", NewJavaCodeGenerator())
-	registry.RegisterLanguage("csharp", NewDotNetCodeGenerator())
-	registry.RegisterLanguage("dotnet", NewDotNetCodeGenerator())
-	registry.RegisterLanguage("ruby", NewRubyCodeGenerator())
-	registry.RegisterLanguage("php", NewPHPCodeGenerator())
-
 	return &TemplateGenerationStrategy{
 		templateEngine:   templateEngine,
 		codeInjector:     injector.NewCodeInjector(),
-		languageRegistry: registry,
 		dependencyWriter: dependency.NewDependencyWriter(),
 	}
 }
+
+// NOTE: Language-specific instrumentation prerequisite resolution is handled
+// by language dependency handlers to keep this generator language-agnostic.
 
 // GetName returns the name of this strategy
 func (s *TemplateGenerationStrategy) GetName() string {
@@ -66,7 +56,7 @@ func (s *TemplateGenerationStrategy) GetRequiredFlags() []string {
 
 // GetSupportedLanguages returns all supported languages for template generation
 func (s *TemplateGenerationStrategy) GetSupportedLanguages() []string {
-	return s.languageRegistry.GetSupportedLanguages()
+	return getSupportedLanguages()
 }
 
 // GenerateCode generates code directly using templates
@@ -89,12 +79,13 @@ func (s *TemplateGenerationStrategy) GenerateCode(ctx context.Context, opportuni
 		languageOpportunities := s.groupOpportunitiesByLanguage(opps)
 
 		for language, langOpportunities := range languageOpportunities {
+			normalizedLanguage := normalizeLanguageForGeneration(language)
 			operationsData := s.analyzeOpportunities(langOpportunities)
-			operationsSummary = append(operationsSummary, s.createOperationsSummary(language, operationsData)...)
+			operationsSummary = append(operationsSummary, s.createOperationsSummary(normalizedLanguage, operationsData)...)
 			dependencyPath := s.determineOutputDirectory(req, directory)
 
-			if err := s.addDependencies(ctx, dependencyPath, language, operationsData, req); err != nil {
-				fmt.Printf("Warning: failed to add dependencies for %s: %v\n", language, err)
+			if err := s.addDependencies(ctx, dependencyPath, normalizedLanguage, operationsData, req); err != nil {
+				fmt.Printf("Warning: failed to add dependencies for %s: %v\n", normalizedLanguage, err)
 			}
 
 			// Handle entry point modifications
@@ -106,9 +97,9 @@ func (s *TemplateGenerationStrategy) GenerateCode(ctx context.Context, opportuni
 			}
 
 			// Handle regular file generation
-			files, err := s.generateCodeForLanguage(language, langOpportunities, req, directory)
+			files, err := s.generateCodeForLanguage(normalizedLanguage, langOpportunities, req, directory)
 			if err != nil {
-				fmt.Printf("Warning: failed to generate code for %s: %v\n", language, err)
+				fmt.Printf("Warning: failed to generate code for %s: %v\n", normalizedLanguage, err)
 				continue
 			}
 			generatedFiles = append(generatedFiles, files...)
@@ -137,28 +128,17 @@ func (s *TemplateGenerationStrategy) GenerateCode(ctx context.Context, opportuni
 }
 
 func (s *TemplateGenerationStrategy) generateCodeForLanguage(language string, opportunities []domain.Opportunity, req types.GenerationRequest, directory string) ([]string, error) {
-	// Get language generator
-	languageGen, exists := s.languageRegistry.GetGenerator(strings.ToLower(language))
-	if !exists {
+	operationsData := s.analyzeOpportunities(opportunities)
+	normalized := strings.ToLower(language)
+	if _, ok := supportedLanguageExtensions[normalized]; !ok {
 		return nil, fmt.Errorf("template-based code generation not supported for language: %s", language)
 	}
-
-	// Convert string method to InstallationMethod
-	method := templates.InstallationMethod(req.Method)
-
-	// Validate method is supported for this language
-	if err := languageGen.ValidateMethod(method); err != nil {
-		return nil, err
-	}
-
-	operationsData := s.analyzeOpportunities(opportunities)
-	return s.generateCodeWithLanguageGenerator(languageGen, method, operationsData, req, directory)
+	return s.generateCodeWithLanguage(normalized, operationsData, req, directory)
 }
 
-// generateCodeWithLanguageGenerator is a generic method for generating code using any language generator
-func (s *TemplateGenerationStrategy) generateCodeWithLanguageGenerator(
-	languageGen LanguageCodeGenerator,
-	method templates.InstallationMethod,
+// generateCodeWithLanguage renders the template and writes the language-specific output file.
+func (s *TemplateGenerationStrategy) generateCodeWithLanguage(
+	language string,
 	operationsData *types.OperationsData,
 	req types.GenerationRequest,
 	directory string,
@@ -167,8 +147,7 @@ func (s *TemplateGenerationStrategy) generateCodeWithLanguageGenerator(
 
 	// Create template data
 	data := templates.TemplateData{
-		Language:          languageGen.GetLanguageName(),
-		Method:            method,
+		Language:          language,
 		Instrumentations:  operationsData.InstallInstrumentations,
 		ServiceName:       serviceName,
 		InstallOTEL:       operationsData.InstallOTEL,
@@ -177,25 +156,25 @@ func (s *TemplateGenerationStrategy) generateCodeWithLanguageGenerator(
 	}
 
 	// Generate code using template
-	code, err := s.templateEngine.GenerateInstructions(languageGen.GetLanguageName(), method, data)
+	code, err := s.templateEngine.GenerateInstructions(language, data)
 	if err != nil {
-		return nil, fmt.Errorf("failed to generate %s code: %w", languageGen.GetLanguageName(), err)
+		return nil, fmt.Errorf("failed to generate %s code: %w", language, err)
 	}
 
 	// Determine output directory and filename
 	outputDir := s.determineOutputDirectory(req, directory)
-	filename := languageGen.GetOutputFilename(method)
+	filename := getOutputFilenameForLanguage(language)
 	outputPath := filepath.Join(outputDir, filename)
 
 	if req.Config.DryRun {
-		fmt.Printf("Generated %s instrumentation code (dry run):\n", languageGen.GetLanguageName())
+		fmt.Printf("Generated %s instrumentation code (dry run):\n", language)
 		fmt.Printf(dryRunOutputFormat, outputPath)
 		fmt.Printf(dryRunContentFormat, code)
 		return []string{outputPath}, nil
 	}
 
 	if err := s.writeCodeToFile(outputPath, code); err != nil {
-		return nil, fmt.Errorf("failed to write %s code to %s: %w", languageGen.GetLanguageName(), outputPath, err)
+		return nil, fmt.Errorf("failed to write %s code to %s: %w", language, outputPath, err)
 	}
 
 	return []string{outputPath}, nil
@@ -327,6 +306,17 @@ func (s *TemplateGenerationStrategy) groupOpportunitiesByLanguage(opportunities 
 	}
 
 	return grouped
+}
+
+// normalizeLanguageForGeneration maps language aliases to the canonical identifiers used by
+// dependency management, templates, and injectors.
+func normalizeLanguageForGeneration(language string) string {
+	switch strings.ToLower(language) {
+	case "js", "node", "nodejs":
+		return "javascript"
+	default:
+		return strings.ToLower(language)
+	}
 }
 
 // handleEntryPointModifications processes entry point modification opportunities

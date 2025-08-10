@@ -9,14 +9,14 @@ import (
 	"github.com/smacker/go-tree-sitter/python"
 )
 
-// PythonHandler implements LanguageHandler for Python
-type PythonHandler struct {
+// PythonInjector implements LanguageHandler for Python
+type PythonInjector struct {
 	config *types.LanguageConfig
 }
 
-// NewPythonHandler creates a new Python language handler
-func NewPythonHandler() *PythonHandler {
-	return &PythonHandler{
+// NewPythonInjector creates a new Python language handler
+func NewPythonInjector() *PythonInjector {
+	return &PythonInjector{
 		config: &types.LanguageConfig{
 			Language:       "Python",
 			FileExtensions: []string{".py", ".pyw"},
@@ -57,7 +57,6 @@ func NewPythonHandler() *PythonHandler {
 			ImportTemplate: `from opentelemetry import %s`,
 			InitializationTemplate: `
     # Initialize OpenTelemetry
-    from otel import init_tracer
     tracer_provider = init_tracer()
 `,
 			CleanupTemplate: `tp.shutdown()`,
@@ -66,25 +65,24 @@ func NewPythonHandler() *PythonHandler {
 }
 
 // GetLanguage returns the tree-sitter language parser for Python
-func (h *PythonHandler) GetLanguage() *sitter.Language {
+func (h *PythonInjector) GetLanguage() *sitter.Language {
 	return python.GetLanguage()
 }
 
 // GetConfig returns the language configuration for Python
-func (h *PythonHandler) GetConfig() *types.LanguageConfig {
+func (h *PythonInjector) GetConfig() *types.LanguageConfig {
 	return h.config
 }
 
 // GetRequiredImports returns the list of imports needed for OTEL in Python
-func (h *PythonHandler) GetRequiredImports() []string {
-	return []string{
-		"opentelemetry.sdk.trace",
-		"opentelemetry.exporter.otlp.proto.http.trace_exporter",
-	}
+func (h *PythonInjector) GetRequiredImports() []string {
+	// Rely on the generated otel.py bootstrap to handle OTEL imports.
+	// Avoid injecting imports into user files to prevent syntax issues (e.g., splitting try/except).
+	return []string{}
 }
 
 // FormatImports formats Python import statements
-func (h *PythonHandler) FormatImports(imports []string, hasExistingImports bool) string {
+func (h *PythonInjector) FormatImports(imports []string, hasExistingImports bool) string {
 	if len(imports) == 0 {
 		return ""
 	}
@@ -97,7 +95,7 @@ func (h *PythonHandler) FormatImports(imports []string, hasExistingImports bool)
 }
 
 // FormatSingleImport formats a single Python import statement
-func (h *PythonHandler) FormatSingleImport(importPath string) string {
+func (h *PythonInjector) FormatSingleImport(importPath string) string {
 	if strings.Contains(importPath, ".") {
 		parts := strings.Split(importPath, ".")
 		return fmt.Sprintf("from %s import %s\n", strings.Join(parts[:len(parts)-1], "."), parts[len(parts)-1])
@@ -106,7 +104,7 @@ func (h *PythonHandler) FormatSingleImport(importPath string) string {
 }
 
 // AnalyzeImportCapture processes an import capture from tree-sitter query for Python
-func (h *PythonHandler) AnalyzeImportCapture(captureName string, node *sitter.Node, content []byte, analysis *types.FileAnalysis) {
+func (h *PythonInjector) AnalyzeImportCapture(captureName string, node *sitter.Node, content []byte, analysis *types.FileAnalysis) {
 	switch captureName {
 	case "import_path":
 		importPath := node.Content(content)
@@ -130,7 +128,7 @@ func (h *PythonHandler) AnalyzeImportCapture(captureName string, node *sitter.No
 }
 
 // AnalyzeFunctionCapture processes a function capture from tree-sitter query for Python
-func (h *PythonHandler) AnalyzeFunctionCapture(captureName string, node *sitter.Node, content []byte, analysis *types.FileAnalysis, config *types.LanguageConfig) {
+func (h *PythonInjector) AnalyzeFunctionCapture(captureName string, node *sitter.Node, content []byte, analysis *types.FileAnalysis, config *types.LanguageConfig) {
 	switch captureName {
 	case "main_if_block":
 		// Handle if __name__ == "__main__": pattern
@@ -178,7 +176,7 @@ func (h *PythonHandler) AnalyzeFunctionCapture(captureName string, node *sitter.
 }
 
 // findMainBlockWithRegex uses regex to find the if __name__ == '__main__': pattern
-func (h *PythonHandler) findMainBlockWithRegex(content []byte, analysis *types.FileAnalysis) {
+func (h *PythonInjector) findMainBlockWithRegex(content []byte, analysis *types.FileAnalysis) {
 	lines := strings.Split(string(content), "\n")
 
 	for i, line := range lines {
@@ -209,7 +207,7 @@ func (h *PythonHandler) findMainBlockWithRegex(content []byte, analysis *types.F
 		}
 	}
 } // GetInsertionPointPriority returns priority for Python insertion point types
-func (h *PythonHandler) GetInsertionPointPriority(captureName string) int {
+func (h *PythonInjector) GetInsertionPointPriority(captureName string) int {
 	switch captureName {
 	case "after_variables":
 		return 3 // High priority - after variable declarations
@@ -223,7 +221,7 @@ func (h *PythonHandler) GetInsertionPointPriority(captureName string) int {
 }
 
 // findBestInsertionPoint finds the optimal location to insert OTEL initialization code in Python
-func (h *PythonHandler) findBestInsertionPoint(bodyNode *sitter.Node, content []byte, config *types.LanguageConfig) types.InsertionPoint {
+func (h *PythonInjector) findBestInsertionPoint(bodyNode *sitter.Node, content []byte, config *types.LanguageConfig) types.InsertionPoint {
 	// Default to the beginning of the function body
 	defaultPoint := types.InsertionPoint{
 		LineNumber: bodyNode.StartPoint().Row + 1,
@@ -275,19 +273,28 @@ func (h *PythonHandler) findBestInsertionPoint(bodyNode *sitter.Node, content []
 }
 
 // detectExistingOTELSetup checks if OTEL initialization code already exists in Python
-func (h *PythonHandler) detectExistingOTELSetup(bodyNode *sitter.Node, content []byte) bool {
+func (h *PythonInjector) detectExistingOTELSetup(bodyNode *sitter.Node, content []byte) bool {
 	bodyContent := bodyNode.Content(content)
-	return strings.Contains(bodyContent, "initialize_otel") ||
+	if strings.Contains(bodyContent, "initialize_otel") ||
 		strings.Contains(bodyContent, "TracerProvider") ||
-		strings.Contains(bodyContent, "set_tracer_provider")
+		strings.Contains(bodyContent, "set_tracer_provider") {
+		return true
+	}
+	// Detect bootstrap usage inserted by our template
+	if strings.Contains(bodyContent, "from otel import init_tracer") ||
+		strings.Contains(bodyContent, "import otel") ||
+		strings.Contains(bodyContent, "init_tracer(") {
+		return true
+	}
+	return false
 }
 
 // FallbackAnalyzeImports for Python: no-op since tree-sitter captures are sufficient
-func (h *PythonHandler) FallbackAnalyzeImports(content []byte, analysis *types.FileAnalysis) {
+func (h *PythonInjector) FallbackAnalyzeImports(content []byte, analysis *types.FileAnalysis) {
 	// Intentionally empty
 }
 
 // FallbackAnalyzeEntryPoints uses regex to find the if __name__ == '__main__' block when tree-sitter misses it
-func (h *PythonHandler) FallbackAnalyzeEntryPoints(content []byte, analysis *types.FileAnalysis) {
+func (h *PythonInjector) FallbackAnalyzeEntryPoints(content []byte, analysis *types.FileAnalysis) {
 	h.findMainBlockWithRegex(content, analysis)
 }

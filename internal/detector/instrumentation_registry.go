@@ -52,7 +52,7 @@ func (s *InstrumentationRegistryService) GetInstrumentation(ctx context.Context,
 	packageName := s.PackageName(pkg.Name)
 
 	// Construct URL for instrumentation file
-	url := fmt.Sprintf("%s/instrumentation-%s-%s.yml", s.baseURL, pkg.Language, packageName)
+	url := fmt.Sprintf("%s/instrumentation-%s-%s.yml", s.baseURL, s.RegistryLanguage(pkg.Language), packageName)
 
 	// Create HTTP request with context
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
@@ -93,7 +93,7 @@ func (s *InstrumentationRegistryService) GetInstrumentation(ctx context.Context,
 		Title:        entry.Title,
 		Description:  entry.Description,
 		RegistryType: entry.RegistryType,
-		Language:     entry.Language,
+		Language:     s.CanonicalLanguage(entry.Language),
 		Tags:         entry.Tags,
 		License:      entry.License,
 		CreatedAt:    entry.CreatedAt,
@@ -129,6 +129,28 @@ func (s *InstrumentationRegistryService) PackageName(packageName string) string 
 	name = strings.ReplaceAll(name, "_", "-")
 
 	return name
+}
+
+// RegistryLanguage normalizes language names to the ones used by the registry filenames
+func (s *InstrumentationRegistryService) RegistryLanguage(language string) string {
+	lang := strings.ToLower(language)
+	switch lang {
+	case "javascript", "typescript":
+		return "js"
+	default:
+		return lang
+	}
+}
+
+// CanonicalLanguage normalizes registry language identifiers to our internal ones
+func (s *InstrumentationRegistryService) CanonicalLanguage(language string) string {
+	lang := strings.ToLower(language)
+	switch lang {
+	case "js", "node", "nodejs":
+		return "javascript"
+	default:
+		return lang
+	}
 }
 
 // GetAvailableInstrumentations returns all instrumentations for a given language

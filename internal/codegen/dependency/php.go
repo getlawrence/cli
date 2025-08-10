@@ -10,17 +10,17 @@ import (
 	"strings"
 )
 
-// PHPHandler implements DependencyHandler for PHP projects (Composer)
-type PHPHandler struct{}
+// PHPInjector implements DependencyHandler for PHP projects (Composer)
+type PHPInjector struct{}
 
-// NewPHPHandler creates a new PHP dependency handler
-func NewPHPHandler() *PHPHandler { return &PHPHandler{} }
+// NewPHPInjector creates a new PHP dependency handler
+func NewPHPInjector() *PHPInjector { return &PHPInjector{} }
 
 // GetLanguage returns the language this handler supports
-func (h *PHPHandler) GetLanguage() string { return "php" }
+func (h *PHPInjector) GetLanguage() string { return "php" }
 
 // AddDependencies adds the specified dependencies to composer.json (creates it if missing)
-func (h *PHPHandler) AddDependencies(ctx context.Context, projectPath string, dependencies []Dependency, dryRun bool) error {
+func (h *PHPInjector) AddDependencies(ctx context.Context, projectPath string, dependencies []Dependency, dryRun bool) error {
 	if len(dependencies) == 0 {
 		return nil
 	}
@@ -123,7 +123,7 @@ func (h *PHPHandler) AddDependencies(ctx context.Context, projectPath string, de
 }
 
 // GetCoreDependencies returns essential OpenTelemetry packages for PHP
-func (h *PHPHandler) GetCoreDependencies() []Dependency {
+func (h *PHPInjector) GetCoreDependencies() []Dependency {
 	return []Dependency{
 		{
 			Name:        "OpenTelemetry SDK",
@@ -137,13 +137,18 @@ func (h *PHPHandler) GetCoreDependencies() []Dependency {
 }
 
 // GetInstrumentationDependency returns instrumentation dependency for a specific package (none for minimal)
-func (h *PHPHandler) GetInstrumentationDependency(instrumentation string) *Dependency { return nil }
+func (h *PHPInjector) GetInstrumentationDependency(instrumentation string) *Dependency { return nil }
 
 // GetComponentDependency returns component dependencies (none for minimal)
-func (h *PHPHandler) GetComponentDependency(componentType, component string) *Dependency { return nil }
+func (h *PHPInjector) GetComponentDependency(componentType, component string) *Dependency { return nil }
+
+// ResolveInstrumentationPrerequisites for PHP currently returns the list unchanged.
+func (h *PHPInjector) ResolveInstrumentationPrerequisites(instrumentations []string) []string {
+	return instrumentations
+}
 
 // ValidateProjectStructure checks for composer.json presence and warns if missing
-func (h *PHPHandler) ValidateProjectStructure(projectPath string) error {
+func (h *PHPInjector) ValidateProjectStructure(projectPath string) error {
 	composerPath := filepath.Join(projectPath, "composer.json")
 	if _, err := os.Stat(composerPath); os.IsNotExist(err) {
 		fmt.Printf("No composer.json found in %s, will create one if needed.\n", projectPath)
@@ -152,7 +157,7 @@ func (h *PHPHandler) ValidateProjectStructure(projectPath string) error {
 }
 
 // GetDependencyFiles returns paths to dependency files
-func (h *PHPHandler) GetDependencyFiles(projectPath string) []string {
+func (h *PHPInjector) GetDependencyFiles(projectPath string) []string {
 	path := filepath.Join(projectPath, "composer.json")
 	if _, err := os.Stat(path); err == nil {
 		return []string{path}

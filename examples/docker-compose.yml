@@ -1,0 +1,110 @@
+services:
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.98.0
+    user: "0"
+    command: ["--config=/etc/otelcol-config.yaml"]
+    volumes:
+      - ./otel-collector-config.yaml:/etc/otelcol-config.yaml:ro
+      - ./.otel-data:/data
+    ports:
+      - "4318:4318"  # OTLP HTTP receiver
+
+  go-service:
+    build:
+      context: ./go
+      dockerfile: Dockerfile
+    environment:
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
+      - OTEL_SERVICE_NAME=examples-go
+      - OTEL_LOG_LEVEL=debug
+    depends_on:
+      - otel-collector
+    ports:
+      - "8080:8080"
+
+  js-service:
+    build:
+      context: ./js
+      dockerfile: Dockerfile
+    environment:
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
+      - OTEL_SERVICE_NAME=examples-js
+      - NODE_ENV=production
+      - OTEL_LOG_LEVEL=debug
+    depends_on:
+      - otel-collector
+    ports:
+      - "3000:3000"
+
+  python-service:
+    build:
+      context: ./python
+      dockerfile: Dockerfile
+    environment:
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
+      - OTEL_SERVICE_NAME=examples-python
+      - FLASK_ENV=production
+      - OTEL_LOG_LEVEL=debug
+    depends_on:
+      - otel-collector
+    ports:
+      - "5001:5000"
+
+  php-service:
+    build:
+      context: ./php
+      dockerfile: Dockerfile
+    environment:
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
+      - OTEL_SERVICE_NAME=examples-php
+      - OTEL_LOG_LEVEL=debug
+    depends_on:
+      - otel-collector
+    ports:
+      - "8000:8000"
+
+  ruby-service:
+    build:
+      context: ./ruby
+      dockerfile: Dockerfile
+    environment:
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
+      - OTEL_SERVICE_NAME=examples-ruby
+      - OTEL_LOG_LEVEL=debug
+    depends_on:
+      - otel-collector
+    ports:
+      - "4567:4567"
+
+  java-service:
+    profiles: ["extended"]
+    build:
+      context: ./java
+      dockerfile: Dockerfile
+    environment:
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
+      - OTEL_SERVICE_NAME=examples-java
+      - OTEL_LOG_LEVEL=debug
+    depends_on:
+      - otel-collector
+    ports:
+      - "8082:8082"
+
+  csharp-service:
+    build:
+      context: ./csharp
+      dockerfile: Dockerfile
+    environment:
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
+      - OTEL_SERVICE_NAME=examples-csharp
+      - ASPNETCORE_URLS=http://0.0.0.0:8083
+      - OTEL_LOG_LEVEL=debug
+    depends_on:
+      - otel-collector
+    ports:
+      - "8083:8083"
+
+networks:
+  default:
+    name: examples-net
+

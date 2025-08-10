@@ -36,6 +36,5 @@ cli
 lawrence
 main
 
-# otel instrumentation in examples directory
-examples/**/otel*
 node_modules
+vendor
