@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 
 	"github.com/getlawrence/cli/internal/agents"
@@ -124,6 +125,39 @@ func (s *AIGenerationStrategy) sendInstructionsToAgent(allInstructions []string,
 		Instructions: combinedInstructions,
 		TargetDir:    req.CodebasePath,
 		ServiceName:  filepath.Base(req.CodebasePath), // Use directory name as default service name
+	}
+
+	// If requested (or in dry-run), generate and show/save the prompt before execution
+	if req.Config.ShowPrompt || req.Config.SavePrompt != "" || req.Config.DryRun {
+		prompt, err := s.agentDetector.GeneratePrompt(agents.AgentExecutionRequest{
+			Language:               agentRequest.Language,
+			Instructions:           agentRequest.Instructions,
+			TargetDir:              agentRequest.TargetDir,
+			ServiceName:            agentRequest.ServiceName,
+			DetectedFrameworks:     agentRequest.DetectedFrameworks,
+			AdditionalRequirements: agentRequest.AdditionalRequirements,
+			TemplateContent:        agentRequest.TemplateContent,
+		})
+		if err != nil {
+			return fmt.Errorf("failed to generate prompt: %v", err)
+		}
+		if req.Config.ShowPrompt || req.Config.DryRun {
+			fmt.Print("\n===== AGENT PROMPT =====\n\n")
+			fmt.Println(prompt)
+			fmt.Print("\n========================\n\n")
+		}
+		if req.Config.SavePrompt != "" {
+			if err := os.WriteFile(req.Config.SavePrompt, []byte(prompt), 0o644); err != nil {
+				return fmt.Errorf("failed to save prompt to %s: %v", req.Config.SavePrompt, err)
+			}
+			fmt.Printf("Saved prompt to %s\n", req.Config.SavePrompt)
+		}
+	}
+
+	// In AI dry-run mode, skip invoking the external agent
+	if req.Config.DryRun {
+		fmt.Println("AI dry-run: skipping agent execution")
+		return nil
 	}
 
 	// Execute with selected agent - single call with comprehensive instructions

@@ -46,6 +46,8 @@ var (
 	generationMode string
 	outputDir      string
 	dryRun         bool
+	showPrompt     bool
+	savePrompt     string
 )
 
 func init() {
@@ -67,6 +69,11 @@ func init() {
 		"Output directory for generated files (template mode only)")
 	codegenCmd.Flags().BoolVar(&dryRun, "dry-run", false,
 		"Show what would be generated without writing files (template mode only)")
+	// AI mode flags
+	codegenCmd.Flags().BoolVar(&showPrompt, "show-prompt", false,
+		"Print the generated agent prompt before execution (AI mode only)")
+	codegenCmd.Flags().StringVar(&savePrompt, "save-prompt", "",
+		"Save the generated agent prompt to the given file path (AI mode only)")
 }
 
 func runCodegen(cmd *cobra.Command, args []string) error {
@@ -140,6 +147,8 @@ func runCodegen(cmd *cobra.Command, args []string) error {
 			AgentType:       agentType,
 			OutputDirectory: outputDir,
 			DryRun:          dryRun,
+			ShowPrompt:      showPrompt,
+			SavePrompt:      savePrompt,
 		},
 	}
 

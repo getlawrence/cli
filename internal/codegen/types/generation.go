@@ -16,6 +16,9 @@ type StrategyConfig struct {
 	AgentType       string         `json:"agent_type,omitempty"`
 	OutputDirectory string         `json:"output_directory,omitempty"`
 	DryRun          bool           `json:"dry_run,omitempty"`
+	// AI mode options
+	ShowPrompt bool   `json:"show_prompt,omitempty"`
+	SavePrompt string `json:"save_prompt,omitempty"`
 }
 
 // GenerationRequest contains parameters for code generation
