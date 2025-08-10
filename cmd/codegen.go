@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	"github.com/getlawrence/cli/internal/codegen/generator"
@@ -41,7 +42,6 @@ var (
 	language       string
 	method         string
 	agentType      string
-	codebasePath   string
 	listAgents     bool
 	listTemplates  bool
 	listStrategies bool
@@ -59,8 +59,6 @@ func init() {
 		"Installation method (code, auto, ebpf)")
 	codegenCmd.Flags().StringVarP(&agentType, "agent", "a", "",
 		"Preferred coding agent (gemini, claude, openai, github)")
-	codegenCmd.Flags().StringVarP(&codebasePath, "path", "p", ".",
-		"Path to codebase")
 	codegenCmd.Flags().BoolVar(&listAgents, "list-agents", false,
 		"List available coding agents")
 	codegenCmd.Flags().BoolVar(&listTemplates, "list-templates", false,
@@ -77,6 +75,17 @@ func init() {
 
 func runCodegen(cmd *cobra.Command, args []string) error {
 	ctx := context.Background()
+
+	targetPath := "."
+	if len(args) > 0 {
+		targetPath = args[0]
+	}
+
+	// Convert to absolute path
+	absPath, err := filepath.Abs(targetPath)
+	if err != nil {
+		return fmt.Errorf("failed to resolve path: %w", err)
+	}
 
 	// Create analysis engine
 	codebaseAnalyzer := detector.NewCodebaseAnalyzer([]detector.IssueDetector{
@@ -134,7 +143,7 @@ func runCodegen(cmd *cobra.Command, args []string) error {
 	}
 
 	req := types.GenerationRequest{
-		CodebasePath: codebasePath,
+		CodebasePath: absPath,
 		Language:     language,
 		Method:       method,
 		AgentType:    agentType, // Deprecated field for backward compatibility

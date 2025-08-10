@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/getlawrence/cli/internal/detector"
@@ -94,11 +95,11 @@ func runAnalyze(cmd *cobra.Command, args []string) error {
 	case "json":
 		return outputJSON(analysis)
 	default:
-		return outputText(analysis, detailed, verbose)
+		return outputText(analysis, detailed)
 	}
 }
 
-func outputText(analysis *detector.Analysis, detailed, verbose bool) error {
+func outputText(analysis *detector.Analysis, detailed bool) error {
 	fmt.Printf("📊 OpenTelemetry Analysis Results\n")
 	fmt.Printf("=================================\n\n")
 
@@ -119,11 +120,12 @@ func outputText(analysis *detector.Analysis, detailed, verbose bool) error {
 		}
 	}
 
-	// Convert detected languages map to slice
+	// Convert detected languages map to a sorted slice for stable output
 	var languageSlice []string
 	for lang := range detectedLanguages {
 		languageSlice = append(languageSlice, lang)
 	}
+	sort.Strings(languageSlice)
 
 	// Summary
 	fmt.Printf("📂 Project Path: %s\n", analysis.RootPath)
@@ -134,11 +136,39 @@ func outputText(analysis *detector.Analysis, detailed, verbose bool) error {
 	fmt.Printf("📁 Directories Analyzed: %d\n", len(analysis.DirectoryAnalyses))
 	fmt.Printf("⚠️  Issues Found: %d\n\n", len(allIssues))
 
+	// Monorepo overview (when multiple directories exist)
+	if len(analysis.DirectoryAnalyses) > 1 {
+		fmt.Printf("📚 Monorepo Overview:\n")
+		fmt.Printf("--------------------\n")
+		// Stable iteration order
+		var dirs []string
+		for directory := range analysis.DirectoryAnalyses {
+			dirs = append(dirs, directory)
+		}
+		sort.Strings(dirs)
+
+		for _, directory := range dirs {
+			dirAnalysis := analysis.DirectoryAnalyses[directory]
+			fmt.Printf("  📂 %s (%s)\n", directory, dirAnalysis.Language)
+			fmt.Printf("    📦 Libraries: %d, 📥 Packages: %d, 🔧 Instrumentations: %d, ⚠️ Issues: %d\n",
+				len(dirAnalysis.Libraries), len(dirAnalysis.Packages),
+				len(dirAnalysis.AvailableInstrumentations), len(dirAnalysis.Issues))
+		}
+		fmt.Println()
+	}
+
 	// Directory-specific analysis
 	if len(analysis.DirectoryAnalyses) > 0 && detailed {
 		fmt.Printf("📁 Directory Analysis:\n")
 		fmt.Printf("---------------------\n")
-		for directory, dirAnalysis := range analysis.DirectoryAnalyses {
+		// Stable iteration order
+		var dirs []string
+		for directory := range analysis.DirectoryAnalyses {
+			dirs = append(dirs, directory)
+		}
+		sort.Strings(dirs)
+		for _, directory := range dirs {
+			dirAnalysis := analysis.DirectoryAnalyses[directory]
 			fmt.Printf("  📂 %s (%s)\n", directory, dirAnalysis.Language)
 			fmt.Printf("    📦 Libraries: %d, Packages: %d, Instrumentations: %d, Issues: %d\n",
 				len(dirAnalysis.Libraries), len(dirAnalysis.Packages),
@@ -199,26 +229,63 @@ func outputText(analysis *detector.Analysis, detailed, verbose bool) error {
 		fmt.Println()
 	}
 
-	// Issues
+	// Issues (grouped by directory when monorepo)
 	if len(allIssues) > 0 {
 		fmt.Printf("⚠️  Issues and Recommendations:\n")
 		fmt.Printf("-------------------------------\n")
-		fmt.Printf("Total Issues Found: %d\n\n", len(allIssues))
-		for _, issue := range allIssues {
-			fmt.Printf("  • %s (%s)\n", issue.Title, issue.Severity)
-			if issue.Description != "" {
-				fmt.Printf("    📖 %s\n", issue.Description)
+		if len(analysis.DirectoryAnalyses) <= 1 {
+			fmt.Printf("Total Issues Found: %d\n\n", len(allIssues))
+			for _, issue := range allIssues {
+				fmt.Printf("  • %s (%s)\n", issue.Title, issue.Severity)
+				if issue.Description != "" {
+					fmt.Printf("    📖 %s\n", issue.Description)
+				}
+				if issue.Suggestion != "" {
+					fmt.Printf("    💡 %s\n", issue.Suggestion)
+				}
+				if detailed && len(issue.References) > 0 {
+					fmt.Printf("    📚 References: %s\n", strings.Join(issue.References, ", "))
+				}
+				if detailed && issue.File != "" {
+					fmt.Printf("    📄 File: %s, Line: %d\n", issue.File, issue.Line)
+				}
+				fmt.Println()
 			}
-			if issue.Suggestion != "" {
-				fmt.Printf("    💡 %s\n", issue.Suggestion)
+		} else {
+			// Group by directory
+			// Stable iteration order
+			var dirs []string
+			for directory := range analysis.DirectoryAnalyses {
+				dirs = append(dirs, directory)
 			}
-			if detailed && len(issue.References) > 0 {
-				fmt.Printf("    📚 References: %s\n", strings.Join(issue.References, ", "))
+			sort.Strings(dirs)
+
+			totalIssues := 0
+			for _, directory := range dirs {
+				dirAnalysis := analysis.DirectoryAnalyses[directory]
+				if len(dirAnalysis.Issues) == 0 {
+					continue
+				}
+				fmt.Printf("📂 %s (%s) — %d issue(s)\n", directory, dirAnalysis.Language, len(dirAnalysis.Issues))
+				for _, issue := range dirAnalysis.Issues {
+					fmt.Printf("  • %s (%s)\n", issue.Title, issue.Severity)
+					if issue.Description != "" {
+						fmt.Printf("    📖 %s\n", issue.Description)
+					}
+					if issue.Suggestion != "" {
+						fmt.Printf("    💡 %s\n", issue.Suggestion)
+					}
+					if detailed && len(issue.References) > 0 {
+						fmt.Printf("    📚 References: %s\n", strings.Join(issue.References, ", "))
+					}
+					if detailed && issue.File != "" {
+						fmt.Printf("    📄 File: %s, Line: %d\n", issue.File, issue.Line)
+					}
+					fmt.Println()
+					totalIssues++
+				}
 			}
-			if detailed && issue.File != "" {
-				fmt.Printf("    📄 File: %s, Line: %d\n", issue.File, issue.Line)
-			}
-			fmt.Println()
+			fmt.Printf("Total Issues Found: %d\n", totalIssues)
 		}
 	} else {
 		fmt.Printf("✅ No issues found! Your OpenTelemetry setup looks good.\n")
