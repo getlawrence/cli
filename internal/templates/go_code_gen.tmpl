@@ -7,11 +7,12 @@ import (
 	"time"
 
 	"go.opentelemetry.io/otel"
+	attribute "go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/resource"
-	"go.opentelemetry.io/otel/sdk/trace"
-	semconv "go.opentelemetry.io/otel/semconv/v1.21.0"
+    "go.opentelemetry.io/otel/sdk/trace"
+
 {{range .Instrumentations}}
 {{if eq . "otelhttp"}}	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"{{end}}
 {{if eq . "otelgin"}}	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"{{end}}
@@ -48,10 +49,10 @@ func InitializeOTEL(config *OTELConfig) (*trace.TracerProvider, error) {
 	res, err := resource.Merge(
 		resource.Default(),
 		resource.NewWithAttributes(
-			semconv.SchemaURL,
-			semconv.ServiceNameKey.String(config.ServiceName),
-			semconv.ServiceVersionKey.String(config.ServiceVersion),
-			semconv.DeploymentEnvironmentKey.String(config.Environment),
+			"",
+			attribute.String("service.name", config.ServiceName),
+			attribute.String("service.version", config.ServiceVersion),
+			attribute.String("deployment.environment", config.Environment),
 		),
 	)
 	if err != nil {

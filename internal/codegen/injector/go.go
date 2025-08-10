@@ -101,14 +101,12 @@ func (h *GoInjector) GetConfig() *types.LanguageConfig {
 
 // GetRequiredImports returns the list of imports needed for OTEL in Go
 func (h *GoInjector) GetRequiredImports() []string {
-	return []string{
-		"go.opentelemetry.io/otel",
-		"go.opentelemetry.io/otel/trace",
-		"go.opentelemetry.io/otel/sdk/trace",
-		"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp",
-		"context",
-		"log",
-	}
+    // Only import what the injected initialization snippet directly uses.
+    // The generated OTEL helper lives in the same package, so no OTEL imports are needed here.
+    return []string{
+        "context",
+        "log",
+    }
 }
 
 // FormatImports formats Go import statements

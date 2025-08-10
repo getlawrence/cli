@@ -1,4 +1,4 @@
-FROM golang:1.22-alpine AS build
+FROM golang:1.23-alpine AS build
 WORKDIR /app
 COPY go.mod .
 RUN --mount=type=cache,target=/go/pkg/mod go mod download
