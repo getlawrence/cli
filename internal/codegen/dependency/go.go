@@ -121,7 +121,7 @@ func (h *GoInjector) GetCoreDependencies() []Dependency {
 			Name:        "OpenTelemetry Semantic Conventions",
 			Version:     "",
 			Language:    "go",
-			ImportPath:  "go.opentelemetry.io/otel/semconv/v1.21.0",
+			ImportPath:  "go.opentelemetry.io/otel/semconv/v1.34.0",
 			Category:    "core",
 			Description: "OpenTelemetry semantic conventions",
 			Required:    true,

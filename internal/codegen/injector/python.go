@@ -77,10 +77,9 @@ func (h *PythonInjector) GetConfig() *types.LanguageConfig {
 
 // GetRequiredImports returns the list of imports needed for OTEL in Python
 func (h *PythonInjector) GetRequiredImports() []string {
-	return []string{
-		"opentelemetry.sdk.trace",
-		"opentelemetry.exporter.otlp.proto.http.trace_exporter",
-	}
+	// Rely on the generated otel.py bootstrap to handle OTEL imports.
+	// Avoid injecting imports into user files to prevent syntax issues (e.g., splitting try/except).
+	return []string{}
 }
 
 // FormatImports formats Python import statements

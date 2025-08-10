@@ -3,6 +3,7 @@ package e2e
 import (
 	"bufio"
 	"context"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -107,7 +108,7 @@ func TestExamplesStackCodegenAndOTEL(t *testing.T) {
 	}()
 
 	// Give services a moment
-	time.Sleep(5 * time.Second)
+	time.Sleep(10 * time.Second)
 
 	// Stimulate each service to emit at least one request
 	hits := []struct{ url string }{
@@ -116,12 +117,38 @@ func TestExamplesStackCodegenAndOTEL(t *testing.T) {
 		{"http://localhost:5001/"},
 	}
 	for _, h := range hits {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		cmd := exec.CommandContext(ctx, "curl", "-sf", h.url)
-		out, err := cmd.CombinedOutput()
-		cancel()
-		if err != nil {
-			t.Fatalf("failed to hit %s: %v\n%s", h.url, err, string(out))
+		var lastErr error
+		for attempt := 0; attempt < 15; attempt++ {
+			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+			cmd := exec.CommandContext(ctx, "curl", "-sf", h.url)
+			out, err := cmd.CombinedOutput()
+			cancel()
+			if err == nil {
+				lastErr = nil
+				break
+			}
+			lastErr = fmt.Errorf("%v: %s", err, string(out))
+			time.Sleep(1 * time.Second)
+		}
+		if lastErr != nil {
+			// Diagnostic: show compose ps and python-service logs
+			{
+				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+				defer cancel()
+				cmd := exec.CommandContext(ctx, "docker", "compose", "-f", composeFile, "ps")
+				cmd.Dir = examplesDir
+				out, _ := cmd.CombinedOutput()
+				t.Logf("docker compose ps\n%s", string(out))
+			}
+			{
+				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+				defer cancel()
+				cmd := exec.CommandContext(ctx, "docker", "compose", "-f", composeFile, "logs", "python-service")
+				cmd.Dir = examplesDir
+				out, _ := cmd.CombinedOutput()
+				t.Logf("python-service logs:\n%s", string(out))
+			}
+			t.Fatalf("failed to hit %s after retries: %v", h.url, lastErr)
 		}
 	}
 
