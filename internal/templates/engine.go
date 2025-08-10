@@ -70,45 +70,16 @@ func (e *TemplateEngine) GenerateAgentPrompt(data AgentPromptData) (string, erro
 
 // GenerateInstructions creates instructions based on language and method
 func (e *TemplateEngine) GenerateInstructions(lang string, data TemplateData) (string, error) {
-	// For template-based code generation, try code generation templates first
+	// Only use code generation templates for template-based generation
 	codeGenKey := fmt.Sprintf("%s_code_gen", lang)
-	if tmpl, exists := e.templates[codeGenKey]; exists {
-		var buf bytes.Buffer
-		if err := tmpl.Execute(&buf, data); err != nil {
-			return "", fmt.Errorf("code generation template execution failed: %w", err)
-		}
-		return buf.String(), nil
-	}
-
-	// First try comprehensive template
-	comprehensiveKey := fmt.Sprintf("%s_comprehensive", lang)
-	if tmpl, exists := e.templates[comprehensiveKey]; exists {
-		var buf bytes.Buffer
-		if err := tmpl.Execute(&buf, data); err != nil {
-			return "", fmt.Errorf("comprehensive template execution failed: %w", err)
-		}
-		return buf.String(), nil
-	}
-
-	// Fallback to method-specific template
-	templateKey := fmt.Sprintf("%s_code_gen", lang)
-	tmpl, exists := e.templates[templateKey]
+	tmpl, exists := e.templates[codeGenKey]
 	if !exists {
-		// Final fallback: if there is a generic code_gen for the language, use it
-		genericKey := fmt.Sprintf("%s_code_gen", lang)
-		if tmpl2, ok := e.templates[genericKey]; ok {
-			var buf2 bytes.Buffer
-			if err := tmpl2.Execute(&buf2, data); err != nil {
-				return "", fmt.Errorf("template execution failed: %w", err)
-			}
-			return buf2.String(), nil
-		}
-		return "", fmt.Errorf("template not found for %s", lang)
+		return "", fmt.Errorf("code generation template not found for %s", lang)
 	}
 
 	var buf bytes.Buffer
 	if err := tmpl.Execute(&buf, data); err != nil {
-		return "", fmt.Errorf("template execution failed: %w", err)
+		return "", fmt.Errorf("code generation template execution failed: %w", err)
 	}
 
 	return buf.String(), nil
