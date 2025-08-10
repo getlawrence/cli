@@ -1,3 +1,8 @@
+try:
+    # Initialize OTEL if generated otel.py exists
+    import otel  # noqa: F401
+except Exception:
+    pass
 from flask import Flask
 
 app = Flask(__name__)

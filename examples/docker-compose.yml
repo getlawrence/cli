@@ -1,0 +1,62 @@
+version: "3.9"
+
+services:
+  otel-collector:
+    image: otel/opentelemetry-collector:0.98.0
+    command: ["--config=/etc/otelcol-config.yaml"]
+    volumes:
+      - ./otel-collector-config.yaml:/etc/otelcol-config.yaml:ro
+      - ./.otel-data:/data
+    ports:
+      - "4318:4318"  # OTLP HTTP receiver
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:13133/healthz"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+
+  go-service:
+    build:
+      context: ./go
+      dockerfile: Dockerfile
+    environment:
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
+      - OTEL_SERVICE_NAME=examples-go
+    depends_on:
+      otel-collector:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+
+  js-service:
+    build:
+      context: ./js
+      dockerfile: Dockerfile
+    environment:
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
+      - OTEL_SERVICE_NAME=examples-js
+      - NODE_ENV=production
+    depends_on:
+      otel-collector:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+
+  python-service:
+    build:
+      context: ./python
+      dockerfile: Dockerfile
+    environment:
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
+      - OTEL_SERVICE_NAME=examples-python
+      - FLASK_ENV=production
+    depends_on:
+      otel-collector:
+        condition: service_healthy
+    ports:
+      - "5000:5000"
+
+networks:
+  default:
+    name: examples-net
+

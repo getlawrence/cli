@@ -1,13 +1,13 @@
-// OpenTelemetry bootstrap for {{.ServiceName}} (JavaScript/Node.js)
+// OpenTelemetry bootstrap for {{.ServiceName}} (JavaScript/Node.js, CommonJS)
 
 // Install packages:
 // npm install @opentelemetry/api @opentelemetry/sdk-node @opentelemetry/exporter-trace-otlp-http{{range .Instrumentations}} @opentelemetry/instrumentation-{{.}}{{end}}
 
-// Create file: telemetry/otel.js and import it at process start
+// Create file: otel.js and require it at process start
 
-export async function setupOTel() {
-  const { NodeSDK } = await import("@opentelemetry/sdk-node");
-  const { OTLPTraceExporter } = await import("@opentelemetry/exporter-trace-otlp-http");
+async function setupOTel() {
+  const { NodeSDK } = require("@opentelemetry/sdk-node");
+  const { OTLPTraceExporter } = require("@opentelemetry/exporter-trace-otlp-http");
 
   const sdk = new NodeSDK({
     traceExporter: new OTLPTraceExporter(),
@@ -16,5 +16,7 @@ export async function setupOTel() {
   process.on("SIGTERM", async () => { await sdk.shutdown(); });
   return sdk;
 }
+
+module.exports = { setupOTel };
 
 
