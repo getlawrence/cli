@@ -12,12 +12,10 @@ const (
 
 // StrategyConfig contains configuration for generation strategies
 type StrategyConfig struct {
-	Mode GenerationMode `json:"mode"`
-	// AI-specific config
-	AgentType string `json:"agent_type,omitempty"`
-	// Template-specific config
-	OutputDirectory string `json:"output_directory,omitempty"`
-	DryRun          bool   `json:"dry_run,omitempty"`
+	Mode            GenerationMode `json:"mode"`
+	AgentType       string         `json:"agent_type,omitempty"`
+	OutputDirectory string         `json:"output_directory,omitempty"`
+	DryRun          bool           `json:"dry_run,omitempty"`
 }
 
 // GenerationRequest contains parameters for code generation

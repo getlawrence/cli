@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
-	"strings"
 
 	"github.com/getlawrence/cli/internal/codegen/generator"
 	"github.com/getlawrence/cli/internal/codegen/types"
@@ -40,7 +39,6 @@ This command will:
 
 var (
 	language       string
-	method         string
 	agentType      string
 	listAgents     bool
 	listTemplates  bool
@@ -55,8 +53,6 @@ func init() {
 
 	codegenCmd.Flags().StringVarP(&language, "language", "l", "",
 		"Target language (go, javascript, python, java, dotnet, ruby, php)")
-	codegenCmd.Flags().StringVarP(&method, "method", "m", "code",
-		"Installation method (code)")
 	codegenCmd.Flags().StringVarP(&agentType, "agent", "a", "",
 		"Preferred coding agent (gemini, claude, openai, github)")
 	codegenCmd.Flags().BoolVar(&listAgents, "list-agents", false,
@@ -135,18 +131,10 @@ func runCodegen(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("agent type is required for AI mode. Use --list-agents to see available options")
 	}
 
-	// Validate method
-	validMethods := []string{"code"}
-	if !contains(validMethods, method) {
-		return fmt.Errorf("invalid method %s. Valid options: %s",
-			method, strings.Join(validMethods, ", "))
-	}
-
 	req := types.GenerationRequest{
 		CodebasePath: absPath,
 		Language:     language,
-		Method:       method,
-		AgentType:    agentType, // Deprecated field for backward compatibility
+		AgentType:    agentType,
 		Config: types.StrategyConfig{
 			Mode:            mode,
 			AgentType:       agentType,

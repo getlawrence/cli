@@ -45,7 +45,6 @@ func TestCodegenTemplateDryRunOnGoSample(t *testing.T) {
 			"codegen",
 			samplePath,
 			"--mode", "template",
-			"--method", "code",
 			"--output", outputDir,
 			"--dry-run",
 		}
@@ -113,7 +112,6 @@ func TestCodegenTemplateDryRunOnOtherSamples(t *testing.T) {
 				"codegen",
 				samplePath,
 				"--mode", "template",
-				"--method", "code",
 				"--dry-run",
 			}
 			cmd := exec.CommandContext(ctx, binaryPath, args...)

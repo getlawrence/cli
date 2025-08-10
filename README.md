@@ -107,11 +107,10 @@ Flags:
 Analyze a codebase and generate OpenTelemetry instrumentation using AI or templates.
 
 ```bash
-lawrence codegen --mode template --method code --path /path/to/project --dry-run
+lawrence codegen --mode template --path /path/to/project --dry-run
 
 Flags:
   -l, --language string       Target language (go, javascript, python, java, dotnet, ruby, php)
-  -m, --method string         Installation method (code) (default "code")
   -a, --agent string          Preferred coding agent (gemini, claude, openai, github)
       --list-agents           List available coding agents
       --list-templates        List available templates
