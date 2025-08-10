@@ -37,11 +37,3 @@ type OperationsData struct {
 	InstallComponents       map[string][]string `json:"install_components"`       // Components to install by type (sdk, propagator, exporter)
 	RemoveComponents        map[string][]string `json:"remove_components"`        // Components to remove by type
 }
-
-// IsEmpty checks if there are any operations to perform
-func (od *OperationsData) IsEmpty() bool {
-	return !od.InstallOTEL &&
-		len(od.InstallInstrumentations) == 0 &&
-		len(od.InstallComponents) == 0 &&
-		len(od.RemoveComponents) == 0
-}

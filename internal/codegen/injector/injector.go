@@ -317,8 +317,9 @@ func (ci *CodeInjector) generateImportModifications(
 ) []types.CodeModification {
 	var modifications []types.CodeModification
 
+	// Only import language-required paths. Instrumentations are handled via
+	// generated bootstrap files (e.g., otel.js) rather than direct imports here.
 	requiredImports := handler.GetRequiredImports()
-	requiredImports = append(requiredImports, operationsData.InstallInstrumentations...)
 	newImports := make([]string, 0)
 
 	// Collect imports that need to be added
