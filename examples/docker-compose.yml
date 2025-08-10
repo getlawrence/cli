@@ -16,6 +16,7 @@ services:
     environment:
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
       - OTEL_SERVICE_NAME=examples-go
+      - OTEL_LOG_LEVEL=debug
     depends_on:
       - otel-collector
     ports:
@@ -29,6 +30,7 @@ services:
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
       - OTEL_SERVICE_NAME=examples-js
       - NODE_ENV=production
+      - OTEL_LOG_LEVEL=debug
     depends_on:
       - otel-collector
     ports:
@@ -42,6 +44,7 @@ services:
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
       - OTEL_SERVICE_NAME=examples-python
       - FLASK_ENV=production
+      - OTEL_LOG_LEVEL=debug
     depends_on:
       - otel-collector
     ports:
@@ -54,6 +57,7 @@ services:
     environment:
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
       - OTEL_SERVICE_NAME=examples-php
+      - OTEL_LOG_LEVEL=debug
     depends_on:
       - otel-collector
     ports:
@@ -66,6 +70,7 @@ services:
     environment:
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
       - OTEL_SERVICE_NAME=examples-ruby
+      - OTEL_LOG_LEVEL=debug
     depends_on:
       - otel-collector
     ports:
@@ -79,6 +84,7 @@ services:
     environment:
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
       - OTEL_SERVICE_NAME=examples-java
+      - OTEL_LOG_LEVEL=debug
     depends_on:
       - otel-collector
     ports:
@@ -92,6 +98,7 @@ services:
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
       - OTEL_SERVICE_NAME=examples-csharp
       - ASPNETCORE_URLS=http://0.0.0.0:8083
+      - OTEL_LOG_LEVEL=debug
     depends_on:
       - otel-collector
     ports:
