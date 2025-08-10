@@ -10,7 +10,7 @@ async function setupOTel() {
   const { OTLPTraceExporter } = require("@opentelemetry/exporter-trace-otlp-http");
 
   const sdk = new NodeSDK({
-    traceExporter: new OTLPTraceExporter(),
+    traceExporter: new OTLPTraceExporter({}),
   });
   await sdk.start();
   process.on("SIGTERM", async () => { await sdk.shutdown(); });

@@ -56,8 +56,8 @@ func (h *RubyInjector) AddDependencies(ctx context.Context, projectPath string, 
 		return err
 	}
 
-	// Run bundle install
-	cmd := exec.CommandContext(ctx, "bundle", "install")
+	// Run bundle install into a local path to avoid system gem install prompts
+	cmd := exec.CommandContext(ctx, "bundle", "install", "--path", "vendor/bundle")
 	cmd.Dir = projectPath
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -80,6 +80,7 @@ func (h *RubyInjector) GetInstrumentationDependency(instrumentation string) *Dep
 	m := map[string]Dependency{
 		"rails":   {Name: "Rails Instrumentation", Language: "ruby", ImportPath: "opentelemetry-instrumentation-rails", Category: "instrumentation"},
 		"rack":    {Name: "Rack Instrumentation", Language: "ruby", ImportPath: "opentelemetry-instrumentation-rack", Category: "instrumentation"},
+		"sinatra": {Name: "Sinatra Instrumentation", Language: "ruby", ImportPath: "opentelemetry-instrumentation-sinatra", Category: "instrumentation"},
 		"http":    {Name: "HTTP (Net::HTTP) Instrumentation", Language: "ruby", ImportPath: "opentelemetry-instrumentation-net_http", Category: "instrumentation"},
 		"pg":      {Name: "Postgres (pg) Instrumentation", Language: "ruby", ImportPath: "opentelemetry-instrumentation-pg", Category: "instrumentation"},
 		"mysql2":  {Name: "MySQL2 Instrumentation", Language: "ruby", ImportPath: "opentelemetry-instrumentation-mysql2", Category: "instrumentation"},

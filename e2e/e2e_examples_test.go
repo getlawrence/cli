@@ -80,6 +80,10 @@ func TestExamplesStackCodegenAndOTEL(t *testing.T) {
 
 	// docker compose build and up
 	composeFile := filepath.Join(examplesDir, "docker-compose.yml")
+	// Ensure host traces directory exists for bind mount
+	if err := os.MkdirAll(filepath.Join(examplesDir, ".otel-data"), 0o755); err != nil {
+		t.Fatalf("failed to create traces output directory: %v", err)
+	}
 	{
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 		defer cancel()
@@ -154,21 +158,41 @@ func TestExamplesStackCodegenAndOTEL(t *testing.T) {
 				out, _ := cmd.CombinedOutput()
 				t.Logf("python-service logs:\n%s", string(out))
 			}
+			{
+				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+				defer cancel()
+				cmd := exec.CommandContext(ctx, "docker", "compose", "-f", composeFile, "logs", "ruby-service")
+				cmd.Dir = examplesDir
+				out, _ := cmd.CombinedOutput()
+				t.Logf("ruby-service logs:\n%s", string(out))
+			}
 			t.Fatalf("failed to hit %s after retries: %v", h.url, lastErr)
 		}
 	}
 
-	// Wait for collector to flush
-	t.Logf("Waiting 5s for collector to flush...")
-	time.Sleep(5 * time.Second)
-
-	// Verify traces file has content
+	// Wait for collector to flush and file to be created
 	tracesPath := filepath.Join(examplesDir, ".otel-data", "traces.jsonl")
-	t.Logf("Verifying OTEL traces at: %s", tracesPath)
-	f, err := os.Open(tracesPath)
-	if err != nil {
-		t.Fatalf("failed to open traces file: %v", err)
+	t.Logf("Waiting for OTEL traces file at: %s", tracesPath)
+	var f *os.File
+	var err error
+	for i := 0; i < 30; i++ { // up to ~30s
+		f, err = os.Open(tracesPath)
+		if err == nil {
+			break
+		}
+		time.Sleep(1 * time.Second)
 	}
+	if err != nil {
+		// dump collector logs for debugging
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		cmd := exec.CommandContext(ctx, "docker", "compose", "-f", composeFile, "logs", "otel-collector")
+		cmd.Dir = examplesDir
+		out, _ := cmd.CombinedOutput()
+		t.Logf("otel-collector logs:\n%s", string(out))
+		t.Fatalf("failed to open traces file after waiting: %v", err)
+	}
+	t.Logf("Traces file opened successfully")
 	defer f.Close()
 	scanner := bufio.NewScanner(f)
 	found := false
