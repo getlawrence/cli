@@ -52,8 +52,8 @@ func NewDetector() (*Detector, error) {
 		agents: []Agent{
 			{Type: GeminiCLI, Name: "Gemini CLI", Command: "gemini"},
 			{Type: ClaudeCode, Name: "Claude Code", Command: "claude"},
-			{Type: OpenAICodex, Name: "OpenAI Codex", Command: "openai"},
-			{Type: GitHubCLI, Name: "GitHub Copilot CLI", Command: "gh"},
+			{Type: OpenAICodex, Name: "OpenAI Codex", Command: "codex"},
+			{Type: GitHubCLI, Name: "GitHub Copilot CLI", Command: "gh copilot"},
 		},
 		templateEngine: templateEngine,
 	}, nil
@@ -152,7 +152,7 @@ func (d *Detector) executeGemini(prompt string, targetDir string) error {
 }
 
 func (d *Detector) executeClaude(prompt string, targetDir string) error {
-	cmd := exec.Command("claude", "code", prompt)
+	cmd := exec.Command("claude", "-p", prompt)
 	cmd.Dir = targetDir
 	cmd.Stdout = nil
 	cmd.Stderr = nil
@@ -160,7 +160,7 @@ func (d *Detector) executeClaude(prompt string, targetDir string) error {
 }
 
 func (d *Detector) executeOpenAI(prompt string, targetDir string) error {
-	cmd := exec.Command("openai", "api", "completions.create", "-p", prompt)
+	cmd := exec.Command("codex", prompt)
 	cmd.Dir = targetDir
 	cmd.Stdout = nil
 	cmd.Stderr = nil
