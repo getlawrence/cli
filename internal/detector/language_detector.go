@@ -111,6 +111,8 @@ func normalizeLanguageName(lang string) string {
 	switch lang {
 	case "Go Module":
 		return "Go"
+	case "C#":
+		return "csharp"
 	default:
 		return lang
 	}

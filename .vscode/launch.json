@@ -19,7 +19,7 @@
             "program": "${workspaceFolder}",
             "args": [
                 "analyze",
-                "${workspaceFolder}/examples/monorepo-sample",
+                "${workspaceFolder}/examples/csharp",
             ],
             "env": {
                 "GO111MODULE": "on"

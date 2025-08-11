@@ -36,15 +36,18 @@ func Logf(format string, args ...interface{}) {
 	activeLogMu.RLock()
 	ch := activeLogCh
 	activeLogMu.RUnlock()
-	if ch != nil {
-		select {
-		case ch <- logEntry{level: "info", message: msg}:
-		default:
-			// drop if channel is full to avoid blocking
-		}
-		return
-	}
-	fmt.Fprint(os.Stdout, msg)
+    if ch != nil {
+        select {
+        case ch <- logEntry{level: "info", message: msg}:
+        default:
+            // drop if channel is full to avoid blocking
+        }
+        // Also mirror to stdout (captured during spinner) so logs are preserved
+        // and available to callers/tests after spinner completes
+        fmt.Fprint(os.Stdout, msg)
+        return
+    }
+    fmt.Fprint(os.Stdout, msg)
 }
 
 // Log writes a plain message with newline semantics when not under a spinner.
