@@ -36,7 +36,7 @@ func NewGenerator(codebaseAnalyzer *detector.CodebaseAnalyzer) (*Generator, erro
 
 	// Initialize strategies
 	strategies := make(map[types.GenerationMode]types.CodeGenerationStrategy)
-	strategies[types.AIMode] = agent.NewAIGenerationStrategy(agentDetector, templateEngine)
+	strategies[types.AgentMode] = agent.NewAIGenerationStrategy(agentDetector, templateEngine)
 	strategies[types.TemplateMode] = template.NewTemplateGenerationStrategy(templateEngine)
 	defaultStrategy := types.TemplateMode
 

@@ -129,12 +129,12 @@ func runCodegen(cmd *cobra.Command, args []string) error {
 	}
 
 	// Validate mode
-	if mode != types.AIMode && mode != types.TemplateMode {
+	if mode != types.AgentMode && mode != types.TemplateMode {
 		return fmt.Errorf("invalid generation mode %s. Valid options: ai, template", mode)
 	}
 
 	// Validate mode-specific requirements
-	if mode == types.AIMode && agentType == "" {
+	if mode == types.AgentMode && agentType == "" {
 		return fmt.Errorf("agent type is required for AI mode. Use --list-agents to see available options")
 	}
 

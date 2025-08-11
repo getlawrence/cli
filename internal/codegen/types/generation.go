@@ -4,8 +4,8 @@ package types
 type GenerationMode string
 
 const (
-	// AIMode uses AI agents for code generation
-	AIMode GenerationMode = "ai"
+	// AgentMode uses AI agents for code generation
+	AgentMode GenerationMode = "agent"
 	// TemplateMode uses templates for direct code generation
 	TemplateMode GenerationMode = "template"
 )

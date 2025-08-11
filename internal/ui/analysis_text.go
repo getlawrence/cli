@@ -5,7 +5,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/charmbracelet/lipgloss"
 	"github.com/getlawrence/cli/internal/detector"
 	"github.com/getlawrence/cli/internal/domain"
 )
@@ -15,15 +14,6 @@ func RenderAnalysis(analysis *detector.Analysis, detailed bool) string {
 	if analysis == nil {
 		return ""
 	}
-
-	// Styles
-	titleStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("12"))
-	sectionTitle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("213"))
-	faint := lipgloss.NewStyle().Faint(true)
-	bullet := lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
-	success := lipgloss.NewStyle().Foreground(lipgloss.Color("42"))
-	warn := lipgloss.NewStyle().Foreground(lipgloss.Color("214"))
-	dim := lipgloss.NewStyle().Foreground(lipgloss.Color("244"))
 
 	// Aggregate data
 	var allIssues []domain.Issue
@@ -50,8 +40,8 @@ func RenderAnalysis(analysis *detector.Analysis, detailed bool) string {
 
 	// Header
 	var b strings.Builder
-	fmt.Fprintf(&b, "%s\n", titleStyle.Render("📊 OpenTelemetry Analysis Results"))
-	b.WriteString(dim.Render(strings.Repeat("=", 32)))
+	fmt.Fprintf(&b, "%s\n", "📊 OpenTelemetry Analysis Results")
+	b.WriteString(strings.Repeat("=", 32))
 	b.WriteString("\n\n")
 
 	// Summary block
@@ -64,14 +54,13 @@ func RenderAnalysis(analysis *detector.Analysis, detailed bool) string {
 		fmt.Sprintf("📁 Directories Analyzed: %d", len(analysis.DirectoryAnalyses)),
 		fmt.Sprintf("⚠️  Issues Found: %d", len(allIssues)),
 	}
-	b.WriteString(lipgloss.JoinVertical(lipgloss.Left, summary...))
+	b.WriteString(strings.Join(summary, "\n"))
 	b.WriteString("\n\n")
 
 	// Monorepo overview
 	if len(analysis.DirectoryAnalyses) > 1 {
-		b.WriteString(sectionTitle.Render("📚 Monorepo Overview:"))
-		b.WriteString("\n")
-		b.WriteString(faint.Render(strings.Repeat("-", 20)))
+		b.WriteString("📚 Monorepo Overview:\n")
+		b.WriteString(strings.Repeat("-", 20))
 		b.WriteString("\n")
 
 		// Sort directories by number of issues (desc), then by name
@@ -104,10 +93,10 @@ func RenderAnalysis(analysis *detector.Analysis, detailed bool) string {
 		for _, s := range summaries {
 			fmt.Fprintf(&b, "  📂 %s (%s)\n", s.name, s.language)
 			fmt.Fprintf(&b, "    %s Libraries: %d, %s Packages: %d, %s Instrumentations: %d, %s Issues: %d\n",
-				bullet.Render("📦"), s.libraries,
-				bullet.Render("📥"), s.packages,
-				bullet.Render("🔧"), s.instrumenters,
-				bullet.Render("⚠️"), s.issues,
+				"📦", s.libraries,
+				"📥", s.packages,
+				"🔧", s.instrumenters,
+				"⚠️", s.issues,
 			)
 		}
 		b.WriteString("\n")
@@ -115,9 +104,8 @@ func RenderAnalysis(analysis *detector.Analysis, detailed bool) string {
 
 	// Libraries (deduplicated)
 	if len(allLibraries) > 0 {
-		b.WriteString(sectionTitle.Render("📦 OpenTelemetry Libraries Found:"))
-		b.WriteString("\n")
-		b.WriteString(faint.Render(strings.Repeat("-", 33)))
+		b.WriteString("📦 OpenTelemetry Libraries Found:\n")
+		b.WriteString(strings.Repeat("-", 33))
 		b.WriteString("\n")
 		// Build unique set by name+language to avoid noisy duplicates
 		type libKey struct{ name, language string }
@@ -147,7 +135,7 @@ func RenderAnalysis(analysis *detector.Analysis, detailed bool) string {
 				fmt.Fprintf(&b, "  • %s - %s\n", lib.Name, lib.Language)
 			}
 			if detailed && lib.PackageFile != "" {
-				fmt.Fprintf(&b, "    %s %s\n", dim.Render("📄 Found in:"), lib.PackageFile)
+				fmt.Fprintf(&b, "    %s %s\n", "📄 Found in:", lib.PackageFile)
 			}
 		}
 		b.WriteString("\n")
@@ -155,24 +143,23 @@ func RenderAnalysis(analysis *detector.Analysis, detailed bool) string {
 
 	// Available Instrumentations
 	if len(allInstrumentations) > 0 {
-		b.WriteString(sectionTitle.Render("🔧 Available OpenTelemetry Instrumentations:"))
-		b.WriteString("\n")
-		b.WriteString(faint.Render(strings.Repeat("-", 43)))
+		b.WriteString("🔧 Available OpenTelemetry Instrumentations:\n")
+		b.WriteString(strings.Repeat("-", 43))
 		b.WriteString("\n")
 		for _, instr := range allInstrumentations {
-			status := bullet.Render("🔧")
+			status := "🔧"
 			if instr.IsFirstParty {
-				status = success.Render("✅")
+				status = "✅"
 			}
 			fmt.Fprintf(&b, "  %s %s (%s)\n", status, instr.Package.Name, instr.Language)
 			if instr.Title != "" && instr.Title != instr.Package.Name {
 				fmt.Fprintf(&b, "    📝 %s\n", instr.Title)
 			}
 			if detailed && instr.Description != "" {
-				fmt.Fprintf(&b, "    %s %s\n", dim.Render("💬"), instr.Description)
+				fmt.Fprintf(&b, "    %s %s\n", "💬", instr.Description)
 			}
 			if detailed && len(instr.Tags) > 0 {
-				fmt.Fprintf(&b, "    %s %s\n", dim.Render("🏷️ "), strings.Join(instr.Tags, ", "))
+				fmt.Fprintf(&b, "    %s %s\n", "🏷️ ", strings.Join(instr.Tags, ", "))
 			}
 		}
 		b.WriteString("\n")
@@ -180,9 +167,8 @@ func RenderAnalysis(analysis *detector.Analysis, detailed bool) string {
 
 	// Issues
 	if len(allIssues) > 0 {
-		b.WriteString(sectionTitle.Render("⚠️  Issues and Recommendations:"))
-		b.WriteString("\n")
-		b.WriteString(faint.Render(strings.Repeat("-", 31)))
+		b.WriteString("⚠️  Issues and Recommendations:\n")
+		b.WriteString(strings.Repeat("-", 31))
 		b.WriteString("\n")
 
 		if len(analysis.DirectoryAnalyses) <= 1 {
@@ -190,16 +176,16 @@ func RenderAnalysis(analysis *detector.Analysis, detailed bool) string {
 			for _, issue := range allIssues {
 				fmt.Fprintf(&b, "  • %s (%s)\n", issue.Title, issue.Severity)
 				if issue.Description != "" {
-					fmt.Fprintf(&b, "    %s %s\n", dim.Render("📖"), issue.Description)
+					fmt.Fprintf(&b, "    %s %s\n", "📖", issue.Description)
 				}
 				if issue.Suggestion != "" {
-					fmt.Fprintf(&b, "    %s %s\n", warn.Render("💡"), issue.Suggestion)
+					fmt.Fprintf(&b, "    %s %s\n", "💡", issue.Suggestion)
 				}
 				if detailed && len(issue.References) > 0 {
-					fmt.Fprintf(&b, "    %s %s\n", dim.Render("📚 References:"), strings.Join(issue.References, ", "))
+					fmt.Fprintf(&b, "    %s %s\n", "📚 References:", strings.Join(issue.References, ", "))
 				}
 				if detailed && issue.File != "" {
-					fmt.Fprintf(&b, "    %s %s, Line: %d\n", dim.Render("📄 File:"), issue.File, issue.Line)
+					fmt.Fprintf(&b, "    %s %s, Line: %d\n", "📄 File:", issue.File, issue.Line)
 				}
 				b.WriteString("\n")
 			}
@@ -230,16 +216,16 @@ func RenderAnalysis(analysis *detector.Analysis, detailed bool) string {
 				for _, issue := range dirAnalysis.Issues {
 					fmt.Fprintf(&b, "  • %s (%s)\n", issue.Title, issue.Severity)
 					if issue.Description != "" {
-						fmt.Fprintf(&b, "    %s %s\n", dim.Render("📖"), issue.Description)
+						fmt.Fprintf(&b, "    %s %s\n", "📖", issue.Description)
 					}
 					if issue.Suggestion != "" {
-						fmt.Fprintf(&b, "    %s %s\n", warn.Render("💡"), issue.Suggestion)
+						fmt.Fprintf(&b, "    %s %s\n", "💡", issue.Suggestion)
 					}
 					if detailed && len(issue.References) > 0 {
-						fmt.Fprintf(&b, "    %s %s\n", dim.Render("📚 References:"), strings.Join(issue.References, ", "))
+						fmt.Fprintf(&b, "    %s %s\n", "📚 References:", strings.Join(issue.References, ", "))
 					}
 					if detailed && issue.File != "" {
-						fmt.Fprintf(&b, "    %s %s, Line: %d\n", dim.Render("📄 File:"), issue.File, issue.Line)
+						fmt.Fprintf(&b, "    %s %s, Line: %d\n", "📄 File:", issue.File, issue.Line)
 					}
 					b.WriteString("\n")
 					totalIssues++
@@ -248,7 +234,7 @@ func RenderAnalysis(analysis *detector.Analysis, detailed bool) string {
 			fmt.Fprintf(&b, "Total Issues Found: %d\n", totalIssues)
 		}
 	} else {
-		b.WriteString(success.Render("✅ No issues found! Your OpenTelemetry setup looks good."))
+		b.WriteString("✅ No issues found! Your OpenTelemetry setup looks good.")
 		b.WriteString("\n")
 	}
 

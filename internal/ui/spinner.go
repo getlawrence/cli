@@ -1,8 +1,12 @@
 package ui
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"io"
+	"os"
+	"sync"
 	"time"
 
 	"github.com/charmbracelet/bubbles/spinner"
@@ -16,8 +20,56 @@ func RunSpinner(ctx context.Context, title string, action func() error) error {
 	if ctx == nil {
 		ctx = context.Background()
 	}
+
+	// Capture stdout while spinner is running to avoid interleaving output.
+	// We render the spinner to stderr so user-facing output (stdout) prints
+	// cleanly after the spinner finishes.
+	oldStdout := os.Stdout
+	r, w, pipeErr := os.Pipe()
+	if pipeErr != nil {
+		// Fallback: if we cannot create a pipe, just run spinner normally
+		m := newSpinnerModel(ctx, title, action)
+		p := tea.NewProgram(m, tea.WithOutput(os.Stderr))
+		if _, err := p.Run(); err != nil {
+			return err
+		}
+		return m.err
+	}
+
+	// Replace os.Stdout with pipe writer and set up a log channel for live spinner text updates
+	os.Stdout = w
+	logCh := make(chan logEntry, 100)
+	setActiveLogChannel(logCh)
+
+	var wg sync.WaitGroup
+	var buf bytes.Buffer
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		_, _ = io.Copy(&buf, r)
+	}()
+
+	// Ensure restoration even on panic/early return
+	defer func() {
+		// Close writer to end reader goroutine
+		_ = w.Close()
+		// Clear spinner log channel
+		clearActiveLogChannel()
+		// Restore stdout
+		os.Stdout = oldStdout
+		// Wait for the reader to finish draining
+		wg.Wait()
+		// Close read end
+		_ = r.Close()
+		// Flush captured output after spinner is done
+		if buf.Len() > 0 {
+			_, _ = oldStdout.Write(buf.Bytes())
+		}
+	}()
+
+	// Pass action; spinner model will read from the active log channel
 	m := newSpinnerModel(ctx, title, action)
-	p := tea.NewProgram(m)
+	p := tea.NewProgram(m, tea.WithOutput(os.Stderr))
 	if _, err := p.Run(); err != nil {
 		return err
 	}
@@ -33,6 +85,9 @@ type spinnerModel struct {
 	done  bool
 	err   error
 	style lipgloss.Style
+	// logging integration
+	logCh       chan logEntry
+	currentText string
 }
 
 func newSpinnerModel(ctx context.Context, title string, action func() error) *spinnerModel {
@@ -43,11 +98,17 @@ func newSpinnerModel(ctx context.Context, title string, action func() error) *sp
 	s.Spinner = spinner.Dot
 	s.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
 
+	// Attach any active logger channel so we can update the text as logs arrive
+	activeLogMu.RLock()
+	ch := activeLogCh
+	activeLogMu.RUnlock()
+
 	m := &spinnerModel{
 		ctx:   ctx,
 		title: title,
 		spin:  s,
 		style: lipgloss.NewStyle().Padding(0, 1),
+		logCh: ch,
 	}
 
 	// Kick off the action in the background and notify on completion
@@ -84,6 +145,23 @@ func waitForCompletion(m *spinnerModel) tea.Cmd {
 }
 
 func (m *spinnerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	// Drain any pending logs non-blockingly and update current text
+	for {
+		if m.logCh == nil {
+			break
+		}
+		select {
+		case e := <-m.logCh:
+			// Use the last message as the current text
+			if e.message != "" {
+				m.currentText = e.message
+			}
+		default:
+			// no more logs
+			goto afterDrain
+		}
+	}
+afterDrain:
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
@@ -110,5 +188,9 @@ func (m *spinnerModel) View() string {
 		}
 		return m.style.Render("✓ " + m.title + "\n")
 	}
-	return m.style.Render(m.spin.View() + " " + m.title)
+	text := m.title
+	if m.currentText != "" {
+		text = m.currentText
+	}
+	return m.style.Render(m.spin.View() + " " + text)
 }
