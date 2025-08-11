@@ -9,7 +9,7 @@ import (
 	"github.com/getlawrence/cli/internal/detector"
 	"github.com/getlawrence/cli/internal/detector/issues"
 	"github.com/getlawrence/cli/internal/detector/languages"
-	"github.com/getlawrence/cli/internal/ui"
+	"github.com/getlawrence/cli/internal/logger"
 	"github.com/spf13/cobra"
 )
 
@@ -153,26 +153,24 @@ func runCodegen(cmd *cobra.Command, args []string) error {
 	}
 
 	// Always show spinner for generation
-	return ui.RunSpinner(ctx, "Generating code...", func() error {
-		return codeGenerator.Generate(ctx, req)
-	})
+	return codeGenerator.Generate(ctx, req)
 }
 
 func listAvailableAgents(generator *generator.Generator) error {
 	agents := generator.ListAvailableAgents()
 
 	if len(agents) == 0 {
-		ui.Log("No coding agents detected on your system")
-		ui.Log("\nTo use this feature, install one of the following:")
-		ui.Log("  - GitHub CLI: gh extension install github/gh-copilot")
-		ui.Log("  - Gemini CLI: Follow instructions at https://ai.google.dev/gemini-api/docs/cli")
-		ui.Log("  - Claude Code: Follow instructions at https://docs.anthropic.com/claude/docs")
+		logger.Log("No coding agents detected on your system")
+		logger.Log("\nTo use this feature, install one of the following:")
+		logger.Log("  - GitHub CLI: gh extension install github/gh-copilot")
+		logger.Log("  - Gemini CLI: Follow instructions at https://ai.google.dev/gemini-api/docs/cli")
+		logger.Log("  - Claude Code: Follow instructions at https://docs.anthropic.com/claude/docs")
 		return nil
 	}
 
-	ui.Log("Available coding agents:")
+	logger.Log("Available coding agents:")
 	for _, agent := range agents {
-		ui.Logf("  %s - %s (version: %s)\n",
+		logger.Logf("  %s - %s (version: %s)\n",
 			agent.Type, agent.Name, agent.Version)
 	}
 
@@ -182,9 +180,9 @@ func listAvailableAgents(generator *generator.Generator) error {
 func listAvailableTemplates(generator *generator.Generator) error {
 	templates := generator.ListAvailableTemplates()
 
-	ui.Log("Available templates:")
+	logger.Log("Available templates:")
 	for _, template := range templates {
-		ui.Logf("  %s\n", template)
+		logger.Logf("  %s\n", template)
 	}
 
 	return nil
@@ -193,16 +191,16 @@ func listAvailableTemplates(generator *generator.Generator) error {
 func listAvailableStrategies(generator *generator.Generator) error {
 	strategies := generator.ListAvailableStrategies()
 
-	ui.Log("Available generation strategies:")
+	logger.Log("Available generation strategies:")
 	for mode, available := range strategies {
 		status := "available"
 		if !available {
 			status = "not available"
 		}
-		ui.Logf("  %s - %s\n", mode, status)
+		logger.Logf("  %s - %s\n", mode, status)
 	}
 
-	ui.Logf("\nDefault strategy: %s\n", generator.GetDefaultStrategy())
+	logger.Logf("\nDefault strategy: %s\n", generator.GetDefaultStrategy())
 
 	return nil
 }

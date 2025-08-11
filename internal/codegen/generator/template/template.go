@@ -11,8 +11,8 @@ import (
 	"github.com/getlawrence/cli/internal/codegen/injector"
 	"github.com/getlawrence/cli/internal/codegen/types"
 	"github.com/getlawrence/cli/internal/domain"
+	"github.com/getlawrence/cli/internal/logger"
 	"github.com/getlawrence/cli/internal/templates"
-	"github.com/getlawrence/cli/internal/ui"
 )
 
 const (
@@ -63,13 +63,13 @@ func (s *TemplateGenerationStrategy) GetSupportedLanguages() []string {
 // GenerateCode generates code directly using templates
 func (s *TemplateGenerationStrategy) GenerateCode(ctx context.Context, opportunities []domain.Opportunity, req types.GenerationRequest) error {
 	if len(opportunities) == 0 {
-		ui.Log("No code generation opportunities found")
+		logger.Log("No code generation opportunities found")
 		return nil
 	}
 
 	directoryOpportunities := s.groupOpportunitiesByDirectory(opportunities)
 	if len(directoryOpportunities) == 0 {
-		ui.Log("No opportunities to process")
+		logger.Log("No opportunities to process")
 		return nil
 	}
 
@@ -86,13 +86,13 @@ func (s *TemplateGenerationStrategy) GenerateCode(ctx context.Context, opportuni
 			dependencyPath := s.determineOutputDirectory(req, directory)
 
 			if err := s.addDependencies(ctx, dependencyPath, normalizedLanguage, operationsData, req); err != nil {
-				ui.Logf("Warning: failed to add dependencies for %s: %v\n", normalizedLanguage, err)
+				logger.Logf("Warning: failed to add dependencies for %s: %v\n", normalizedLanguage, err)
 			}
 
 			// Handle entry point modifications
 			entryPointFiles, err := s.handleEntryPointModifications(langOpportunities, req, operationsData)
 			if err != nil {
-				ui.Logf("Warning: failed to modify entry points for %s: %v\n", language, err)
+				logger.Logf("Warning: failed to modify entry points for %s: %v\n", language, err)
 			} else {
 				generatedFiles = append(generatedFiles, entryPointFiles...)
 			}
@@ -100,7 +100,7 @@ func (s *TemplateGenerationStrategy) GenerateCode(ctx context.Context, opportuni
 			// Handle regular file generation
 			files, err := s.generateCodeForLanguage(normalizedLanguage, langOpportunities, req, directory)
 			if err != nil {
-				ui.Logf("Warning: failed to generate code for %s: %v\n", normalizedLanguage, err)
+				logger.Logf("Warning: failed to generate code for %s: %v\n", normalizedLanguage, err)
 				continue
 			}
 			generatedFiles = append(generatedFiles, files...)
@@ -108,20 +108,20 @@ func (s *TemplateGenerationStrategy) GenerateCode(ctx context.Context, opportuni
 	}
 
 	if len(generatedFiles) == 0 {
-		ui.Log("No code files were generated")
+		logger.Log("No code files were generated")
 		return nil
 	}
 
 	// Report results
-	ui.Logf("Successfully generated %d files:\n", len(generatedFiles))
+	logger.Logf("Successfully generated %d files:\n", len(generatedFiles))
 	for _, file := range generatedFiles {
-		ui.Logf("  - %s\n", file)
+		logger.Logf("  - %s\n", file)
 	}
 
 	if len(operationsSummary) > 0 {
-		ui.Log("\nOperations performed:")
+		logger.Log("\nOperations performed:")
 		for _, summary := range operationsSummary {
-			ui.Logf("  %s\n", summary)
+			logger.Logf("  %s\n", summary)
 		}
 	}
 
@@ -168,9 +168,9 @@ func (s *TemplateGenerationStrategy) generateCodeWithLanguage(
 	outputPath := filepath.Join(outputDir, filename)
 
 	if req.Config.DryRun {
-		ui.Logf("Generated %s instrumentation code (dry run):\n", language)
-		ui.Logf(dryRunOutputFormat, outputPath)
-		ui.Logf(dryRunContentFormat, code)
+		logger.Logf("Generated %s instrumentation code (dry run):\n", language)
+		logger.Logf(dryRunOutputFormat, outputPath)
+		logger.Logf(dryRunContentFormat, code)
 		return []string{outputPath}, nil
 	}
 
@@ -384,7 +384,7 @@ func (s *TemplateGenerationStrategy) addDependencies(
 
 	// Validate project structure
 	if err := s.dependencyWriter.ValidateProjectStructure(projectPath, language); err != nil {
-		ui.Logf("Warning: %v\n", err)
+		logger.Logf("Warning: %v\n", err)
 	}
 
 	// Add dependencies

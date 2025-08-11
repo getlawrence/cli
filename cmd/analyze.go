@@ -11,7 +11,7 @@ import (
 	"github.com/getlawrence/cli/internal/detector"
 	"github.com/getlawrence/cli/internal/detector/issues"
 	"github.com/getlawrence/cli/internal/detector/languages"
-	"github.com/getlawrence/cli/internal/ui"
+	"github.com/getlawrence/cli/internal/logger"
 	"github.com/spf13/cobra"
 )
 
@@ -66,7 +66,7 @@ func runAnalyze(cmd *cobra.Command, args []string) error {
 	outputFormat, _ := cmd.Flags().GetString("output")
 
 	if verbose {
-		ui.Logf("Analyzing codebase at: %s\n", absPath)
+		logger.Logf("Analyzing codebase at: %s\n", absPath)
 	}
 
 	// Create analysis engine
@@ -83,17 +83,9 @@ func runAnalyze(cmd *cobra.Command, args []string) error {
 	})
 
 	// Run analysis
-	ctx := cmd.Context()
-
-	var analysis *detector.Analysis
-	// Always use spinner TUI while analyzing
-	runErr := ui.RunSpinner(ctx, "Analyzing codebase...", func() error {
-		var e error
-		analysis, e = codebaseAnalyzer.AnalyzeCodebase(ctx, absPath)
-		return e
-	})
-	if runErr != nil {
-		return runErr
+	analysis, err := codebaseAnalyzer.AnalyzeCodebase(cmd.Context(), absPath)
+	if err != nil {
+		return err
 	}
 
 	switch outputFormat {
@@ -106,7 +98,7 @@ func runAnalyze(cmd *cobra.Command, args []string) error {
 
 func outputText(analysis *detector.Analysis, detailed bool) error {
 	if analysis == nil || len(analysis.DirectoryAnalyses) == 0 {
-		ui.Logf("No analysis results to display.\n")
+		logger.Logf("No analysis results to display.\n")
 		return nil
 	}
 
@@ -144,14 +136,14 @@ func outputText(analysis *detector.Analysis, detailed bool) error {
 		totalIssues += len(dirAnalysis.Issues)
 
 		// Header
-		ui.Logf("Directory: %s\n", dirAnalysis.Directory)
-		ui.Logf("Language: %s\n", dirAnalysis.Language)
+		logger.Logf("Directory: %s\n", dirAnalysis.Directory)
+		logger.Logf("Language: %s\n", dirAnalysis.Language)
 
 		// Libraries
 		if detailed {
-			ui.Logf("Libraries:\n")
+			logger.Logf("Libraries:\n")
 			if len(dirAnalysis.Libraries) == 0 {
-				ui.Logf("  - none\n")
+				logger.Logf("  - none\n")
 			} else {
 				for _, lib := range dirAnalysis.Libraries {
 					name := lib.Name
@@ -164,18 +156,18 @@ func outputText(analysis *detector.Analysis, detailed bool) error {
 					if file != "" {
 						label = joinNonEmpty(label, fmt.Sprintf("[%s]", file))
 					}
-					ui.Logf("  - %s\n", label)
+					logger.Logf("  - %s\n", label)
 				}
 			}
 		} else {
-			ui.Logf("Libraries: %d\n", len(dirAnalysis.Libraries))
+			logger.Logf("Libraries: %d\n", len(dirAnalysis.Libraries))
 		}
 
 		// Packages
 		if detailed {
-			ui.Logf("Packages:\n")
+			logger.Logf("Packages:\n")
 			if len(dirAnalysis.Packages) == 0 {
-				ui.Logf("  - none\n")
+				logger.Logf("  - none\n")
 			} else {
 				for _, pkg := range dirAnalysis.Packages {
 					name := pkg.Name
@@ -188,18 +180,18 @@ func outputText(analysis *detector.Analysis, detailed bool) error {
 					if file != "" {
 						label = joinNonEmpty(label, fmt.Sprintf("[%s]", file))
 					}
-					ui.Logf("  - %s\n", label)
+					logger.Logf("  - %s\n", label)
 				}
 			}
 		} else {
-			ui.Logf("Packages: %d\n", len(dirAnalysis.Packages))
+			logger.Logf("Packages: %d\n", len(dirAnalysis.Packages))
 		}
 
 		// Instrumentations
 		if detailed {
-			ui.Logf("Instrumentations:\n")
+			logger.Logf("Instrumentations:\n")
 			if len(dirAnalysis.AvailableInstrumentations) == 0 {
-				ui.Logf("  - none\n")
+				logger.Logf("  - none\n")
 			} else {
 				for _, inst := range dirAnalysis.AvailableInstrumentations {
 					tags := make([]string, 0, 3)
@@ -223,29 +215,29 @@ func outputText(analysis *detector.Analysis, detailed bool) error {
 					if link != "" {
 						suffix = joinNonEmpty(suffix, fmt.Sprintf("- %s", link))
 					}
-					ui.Logf("  - %s: %s%s\n", inst.Package.Name, inst.Title, suffix)
+					logger.Logf("  - %s: %s%s\n", inst.Package.Name, inst.Title, suffix)
 				}
 			}
 		} else {
-			ui.Logf("Instrumentations: %d\n", len(dirAnalysis.AvailableInstrumentations))
+			logger.Logf("Instrumentations: %d\n", len(dirAnalysis.AvailableInstrumentations))
 		}
 
 		// Issues
 		if len(dirAnalysis.Issues) > 0 {
-			ui.Logf("Issues (%d):\n", len(dirAnalysis.Issues))
+			logger.Logf("Issues (%d):\n", len(dirAnalysis.Issues))
 			for _, issue := range dirAnalysis.Issues {
 				header := fmt.Sprintf("[%s][%s] %s", strings.ToUpper(string(issue.Severity)), string(issue.Category), issue.Title)
-				ui.Logf("  - %s\n", header)
+				logger.Logf("  - %s\n", header)
 				if strings.TrimSpace(issue.Description) != "" {
-					ui.Logf("    Description: %s\n", issue.Description)
+					logger.Logf("    Description: %s\n", issue.Description)
 				}
 				if strings.TrimSpace(issue.Suggestion) != "" {
-					ui.Logf("    Suggestion: %s\n", issue.Suggestion)
+					logger.Logf("    Suggestion: %s\n", issue.Suggestion)
 				}
 				if len(issue.References) > 0 {
-					ui.Logf("    References:\n")
+					logger.Logf("    References:\n")
 					for _, ref := range issue.References {
-						ui.Logf("      - %s\n", ref)
+						logger.Logf("      - %s\n", ref)
 					}
 				}
 				locParts := make([]string, 0, 2)
@@ -256,15 +248,15 @@ func outputText(analysis *detector.Analysis, detailed bool) error {
 					locParts = append(locParts, fmt.Sprintf("line %d", issue.Line))
 				}
 				if len(locParts) > 0 {
-					ui.Logf("    Location: %s\n", strings.Join(locParts, ": "))
+					logger.Logf("    Location: %s\n", strings.Join(locParts, ": "))
 				}
 			}
 		} else {
-			ui.Logf("Issues: 0\n")
+			logger.Logf("Issues: 0\n")
 		}
 
 		// Spacer between directories
-		ui.Logf("\n")
+		logger.Logf("\n")
 	}
 
 	// Summary footer
@@ -273,7 +265,7 @@ func outputText(analysis *detector.Analysis, detailed bool) error {
 		languages = append(languages, lang)
 	}
 	sort.Strings(languages)
-	ui.Logf("Summary: %d directories, %d languages [%s], %d libraries, %d packages, %d instrumentations, %d issues\n",
+	logger.Logf("Summary: %d directories, %d languages [%s], %d libraries, %d packages, %d instrumentations, %d issues\n",
 		len(analysis.DirectoryAnalyses), len(languages), strings.Join(languages, ", "), totalLibraries, totalPackages, totalInstrumentations, totalIssues,
 	)
 

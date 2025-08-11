@@ -10,8 +10,8 @@ import (
 	"github.com/getlawrence/cli/internal/codegen/types"
 	"github.com/getlawrence/cli/internal/detector"
 	"github.com/getlawrence/cli/internal/domain"
+	"github.com/getlawrence/cli/internal/logger"
 	"github.com/getlawrence/cli/internal/templates"
-	"github.com/getlawrence/cli/internal/ui"
 )
 
 // AIGenerationStrategy implements code generation using AI agents
@@ -101,7 +101,7 @@ func (s *AIGenerationStrategy) GenerateCode(ctx context.Context, opportunities [
 	languageOpportunities := s.groupOpportunitiesByLanguage(opportunities)
 
 	if len(languageOpportunities) == 0 {
-		ui.Log("No opportunities to process")
+		logger.Log("No opportunities to process")
 		return nil
 	}
 
@@ -112,7 +112,7 @@ func (s *AIGenerationStrategy) GenerateCode(ctx context.Context, opportunities [
 	}
 
 	if len(allInstructions) == 0 {
-		ui.Log("No instructions generated")
+		logger.Log("No instructions generated")
 		return nil
 	}
 
@@ -144,11 +144,11 @@ func (s *AIGenerationStrategy) generateInstructionsForLanguages(languageOpportun
 			req.CodebasePath,
 		)
 		if err != nil {
-			ui.Logf("Warning: failed to generate comprehensive instructions for %s: %v\n", language, err)
+			logger.Logf("Warning: failed to generate comprehensive instructions for %s: %v\n", language, err)
 			continue
 		}
 
-		ui.Logf("Generated comprehensive instrumentation instructions for %s\n", language)
+		logger.Logf("Generated comprehensive instrumentation instructions for %s\n", language)
 		allInstructions = append(allInstructions, instruction)
 	}
 
@@ -159,7 +159,7 @@ func (s *AIGenerationStrategy) sendInstructionsToAgent(allInstructions []string,
 	// Combine all language instructions into a single comprehensive guide
 	combinedInstructions := s.combineInstructions(allInstructions, req.CodebasePath)
 
-	ui.Logf("Generated comprehensive instrumentation guide\n")
+	logger.Logf("Generated comprehensive instrumentation guide\n")
 
 	// Determine the primary language or use "multi-language" if multiple
 	language := req.Language
@@ -261,20 +261,20 @@ func (s *AIGenerationStrategy) sendInstructionsToAgent(allInstructions []string,
 		}
 		if req.Config.ShowPrompt || req.Config.DryRun {
 			fmt.Print("\n===== AGENT PROMPT =====\n\n")
-			ui.Log(prompt)
+			logger.Log(prompt)
 			fmt.Print("\n========================\n\n")
 		}
 		if req.Config.SavePrompt != "" {
 			if err := os.WriteFile(req.Config.SavePrompt, []byte(prompt), 0o644); err != nil {
 				return fmt.Errorf("failed to save prompt to %s: %v", req.Config.SavePrompt, err)
 			}
-			ui.Logf("Saved prompt to %s\n", req.Config.SavePrompt)
+			logger.Logf("Saved prompt to %s\n", req.Config.SavePrompt)
 		}
 	}
 
 	// In AI dry-run mode, skip invoking the external agent
 	if req.Config.DryRun {
-		ui.Log("AI dry-run: skipping agent execution")
+		logger.Log("AI dry-run: skipping agent execution")
 		return nil
 	}
 
@@ -283,7 +283,7 @@ func (s *AIGenerationStrategy) sendInstructionsToAgent(allInstructions []string,
 		return fmt.Errorf("failed to execute with agent %s: %v", req.Config.AgentType, err)
 	}
 
-	ui.Logf("Successfully sent comprehensive instrumentation guide to %s agent\n", req.Config.AgentType)
+	logger.Logf("Successfully sent comprehensive instrumentation guide to %s agent\n", req.Config.AgentType)
 	return nil
 }
 

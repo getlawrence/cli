@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/getlawrence/cli/internal/ui"
+	"github.com/getlawrence/cli/internal/logger"
 )
 
 // JavaScriptInjector implements DependencyHandler for JavaScript/Node.js projects
@@ -44,7 +44,7 @@ func (h *JavaScriptInjector) AddDependencies(ctx context.Context, projectPath st
 	}
 
 	if dryRun {
-		ui.Logf("Would run: npm %v in %s\n", args, projectPath)
+		logger.Logf("Would run: npm %v in %s\n", args, projectPath)
 		return nil
 	}
 

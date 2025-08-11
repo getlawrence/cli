@@ -35,7 +35,7 @@ import (
 )
 
 func main() {
-    ui.Log("hi")
+    logger.Log("hi")
 }
 `,
 			expectInitSub:   "SetupOTEL()",

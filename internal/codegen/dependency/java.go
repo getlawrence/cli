@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/getlawrence/cli/internal/ui"
+	"github.com/getlawrence/cli/internal/logger"
 )
 
 // JavaInjector implements DependencyHandler for Java projects (Maven/Gradle)
@@ -38,9 +38,9 @@ func (h *JavaInjector) AddDependencies(ctx context.Context, projectPath string, 
 	}
 
 	if dryRun {
-		ui.Logf("Java dependencies required (add to pom.xml or build.gradle):\n")
+		logger.Logf("Java dependencies required (add to pom.xml or build.gradle):\n")
 		for _, dep := range dependencies {
-			ui.Logf("  - %s\n", h.formatCoordinate(dep))
+			logger.Logf("  - %s\n", h.formatCoordinate(dep))
 		}
 		return nil
 	}
@@ -61,9 +61,9 @@ func (h *JavaInjector) AddDependencies(ctx context.Context, projectPath string, 
 
 	// If Gradle project, just inform user to add to build file
 	if hasGradle {
-		ui.Log("Please add the following dependencies to your Gradle build file (dependencies block):")
+		logger.Log("Please add the following dependencies to your Gradle build file (dependencies block):")
 		for _, dep := range dependencies {
-			ui.Logf("  implementation '%s'\n", h.formatCoordinate(dep))
+			logger.Logf("  implementation '%s'\n", h.formatCoordinate(dep))
 		}
 		return nil
 	}

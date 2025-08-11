@@ -10,7 +10,7 @@ import (
 
 	"github.com/getlawrence/cli/internal/codegen/types"
 	"github.com/getlawrence/cli/internal/domain"
-	"github.com/getlawrence/cli/internal/ui"
+	"github.com/getlawrence/cli/internal/logger"
 	sitter "github.com/smacker/go-tree-sitter"
 )
 
@@ -463,10 +463,10 @@ func (ci *CodeInjector) applyModifications(filePath string, modifications []type
 	modifiedContent := strings.Join(lines, "\n")
 
 	if dryRun {
-		ui.Logf("Would modify file: %s\n", filePath)
-		ui.Logf("Modifications:\n")
+		logger.Logf("Would modify file: %s\n", filePath)
+		logger.Logf("Modifications:\n")
 		for _, mod := range modifications {
-			ui.Logf("  Line %d: %s\n", mod.LineNumber, strings.TrimSpace(mod.Content))
+			logger.Logf("  Line %d: %s\n", mod.LineNumber, strings.TrimSpace(mod.Content))
 		}
 		return nil
 	}
@@ -474,7 +474,7 @@ func (ci *CodeInjector) applyModifications(filePath string, modifications []type
 	// Create backup
 	backupPath := filePath + ".backup"
 	if err := os.WriteFile(backupPath, content, 0644); err != nil {
-		ui.Logf("Warning: failed to create backup: %v\n", err)
+		logger.Logf("Warning: failed to create backup: %v\n", err)
 	}
 
 	// Write modified content
@@ -482,6 +482,6 @@ func (ci *CodeInjector) applyModifications(filePath string, modifications []type
 		return fmt.Errorf("failed to write modified file: %w", err)
 	}
 
-	ui.Logf("Successfully modified: %s (backup: %s)\n", filePath, backupPath)
+	logger.Logf("Successfully modified: %s (backup: %s)\n", filePath, backupPath)
 	return nil
 }

@@ -10,7 +10,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/getlawrence/cli/internal/ui"
+	"github.com/getlawrence/cli/internal/logger"
 )
 
 // GoInjector implements DependencyHandler for Go projects
@@ -42,17 +42,17 @@ func (h *GoInjector) AddDependencies(ctx context.Context, projectPath string, de
 	}
 
 	if len(neededDeps) == 0 {
-		ui.Log("All required dependencies are already present")
+		logger.Log("All required dependencies are already present")
 		return nil
 	}
 
 	if dryRun {
-		ui.Logf("Would add the following Go dependencies to %s:\n", goModPath)
+		logger.Logf("Would add the following Go dependencies to %s:\n", goModPath)
 		for _, dep := range neededDeps {
 			if dep.Version != "" {
-				ui.Logf("  - %s@%s\n", dep.ImportPath, dep.Version)
+				logger.Logf("  - %s@%s\n", dep.ImportPath, dep.Version)
 			} else {
-				ui.Logf("  - %s\n", dep.ImportPath)
+				logger.Logf("  - %s\n", dep.ImportPath)
 			}
 		}
 		return nil
@@ -322,10 +322,10 @@ func (h *GoInjector) getExistingDependencies(goModPath string) (map[string]bool,
 
 // addDependenciesWithGoGet adds dependencies using the go get command
 func (h *GoInjector) addDependenciesWithGoGet(ctx context.Context, projectPath string, dependencies []Dependency) error {
-	ui.Logf("Adding %d dependencies to Go project...\n", len(dependencies))
+	logger.Logf("Adding %d dependencies to Go project...\n", len(dependencies))
 
 	for _, dep := range dependencies {
-		ui.Logf("  Adding %s...\n", dep.ImportPath)
+		logger.Logf("  Adding %s...\n", dep.ImportPath)
 
 		args := []string{"get"}
 		if dep.Version != "" {
@@ -343,6 +343,6 @@ func (h *GoInjector) addDependenciesWithGoGet(ctx context.Context, projectPath s
 		}
 	}
 
-	ui.Logf("Successfully added %d dependencies\n", len(dependencies))
+	logger.Logf("Successfully added %d dependencies\n", len(dependencies))
 	return nil
 }
