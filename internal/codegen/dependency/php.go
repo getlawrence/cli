@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/getlawrence/cli/internal/ui"
 )
 
 // PHPInjector implements DependencyHandler for PHP projects (Composer)
@@ -71,13 +73,13 @@ func (h *PHPInjector) AddDependencies(ctx context.Context, projectPath string, d
 	}
 
 	if dryRun {
-		fmt.Printf("Would add the following PHP dependencies to composer.json in %s:\n", projectPath)
+		ui.Logf("Would add the following PHP dependencies to composer.json in %s:\n", projectPath)
 		for _, dep := range toAdd {
 			version := dep.Version
 			if version == "" {
 				version = "*"
 			}
-			fmt.Printf("  - %s: %s\n", dep.ImportPath, version)
+			ui.Logf("  - %s: %s\n", dep.ImportPath, version)
 		}
 		return nil
 	}
@@ -118,7 +120,7 @@ func (h *PHPInjector) AddDependencies(ctx context.Context, projectPath string, d
 	if err := os.WriteFile(composerPath, output, 0644); err != nil {
 		return fmt.Errorf("failed to write composer.json: %w", err)
 	}
-	fmt.Printf("Updated %s with %d dependencies\n", composerPath, len(toAdd))
+	ui.Logf("Updated %s with %d dependencies\n", composerPath, len(toAdd))
 	return nil
 }
 
@@ -151,7 +153,7 @@ func (h *PHPInjector) ResolveInstrumentationPrerequisites(instrumentations []str
 func (h *PHPInjector) ValidateProjectStructure(projectPath string) error {
 	composerPath := filepath.Join(projectPath, "composer.json")
 	if _, err := os.Stat(composerPath); os.IsNotExist(err) {
-		fmt.Printf("No composer.json found in %s, will create one if needed.\n", projectPath)
+		ui.Logf("No composer.json found in %s, will create one if needed.\n", projectPath)
 	}
 	return nil
 }

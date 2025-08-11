@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 
 	"github.com/getlawrence/cli/internal/detector"
 	"github.com/getlawrence/cli/internal/detector/issues"
@@ -64,7 +66,7 @@ func runAnalyze(cmd *cobra.Command, args []string) error {
 	outputFormat, _ := cmd.Flags().GetString("output")
 
 	if verbose {
-		fmt.Printf("Analyzing codebase at: %s\n", absPath)
+		ui.Logf("Analyzing codebase at: %s\n", absPath)
 	}
 
 	// Create analysis engine
@@ -103,7 +105,178 @@ func runAnalyze(cmd *cobra.Command, args []string) error {
 }
 
 func outputText(analysis *detector.Analysis, detailed bool) error {
-	fmt.Print(ui.RenderAnalysis(analysis, detailed))
+	if analysis == nil || len(analysis.DirectoryAnalyses) == 0 {
+		ui.Logf("No analysis results to display.\n")
+		return nil
+	}
+
+	// Stable ordering of directories
+	directories := make([]string, 0, len(analysis.DirectoryAnalyses))
+	for dir := range analysis.DirectoryAnalyses {
+		directories = append(directories, dir)
+	}
+	sort.Strings(directories)
+
+	// Totals for summary
+	var totalLibraries, totalPackages, totalInstrumentations, totalIssues int
+	detectedLanguages := make(map[string]bool)
+
+	// Helpers
+	joinNonEmpty := func(parts ...string) string {
+		out := make([]string, 0, len(parts))
+		for _, p := range parts {
+			if strings.TrimSpace(p) != "" {
+				out = append(out, p)
+			}
+		}
+		return strings.Join(out, " ")
+	}
+
+	for _, dir := range directories {
+		dirAnalysis := analysis.DirectoryAnalyses[dir]
+		if dirAnalysis == nil {
+			continue
+		}
+		detectedLanguages[strings.ToLower(dirAnalysis.Language)] = true
+		totalLibraries += len(dirAnalysis.Libraries)
+		totalPackages += len(dirAnalysis.Packages)
+		totalInstrumentations += len(dirAnalysis.AvailableInstrumentations)
+		totalIssues += len(dirAnalysis.Issues)
+
+		// Header
+		ui.Logf("Directory: %s\n", dirAnalysis.Directory)
+		ui.Logf("Language: %s\n", dirAnalysis.Language)
+
+		// Libraries
+		if detailed {
+			ui.Logf("Libraries:\n")
+			if len(dirAnalysis.Libraries) == 0 {
+				ui.Logf("  - none\n")
+			} else {
+				for _, lib := range dirAnalysis.Libraries {
+					name := lib.Name
+					ver := lib.Version
+					file := lib.PackageFile
+					label := name
+					if ver != "" {
+						label = joinNonEmpty(label, fmt.Sprintf("(%s)", ver))
+					}
+					if file != "" {
+						label = joinNonEmpty(label, fmt.Sprintf("[%s]", file))
+					}
+					ui.Logf("  - %s\n", label)
+				}
+			}
+		} else {
+			ui.Logf("Libraries: %d\n", len(dirAnalysis.Libraries))
+		}
+
+		// Packages
+		if detailed {
+			ui.Logf("Packages:\n")
+			if len(dirAnalysis.Packages) == 0 {
+				ui.Logf("  - none\n")
+			} else {
+				for _, pkg := range dirAnalysis.Packages {
+					name := pkg.Name
+					ver := pkg.Version
+					file := pkg.PackageFile
+					label := name
+					if ver != "" {
+						label = joinNonEmpty(label, fmt.Sprintf("(%s)", ver))
+					}
+					if file != "" {
+						label = joinNonEmpty(label, fmt.Sprintf("[%s]", file))
+					}
+					ui.Logf("  - %s\n", label)
+				}
+			}
+		} else {
+			ui.Logf("Packages: %d\n", len(dirAnalysis.Packages))
+		}
+
+		// Instrumentations
+		if detailed {
+			ui.Logf("Instrumentations:\n")
+			if len(dirAnalysis.AvailableInstrumentations) == 0 {
+				ui.Logf("  - none\n")
+			} else {
+				for _, inst := range dirAnalysis.AvailableInstrumentations {
+					tags := make([]string, 0, 3)
+					if inst.IsFirstParty {
+						tags = append(tags, "first-party")
+					}
+					if inst.IsAvailable {
+						tags = append(tags, "available")
+					} else {
+						tags = append(tags, "unavailable")
+					}
+					if inst.RegistryType != "" {
+						tags = append(tags, inst.RegistryType)
+					}
+					meta := ""
+					if len(tags) > 0 {
+						meta = fmt.Sprintf(" (%s)", strings.Join(tags, ", "))
+					}
+					link := inst.URLs.Repo
+					suffix := meta
+					if link != "" {
+						suffix = joinNonEmpty(suffix, fmt.Sprintf("- %s", link))
+					}
+					ui.Logf("  - %s: %s%s\n", inst.Package.Name, inst.Title, suffix)
+				}
+			}
+		} else {
+			ui.Logf("Instrumentations: %d\n", len(dirAnalysis.AvailableInstrumentations))
+		}
+
+		// Issues
+		if len(dirAnalysis.Issues) > 0 {
+			ui.Logf("Issues (%d):\n", len(dirAnalysis.Issues))
+			for _, issue := range dirAnalysis.Issues {
+				header := fmt.Sprintf("[%s][%s] %s", strings.ToUpper(string(issue.Severity)), string(issue.Category), issue.Title)
+				ui.Logf("  - %s\n", header)
+				if strings.TrimSpace(issue.Description) != "" {
+					ui.Logf("    Description: %s\n", issue.Description)
+				}
+				if strings.TrimSpace(issue.Suggestion) != "" {
+					ui.Logf("    Suggestion: %s\n", issue.Suggestion)
+				}
+				if len(issue.References) > 0 {
+					ui.Logf("    References:\n")
+					for _, ref := range issue.References {
+						ui.Logf("      - %s\n", ref)
+					}
+				}
+				locParts := make([]string, 0, 2)
+				if strings.TrimSpace(issue.File) != "" {
+					locParts = append(locParts, issue.File)
+				}
+				if issue.Line > 0 {
+					locParts = append(locParts, fmt.Sprintf("line %d", issue.Line))
+				}
+				if len(locParts) > 0 {
+					ui.Logf("    Location: %s\n", strings.Join(locParts, ": "))
+				}
+			}
+		} else {
+			ui.Logf("Issues: 0\n")
+		}
+
+		// Spacer between directories
+		ui.Logf("\n")
+	}
+
+	// Summary footer
+	languages := make([]string, 0, len(detectedLanguages))
+	for lang := range detectedLanguages {
+		languages = append(languages, lang)
+	}
+	sort.Strings(languages)
+	ui.Logf("Summary: %d directories, %d languages [%s], %d libraries, %d packages, %d instrumentations, %d issues\n",
+		len(analysis.DirectoryAnalyses), len(languages), strings.Join(languages, ", "), totalLibraries, totalPackages, totalInstrumentations, totalIssues,
+	)
+
 	return nil
 }
 

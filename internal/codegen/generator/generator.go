@@ -11,6 +11,7 @@ import (
 	"github.com/getlawrence/cli/internal/detector"
 	"github.com/getlawrence/cli/internal/domain"
 	"github.com/getlawrence/cli/internal/templates"
+	"github.com/getlawrence/cli/internal/ui"
 )
 
 // Generator extends the detector system for code generation
@@ -66,7 +67,7 @@ func (g *Generator) Generate(ctx context.Context, req types.GenerationRequest) e
 	}
 
 	if len(opportunities) == 0 {
-		fmt.Println("Generate: No code generation opportunities found")
+		ui.Log("Generate: No code generation opportunities found")
 		return nil
 	}
 
@@ -92,7 +93,7 @@ func (g *Generator) Generate(ctx context.Context, req types.GenerationRequest) e
 		return err
 	}
 
-	fmt.Printf("Using %s generation strategy\n", strategy.GetName())
+	ui.Logf("Using %s generation strategy\n", strategy.GetName())
 
 	// Provide analysis context to AI strategy (if applicable)
 	if ai, ok := strategy.(*agent.AIGenerationStrategy); ok {
