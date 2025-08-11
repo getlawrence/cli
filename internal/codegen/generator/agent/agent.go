@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 
 	"github.com/getlawrence/cli/internal/agents"
 	"github.com/getlawrence/cli/internal/codegen/types"
@@ -25,6 +27,8 @@ type AIGenerationStrategy struct {
 	existingPackages   []string
 	directoryLanguages map[string]string
 	rootDirectory      string
+	directoryLibraries map[string][]string
+	directoryPackages  map[string][]string
 }
 
 // NewAIGenerationStrategy creates a new AI-based generation strategy
@@ -44,6 +48,8 @@ func (s *AIGenerationStrategy) SetAnalysisContext(analysis *detector.Analysis) {
 	libSet := make(map[string]bool)
 	pkgSet := make(map[string]bool)
 	s.directoryLanguages = make(map[string]string)
+	s.directoryLibraries = make(map[string][]string)
+	s.directoryPackages = make(map[string][]string)
 	for directory, dir := range analysis.DirectoryAnalyses {
 		if dir.Language != "" {
 			langSet[dir.Language] = true
@@ -52,11 +58,13 @@ func (s *AIGenerationStrategy) SetAnalysisContext(analysis *detector.Analysis) {
 		for _, lib := range dir.Libraries {
 			if lib.Name != "" {
 				libSet[lib.Name] = true
+				s.directoryLibraries[directory] = append(s.directoryLibraries[directory], lib.Name)
 			}
 		}
 		for _, pkg := range dir.Packages {
 			if pkg.Name != "" {
 				pkgSet[pkg.Name] = true
+				s.directoryPackages[directory] = append(s.directoryPackages[directory], pkg.Name)
 			}
 		}
 	}
@@ -137,11 +145,14 @@ func (s *AIGenerationStrategy) generateInstructionsForLanguages(languageOpportun
 		// Collect all instrumentations for this language
 		allInstrumentations := s.collectAllInstrumentations(langOpportunities)
 
-		// Generate comprehensive instructions for this language
-		instruction, err := s.templateEngine.GenerateComprehensiveInstructions(
+		// Generate instructions for this language
+		instruction, err := s.templateEngine.GenerateInstructions(
 			language,
-			allInstrumentations,
-			req.CodebasePath,
+			templates.TemplateData{
+				Language:         language,
+				Instrumentations: allInstrumentations,
+				ServiceName:      filepath.Base(req.CodebasePath),
+			},
 		)
 		if err != nil {
 			logger.Logf("Warning: failed to generate comprehensive instructions for %s: %v\n", language, err)
@@ -156,101 +167,75 @@ func (s *AIGenerationStrategy) generateInstructionsForLanguages(languageOpportun
 }
 
 func (s *AIGenerationStrategy) sendInstructionsToAgent(allInstructions []string, req types.GenerationRequest, languageOpportunities map[string][]domain.Opportunity) error {
-	// Combine all language instructions into a single comprehensive guide
-	combinedInstructions := s.combineInstructions(allInstructions, req.CodebasePath)
-
-	logger.Logf("Generated comprehensive instrumentation guide\n")
-
-	// Determine the primary language or use "multi-language" if multiple
 	language := req.Language
 	if language == "" {
 		language = "multi-language" // Default for comprehensive guides
 	}
 
-	// Aggregate analysis context across languages
-	projectLanguageSet := make(map[string]bool)
-	frameworkSet := make(map[string]bool)
-	installInstrumentationSet := make(map[string]bool)
-	installComponents := make(map[string][]string)
-	removeComponents := make(map[string][]string)
-	var issues []string
-	installOTEL := false
+	// Build per-directory plans for prompt organization
+	var directoryPlans []templates.DirectoryPlan
+	for directory, lang := range s.directoryLanguages {
+		plan := templates.DirectoryPlan{
+			Directory:         directory,
+			Language:          lang,
+			InstallComponents: make(map[string][]string),
+			RemoveComponents:  make(map[string][]string),
+		}
 
-	for lang, opps := range languageOpportunities {
-		projectLanguageSet[lang] = true
-		for _, opp := range opps {
-			if opp.Framework != "" {
-				frameworkSet[opp.Framework] = true
-			}
-			switch opp.Type {
-			case domain.OpportunityInstallOTEL:
-				installOTEL = true
-			case domain.OpportunityInstallComponent:
-				if opp.ComponentType == domain.ComponentTypeInstrumentation {
-					installInstrumentationSet[opp.Component] = true
-				} else {
-					ctype := string(opp.ComponentType)
-					installComponents[ctype] = append(installComponents[ctype], opp.Component)
+		if libs := s.directoryLibraries[directory]; len(libs) > 0 {
+			plan.Libraries = libs
+			sort.Strings(plan.Libraries)
+		}
+		if pkgs := s.directoryPackages[directory]; len(pkgs) > 0 {
+			plan.Packages = pkgs
+			sort.Strings(plan.Packages)
+		}
+
+		if opps, ok := languageOpportunities[lang]; ok {
+			for _, opp := range opps {
+				// best-effort directory match
+				if opp.FilePath == directory || strings.Contains(opp.FilePath, directory) {
+					if opp.Framework != "" {
+						plan.DetectedFrameworks = append(plan.DetectedFrameworks, opp.Framework)
+					}
+					switch opp.Type {
+					case domain.OpportunityInstallOTEL:
+						plan.InstallOTEL = true
+					case domain.OpportunityInstallComponent:
+						if opp.ComponentType == domain.ComponentTypeInstrumentation {
+							plan.InstallInstrumentations = append(plan.InstallInstrumentations, string(opp.Component))
+						} else {
+							ctype := string(opp.ComponentType)
+							plan.InstallComponents[ctype] = append(plan.InstallComponents[ctype], string(opp.Component))
+						}
+					case domain.OpportunityRemoveComponent:
+						ctype := string(opp.ComponentType)
+						plan.RemoveComponents[ctype] = append(plan.RemoveComponents[ctype], string(opp.Component))
+					}
+					if opp.Suggestion != "" {
+						plan.Issues = append(plan.Issues, opp.Suggestion)
+					}
 				}
-			case domain.OpportunityRemoveComponent:
-				ctype := string(opp.ComponentType)
-				removeComponents[ctype] = append(removeComponents[ctype], opp.Component)
-			}
-			if opp.Suggestion != "" {
-				issues = append(issues, opp.Suggestion)
 			}
 		}
-	}
 
-	// De-duplicate component lists
-	dedupe := func(items []string) []string {
-		seen := make(map[string]bool)
-		var out []string
-		for _, it := range items {
-			if !seen[it] {
-				seen[it] = true
-				out = append(out, it)
-			}
+		sort.Strings(plan.DetectedFrameworks)
+		sort.Strings(plan.InstallInstrumentations)
+		for _, v := range plan.InstallComponents {
+			sort.Strings(v)
 		}
-		return out
-	}
-	for k, v := range installComponents {
-		installComponents[k] = dedupe(v)
-	}
-	for k, v := range removeComponents {
-		removeComponents[k] = dedupe(v)
+		for _, v := range plan.RemoveComponents {
+			sort.Strings(v)
+		}
+
+		directoryPlans = append(directoryPlans, plan)
 	}
 
-	var projectLanguages []string
-	for l := range projectLanguageSet {
-		projectLanguages = append(projectLanguages, l)
-	}
-	var detectedFrameworks []string
-	for f := range frameworkSet {
-		detectedFrameworks = append(detectedFrameworks, f)
-	}
-	var installInstrumentations []string
-	for inst := range installInstrumentationSet {
-		installInstrumentations = append(installInstrumentations, inst)
-	}
-
-	// Create agent execution request with extended context
 	agentRequest := agents.AgentExecutionRequest{
-		Language:                language,
-		Instructions:            combinedInstructions,
-		TargetDir:               req.CodebasePath,
-		ServiceName:             filepath.Base(req.CodebasePath), // Use directory name as default service name
-		Directory:               filepath.Base(req.CodebasePath),
-		DirectoryLanguages:      s.directoryLanguages,
-		DetectedFrameworks:      detectedFrameworks,
-		ProjectLanguages:        projectLanguages,
-		InstallOTEL:             installOTEL,
-		InstallInstrumentations: installInstrumentations,
-		InstallComponents:       installComponents,
-		RemoveComponents:        removeComponents,
-		ExistingLibraries:       s.existingLibraries,
-		ExistingPackages:        s.existingPackages,
-		Issues:                  issues,
+		Language:       language,
+		TargetDir:      req.CodebasePath,
+		Directory:      req.CodebasePath,
+		DirectoryPlans: directoryPlans,
 	}
 
 	// If requested (or in dry-run), generate and show/save the prompt before execution

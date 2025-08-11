@@ -64,7 +64,7 @@ func init() {
 	codegenCmd.Flags().BoolVar(&listStrategies, "list-strategies", false,
 		"List available generation strategies")
 	codegenCmd.Flags().StringVarP(&generationMode, "mode", "", "",
-		"Generation mode (ai, template). Defaults to ai if agents available, otherwise template")
+		"Generation mode (agent, template). Defaults to agent if agents available, otherwise template")
 	codegenCmd.Flags().StringVarP(&outputDir, "output", "o", "",
 		"Output directory for generated files (template mode only)")
 	codegenCmd.Flags().BoolVar(&dryRun, "dry-run", false,
@@ -122,7 +122,6 @@ func runCodegen(cmd *cobra.Command, args []string) error {
 		return listAvailableStrategies(codeGenerator)
 	}
 
-	// Determine generation mode
 	mode := types.GenerationMode(generationMode)
 	if mode == "" {
 		mode = codeGenerator.GetDefaultStrategy()
@@ -130,12 +129,12 @@ func runCodegen(cmd *cobra.Command, args []string) error {
 
 	// Validate mode
 	if mode != types.AgentMode && mode != types.TemplateMode {
-		return fmt.Errorf("invalid generation mode %s. Valid options: ai, template", mode)
+		return fmt.Errorf("invalid generation mode %s. Valid options: agent, template", mode)
 	}
 
 	// Validate mode-specific requirements
 	if mode == types.AgentMode && agentType == "" {
-		return fmt.Errorf("agent type is required for AI mode. Use --list-agents to see available options")
+		return fmt.Errorf("agent type is required for agent mode. Use --list-agents to see available options")
 	}
 
 	req := types.GenerationRequest{

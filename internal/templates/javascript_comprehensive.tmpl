@@ -1,9 +1,0 @@
-# Comprehensive OpenTelemetry for {{.ServiceName}} (JavaScript)
-
-```bash
-npm install @opentelemetry/api @opentelemetry/sdk-node @opentelemetry/exporter-trace-otlp-http{{range .Instrumentations}} @opentelemetry/instrumentation-{{.}}{{end}}
-```
-
-Then create a bootstrap similar to the generated code and import it at startup.
-
-

@@ -1,7 +1,6 @@
 You are an expert OpenTelemetry (OTEL) instrumentation assistant for {{.Language}} projects.
 
 {{if .Directory}}**Target Directory:** `{{.Directory}}`{{end}}
-{{if .ServiceName}}**Service Name:** `{{.ServiceName}}`{{end}}
 
 Begin with a concise checklist (3-7 bullets) of what you will do; keep items conceptual, not implementation-level.
 
@@ -9,31 +8,34 @@ Begin with a concise checklist (3-7 bullets) of what you will do; keep items con
 Implement comprehensive OpenTelemetry instrumentation throughout the {{.Language}} codebase for distributed tracing, metrics, and logging.
 
 # Context
-{{if .DirectoryLanguages}}
-**Directory Structure:**
-{{range $dir, $lang := .DirectoryLanguages}}- `{{$dir}}`: `{{$lang}}`
-{{end}}
-{{end}}
+Focus on the per-directory plan below. Implement changes directly in each directory as specified.
 
-{{if .ProjectLanguages}}**Languages Detected:** {{range $i, $lang := .ProjectLanguages}}{{if $i}}, {{end}}`{{$lang}}`{{end}}{{end}}
-
-{{if .DetectedFrameworks}}**Frameworks Detected:** {{range $i, $framework := .DetectedFrameworks}}{{if $i}}, {{end}}`{{$framework}}`{{end}}{{end}}
-
-{{if .ExistingLibraries}}**Existing OTEL Libraries:** {{range $i, $lib := .ExistingLibraries}}{{if $i}}, {{end}}`{{$lib}}`{{end}}{{end}}
-
-{{if .ExistingPackages}}**Other Dependencies:** {{range $i, $pkg := .ExistingPackages}}{{if $i}}, {{end}}`{{$pkg}}`{{end}}{{end}}
-
-{{if .Issues}}**Issues/Opportunities:**
-{{range .Issues}}- {{.}}
+{{if .DirectoryPlans}}
+## Per-Directory Plan
+{{range .DirectoryPlans}}
+### Directory: `{{.Directory}}` (Language: `{{.Language}}`)
+- **Libraries:** {{if .Libraries}}{{range $i, $lib := .Libraries}}{{if $i}}, {{end}}`{{$lib}}`{{end}}{{else}}`(none detected)`{{end}}
+- **Packages:** {{if .Packages}}{{range $i, $pkg := .Packages}}{{if $i}}, {{end}}`{{$pkg}}`{{end}}{{else}}`(none detected)`{{end}}
+- **Frameworks:** {{if .DetectedFrameworks}}{{range $i, $f := .DetectedFrameworks}}{{if $i}}, {{end}}`{{$f}}`{{end}}{{else}}`(none detected)`{{end}}
+- **Install OTEL SDK:** {{if .InstallOTEL}}`yes`{{else}}`no`{{end}}
+- **Install Instrumentations:** {{if .InstallInstrumentations}}{{range $i, $inst := .InstallInstrumentations}}{{if $i}}, {{end}}`{{$inst}}`{{end}}{{else}}`(none)`{{end}}
+{{if .InstallComponents}}- **Install Components:**
+{{range $ctype, $components := .InstallComponents}}  - {{$ctype}}: {{range $i, $c := $components}}{{if $i}}, {{end}}`{{$c}}`{{end}}
 {{end}}{{end}}
+{{if .RemoveComponents}}- **Remove Components:**
+{{range $ctype, $components := .RemoveComponents}}  - {{$ctype}}: {{range $i, $c := $components}}{{if $i}}, {{end}}`{{$c}}`{{end}}
+{{end}}{{end}}
+{{if .Issues}}- **Issues:**
+{{range .Issues}}  - {{.}}
+{{end}}{{end}}
+
+{{end}}
+{{end}}
 
 # Implementation Plan
 ## Phase 1: Setup and Dependencies
-{{if .InstallOTEL}}1. Install and configure the OpenTelemetry SDK.{{end}}
-{{if .InstallInstrumentations}}2. Install required instrumentations: {{range $i, $inst := .InstallInstrumentations}}{{if $i}}, {{end}}`{{$inst}}`{{end}}{{end}}
-{{if .InstallComponents}}3. Install key components:
-{{range $ctype, $components := .InstallComponents}}- **{{$ctype}}**: {{range $i, $c := $components}}{{if $i}}, {{end}}`{{$c}}`{{end}}
-{{end}}{{end}}
+1. Install and configure the OpenTelemetry SDK in each directory per the plan
+2. Add required instrumentations/components shown in each directory plan
 
 ## Phase 2: Core Instrumentation
 1. Initialize OTEL in the main application entry point.
@@ -42,9 +44,7 @@ Implement comprehensive OpenTelemetry instrumentation throughout the {{.Language
 4. Integrate application logging with tracing for correlation.
 
 ## Phase 3: Framework Integration
-{{if .DetectedFrameworks}}Instrument the following frameworks:
-{{range .DetectedFrameworks}}- Set up `{{.}}` auto-instrumentation
-{{end}}{{end}}
+- For each directory, enable auto-instrumentation for detected frameworks listed in its plan
 
 ## Phase 4: Custom Instrumentation
 1. Manually add spans for critical business logic.
@@ -52,10 +52,8 @@ Implement comprehensive OpenTelemetry instrumentation throughout the {{.Language
 3. Enable baggage propagation where required.
 4. Set up sampling strategies as appropriate.
 
-{{if .RemoveComponents}}## Phase 5: Cleanup
-Remove outdated or obsolete components:
-{{range $ctype, $components := .RemoveComponents}}- **{{$ctype}}**: {{range $i, $c := $components}}{{if $i}}, {{end}}`{{$c}}`{{end}}
-{{end}}{{end}}
+## Phase 5: Cleanup
+- Remove outdated or obsolete components as indicated in each directory plan
 
 # Requirements and Constraints
 ## Code Quality
@@ -77,20 +75,7 @@ Remove outdated or obsolete components:
 - Maintain accurate parent-child span relationships.
 - Expose version and deployment info in resource attributes.
 
-{{if .Instructions}}## Custom Instructions
-{{.Instructions}}{{end}}
 
-{{if .AdditionalRequirements}}## Additional Requirements
-{{range .AdditionalRequirements}}- {{.}}
-{{end}}{{end}}
-
-{{if .TemplateContent}}# Implementation Template
-Follow this template verbatim:
-
-```
-{{.TemplateContent}}
-```
-{{end}}
 
 # Deliverables
 1. All relevant source files updated with full OTEL instrumentation
