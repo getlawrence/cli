@@ -36,6 +36,18 @@ type AgentExecutionRequest struct {
 	ServiceName            string   `json:"service_name,omitempty"`
 	AdditionalRequirements []string `json:"additional_requirements,omitempty"`
 	TemplateContent        string   `json:"template_content,omitempty"`
+
+	// Extended analysis-driven context
+	Directory               string              `json:"directory,omitempty"`
+	DirectoryLanguages      map[string]string   `json:"directory_languages,omitempty"`
+	ProjectLanguages        []string            `json:"project_languages,omitempty"`
+	InstallOTEL             bool                `json:"install_otel,omitempty"`
+	InstallInstrumentations []string            `json:"install_instrumentations,omitempty"`
+	InstallComponents       map[string][]string `json:"install_components,omitempty"`
+	RemoveComponents        map[string][]string `json:"remove_components,omitempty"`
+	ExistingLibraries       []string            `json:"existing_libraries,omitempty"`
+	ExistingPackages        []string            `json:"existing_packages,omitempty"`
+	Issues                  []string            `json:"issues,omitempty"`
 }
 
 // Detector handles detection of available coding agents
@@ -112,6 +124,17 @@ func (d *Detector) GeneratePrompt(request AgentExecutionRequest) (string, error)
 		ServiceName:            request.ServiceName,
 		AdditionalRequirements: request.AdditionalRequirements,
 		TemplateContent:        request.TemplateContent,
+
+		Directory:               request.Directory,
+		DirectoryLanguages:      request.DirectoryLanguages,
+		ProjectLanguages:        request.ProjectLanguages,
+		InstallOTEL:             request.InstallOTEL,
+		InstallInstrumentations: request.InstallInstrumentations,
+		InstallComponents:       request.InstallComponents,
+		RemoveComponents:        request.RemoveComponents,
+		ExistingLibraries:       request.ExistingLibraries,
+		ExistingPackages:        request.ExistingPackages,
+		Issues:                  request.Issues,
 	}
 
 	return d.templateEngine.GenerateAgentPrompt(promptData)

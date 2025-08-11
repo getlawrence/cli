@@ -33,6 +33,18 @@ type AgentPromptData struct {
 	ServiceName            string   `json:"service_name,omitempty"`
 	AdditionalRequirements []string `json:"additional_requirements,omitempty"`
 	TemplateContent        string   `json:"template_content,omitempty"`
+
+	// Extended analysis-driven context
+	Directory               string              `json:"directory,omitempty"`
+	DirectoryLanguages      map[string]string   `json:"directory_languages,omitempty"`
+	ProjectLanguages        []string            `json:"project_languages,omitempty"`
+	InstallOTEL             bool                `json:"install_otel,omitempty"`
+	InstallInstrumentations []string            `json:"install_instrumentations,omitempty"`
+	InstallComponents       map[string][]string `json:"install_components,omitempty"`
+	RemoveComponents        map[string][]string `json:"remove_components,omitempty"`
+	ExistingLibraries       []string            `json:"existing_libraries,omitempty"`
+	ExistingPackages        []string            `json:"existing_packages,omitempty"`
+	Issues                  []string            `json:"issues,omitempty"`
 }
 
 // TemplateEngine handles template loading and execution

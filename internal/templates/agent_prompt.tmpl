@@ -1,4 +1,5 @@
 You are a coding assistant helping to add OpenTelemetry instrumentation to a {{.Language}} project.
+{{if .Directory}}Directory: {{.Directory}}{{end}}
 
 TASK: Implement OpenTelemetry instrumentation in the {{.Language}} files in this directory.
 
@@ -20,4 +21,41 @@ IMPLEMENTATION REQUIREMENTS:
 {{if .TemplateContent}}TEMPLATE TO FOLLOW:
 {{.TemplateContent}}
 
-{{end}}Please implement these changes now by modifying the actual files.
+{{end}}
+
+CONTEXT FROM ANALYSIS (use all of it precisely):
+{{if .DirectoryLanguages}}
+- Directories and primary languages:
+{{range $dir, $lang := .DirectoryLanguages}}  - {{$dir}}: {{$lang}}
+{{end}}
+{{end}}
+{{if .ProjectLanguages}}
+- Project languages: {{range $i, $lang := .ProjectLanguages}}{{if $i}}, {{end}}{{$lang}}{{end}}
+{{end}}
+{{if .InstallOTEL}}
+- OpenTelemetry SDK must be installed and initialized.
+{{end}}
+{{if .InstallInstrumentations}}
+- Instrumentations to install: {{range $i, $inst := .InstallInstrumentations}}{{if $i}}, {{end}}{{$inst}}{{end}}
+{{end}}
+{{if .InstallComponents}}
+- Components to install by type:
+{{range $ctype, $components := .InstallComponents}}  - {{$ctype}}: {{range $i, $c := $components}}{{if $i}}, {{end}}{{$c}}{{end}}
+{{end}}
+{{end}}
+{{if .RemoveComponents}}
+- Components to remove by type:
+{{range $ctype, $components := .RemoveComponents}}  - {{$ctype}}: {{range $i, $c := $components}}{{if $i}}, {{end}}{{$c}}{{end}}
+{{end}}
+{{end}}
+{{if .ExistingLibraries}}
+- Existing OTEL-related libraries detected: {{range $i, $lib := .ExistingLibraries}}{{if $i}}, {{end}}{{$lib}}{{end}}
+{{end}}
+{{if .ExistingPackages}}
+- Other existing packages: {{range $i, $pkg := .ExistingPackages}}{{if $i}}, {{end}}{{$pkg}}{{end}}
+{{end}}
+{{if .Issues}}
+- Detected issues/opportunities: {{range $i, $issue := .Issues}}{{if $i}} | {{end}}{{$issue}}{{end}}
+{{end}}
+
+Please implement these changes now by modifying the actual files.

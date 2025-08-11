@@ -94,6 +94,11 @@ func (g *Generator) Generate(ctx context.Context, req types.GenerationRequest) e
 
 	fmt.Printf("Using %s generation strategy\n", strategy.GetName())
 
+	// Provide analysis context to AI strategy (if applicable)
+	if ai, ok := strategy.(*agent.AIGenerationStrategy); ok {
+		ai.SetAnalysisContext(analysis)
+	}
+
 	// Execute generation using the selected strategy
 	return strategy.GenerateCode(ctx, opportunities, req)
 }
