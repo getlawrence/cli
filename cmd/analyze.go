@@ -1,18 +1,15 @@
 package cmd
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
-	"strings"
 
 	"github.com/getlawrence/cli/internal/detector"
 	"github.com/getlawrence/cli/internal/detector/issues"
 	"github.com/getlawrence/cli/internal/detector/languages"
-	"github.com/getlawrence/cli/internal/domain"
+	"github.com/getlawrence/cli/internal/ui"
 	"github.com/spf13/cobra"
 )
 
@@ -51,13 +48,13 @@ func runAnalyze(cmd *cobra.Command, args []string) error {
 	}
 
 	// Convert to absolute path
-	absPath, err := filepath.Abs(targetPath)
-	if err != nil {
-		return fmt.Errorf("failed to resolve path: %w", err)
+	absPath, pathErr := filepath.Abs(targetPath)
+	if pathErr != nil {
+		return fmt.Errorf("failed to resolve path: %w", pathErr)
 	}
 
 	// Check if path exists
-	if _, err := os.Stat(absPath); os.IsNotExist(err) {
+	if _, statErr := os.Stat(absPath); os.IsNotExist(statErr) {
 		return fmt.Errorf("path does not exist: %s", absPath)
 	}
 
@@ -84,13 +81,19 @@ func runAnalyze(cmd *cobra.Command, args []string) error {
 	})
 
 	// Run analysis
-	ctx := context.Background()
-	analysis, err := codebaseAnalyzer.AnalyzeCodebase(ctx, absPath)
-	if err != nil {
-		return fmt.Errorf("analysis failed: %w", err)
+	ctx := cmd.Context()
+
+	var analysis *detector.Analysis
+	// Always use spinner TUI while analyzing
+	runErr := ui.RunSpinner(ctx, "Analyzing codebase...", func() error {
+		var e error
+		analysis, e = codebaseAnalyzer.AnalyzeCodebase(ctx, absPath)
+		return e
+	})
+	if runErr != nil {
+		return runErr
 	}
 
-	// Output results
 	switch outputFormat {
 	case "json":
 		return outputJSON(analysis)
@@ -100,213 +103,31 @@ func runAnalyze(cmd *cobra.Command, args []string) error {
 }
 
 func outputText(analysis *detector.Analysis, detailed bool) error {
-	fmt.Printf("📊 OpenTelemetry Analysis Results\n")
-	fmt.Printf("=================================\n\n")
-
-	// Aggregate data from all directories
-	var allIssues []domain.Issue
-	var allLibraries []domain.Library
-	var allPackages []domain.Package
-	var allInstrumentations []domain.InstrumentationInfo
-	detectedLanguages := make(map[string]bool)
-
-	for _, dirAnalysis := range analysis.DirectoryAnalyses {
-		allIssues = append(allIssues, dirAnalysis.Issues...)
-		allLibraries = append(allLibraries, dirAnalysis.Libraries...)
-		allPackages = append(allPackages, dirAnalysis.Packages...)
-		allInstrumentations = append(allInstrumentations, dirAnalysis.AvailableInstrumentations...)
-		if dirAnalysis.Language != "" {
-			detectedLanguages[dirAnalysis.Language] = true
-		}
-	}
-
-	// Convert detected languages map to a sorted slice for stable output
-	var languageSlice []string
-	for lang := range detectedLanguages {
-		languageSlice = append(languageSlice, lang)
-	}
-	sort.Strings(languageSlice)
-
-	// Summary
-	fmt.Printf("📂 Project Path: %s\n", analysis.RootPath)
-	fmt.Printf("🗣️  Languages Detected: %v\n", languageSlice)
-	fmt.Printf("📦 OpenTelemetry Libraries: %d\n", len(allLibraries))
-	fmt.Printf("📥 All Packages: %d\n", len(allPackages))
-	fmt.Printf("🔧 Available Instrumentations: %d\n", len(allInstrumentations))
-	fmt.Printf("📁 Directories Analyzed: %d\n", len(analysis.DirectoryAnalyses))
-	fmt.Printf("⚠️  Issues Found: %d\n\n", len(allIssues))
-
-	// Monorepo overview (when multiple directories exist)
-	if len(analysis.DirectoryAnalyses) > 1 {
-		fmt.Printf("📚 Monorepo Overview:\n")
-		fmt.Printf("--------------------\n")
-		// Stable iteration order
-		var dirs []string
-		for directory := range analysis.DirectoryAnalyses {
-			dirs = append(dirs, directory)
-		}
-		sort.Strings(dirs)
-
-		for _, directory := range dirs {
-			dirAnalysis := analysis.DirectoryAnalyses[directory]
-			fmt.Printf("  📂 %s (%s)\n", directory, dirAnalysis.Language)
-			fmt.Printf("    📦 Libraries: %d, 📥 Packages: %d, 🔧 Instrumentations: %d, ⚠️ Issues: %d\n",
-				len(dirAnalysis.Libraries), len(dirAnalysis.Packages),
-				len(dirAnalysis.AvailableInstrumentations), len(dirAnalysis.Issues))
-		}
-		fmt.Println()
-	}
-
-	// Directory-specific analysis
-	if len(analysis.DirectoryAnalyses) > 0 && detailed {
-		fmt.Printf("📁 Directory Analysis:\n")
-		fmt.Printf("---------------------\n")
-		// Stable iteration order
-		var dirs []string
-		for directory := range analysis.DirectoryAnalyses {
-			dirs = append(dirs, directory)
-		}
-		sort.Strings(dirs)
-		for _, directory := range dirs {
-			dirAnalysis := analysis.DirectoryAnalyses[directory]
-			fmt.Printf("  📂 %s (%s)\n", directory, dirAnalysis.Language)
-			fmt.Printf("    📦 Libraries: %d, Packages: %d, Instrumentations: %d, Issues: %d\n",
-				len(dirAnalysis.Libraries), len(dirAnalysis.Packages),
-				len(dirAnalysis.AvailableInstrumentations), len(dirAnalysis.Issues))
-
-			// Show directory-specific issues if any
-			if len(dirAnalysis.Issues) > 0 {
-				fmt.Printf("    ⚠️  Directory Issues:\n")
-				for _, issue := range dirAnalysis.Issues {
-					fmt.Printf("      • %s (%s)\n", issue.Title, issue.Severity)
-					if issue.Suggestion != "" {
-						fmt.Printf("        💡 %s\n", issue.Suggestion)
-					}
-				}
-			}
-		}
-		fmt.Println()
-	}
-
-	// Libraries
-	if len(allLibraries) > 0 {
-		fmt.Printf("📦 OpenTelemetry Libraries Found:\n")
-		fmt.Printf("---------------------------------\n")
-		for _, lib := range allLibraries {
-			if lib.Version != "" {
-				fmt.Printf("  • %s (%s) - %s\n", lib.Name, lib.Version, lib.Language)
-			} else {
-				fmt.Printf("  • %s - %s\n", lib.Name, lib.Language)
-			}
-			if detailed && lib.PackageFile != "" {
-				fmt.Printf("    📄 Found in: %s\n", lib.PackageFile)
-			}
-		}
-		fmt.Println()
-	}
-
-	// Available Instrumentations
-	if len(allInstrumentations) > 0 {
-		fmt.Printf("🔧 Available OpenTelemetry Instrumentations:\n")
-		fmt.Printf("-------------------------------------------\n")
-		for _, instrumentation := range allInstrumentations {
-			status := "🔧"
-			if instrumentation.IsFirstParty {
-				status = "✅"
-			}
-
-			fmt.Printf("  %s %s (%s)\n", status, instrumentation.Package.Name, instrumentation.Language)
-			if instrumentation.Title != "" && instrumentation.Title != instrumentation.Package.Name {
-				fmt.Printf("    📝 %s\n", instrumentation.Title)
-			}
-			if detailed && instrumentation.Description != "" {
-				fmt.Printf("    💬 %s\n", instrumentation.Description)
-			}
-			if detailed && len(instrumentation.Tags) > 0 {
-				fmt.Printf("    🏷️  Tags: %s\n", strings.Join(instrumentation.Tags, ", "))
-			}
-		}
-		fmt.Println()
-	}
-
-	// Issues (grouped by directory when monorepo)
-	if len(allIssues) > 0 {
-		fmt.Printf("⚠️  Issues and Recommendations:\n")
-		fmt.Printf("-------------------------------\n")
-		if len(analysis.DirectoryAnalyses) <= 1 {
-			fmt.Printf("Total Issues Found: %d\n\n", len(allIssues))
-			for _, issue := range allIssues {
-				fmt.Printf("  • %s (%s)\n", issue.Title, issue.Severity)
-				if issue.Description != "" {
-					fmt.Printf("    📖 %s\n", issue.Description)
-				}
-				if issue.Suggestion != "" {
-					fmt.Printf("    💡 %s\n", issue.Suggestion)
-				}
-				if detailed && len(issue.References) > 0 {
-					fmt.Printf("    📚 References: %s\n", strings.Join(issue.References, ", "))
-				}
-				if detailed && issue.File != "" {
-					fmt.Printf("    📄 File: %s, Line: %d\n", issue.File, issue.Line)
-				}
-				fmt.Println()
-			}
-		} else {
-			// Group by directory
-			// Stable iteration order
-			var dirs []string
-			for directory := range analysis.DirectoryAnalyses {
-				dirs = append(dirs, directory)
-			}
-			sort.Strings(dirs)
-
-			totalIssues := 0
-			for _, directory := range dirs {
-				dirAnalysis := analysis.DirectoryAnalyses[directory]
-				if len(dirAnalysis.Issues) == 0 {
-					continue
-				}
-				fmt.Printf("📂 %s (%s) — %d issue(s)\n", directory, dirAnalysis.Language, len(dirAnalysis.Issues))
-				for _, issue := range dirAnalysis.Issues {
-					fmt.Printf("  • %s (%s)\n", issue.Title, issue.Severity)
-					if issue.Description != "" {
-						fmt.Printf("    📖 %s\n", issue.Description)
-					}
-					if issue.Suggestion != "" {
-						fmt.Printf("    💡 %s\n", issue.Suggestion)
-					}
-					if detailed && len(issue.References) > 0 {
-						fmt.Printf("    📚 References: %s\n", strings.Join(issue.References, ", "))
-					}
-					if detailed && issue.File != "" {
-						fmt.Printf("    📄 File: %s, Line: %d\n", issue.File, issue.Line)
-					}
-					fmt.Println()
-					totalIssues++
-				}
-			}
-			fmt.Printf("Total Issues Found: %d\n", totalIssues)
-		}
-	} else {
-		fmt.Printf("✅ No issues found! Your OpenTelemetry setup looks good.\n")
-	}
-
+	fmt.Print(ui.RenderAnalysis(analysis, detailed))
 	return nil
 }
 
 func outputJSON(analysis *detector.Analysis) error {
 	// Aggregate data from all directories for backward compatibility
-	var allIssues []domain.Issue
-	var allLibraries []domain.Library
-	var allPackages []domain.Package
-	var allInstrumentations []domain.InstrumentationInfo
+	var allIssues []interface{}
+	var allLibraries []interface{}
+	var allPackages []interface{}
+	var allInstrumentations []interface{}
 	detectedLanguages := make(map[string]bool)
 
 	for _, dirAnalysis := range analysis.DirectoryAnalyses {
-		allIssues = append(allIssues, dirAnalysis.Issues...)
-		allLibraries = append(allLibraries, dirAnalysis.Libraries...)
-		allPackages = append(allPackages, dirAnalysis.Packages...)
-		allInstrumentations = append(allInstrumentations, dirAnalysis.AvailableInstrumentations...)
+		for _, it := range dirAnalysis.Issues {
+			allIssues = append(allIssues, it)
+		}
+		for _, it := range dirAnalysis.Libraries {
+			allLibraries = append(allLibraries, it)
+		}
+		for _, it := range dirAnalysis.Packages {
+			allPackages = append(allPackages, it)
+		}
+		for _, it := range dirAnalysis.AvailableInstrumentations {
+			allInstrumentations = append(allInstrumentations, it)
+		}
 		if dirAnalysis.Language != "" {
 			detectedLanguages[dirAnalysis.Language] = true
 		}

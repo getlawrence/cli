@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"path/filepath"
 
@@ -10,6 +9,7 @@ import (
 	"github.com/getlawrence/cli/internal/detector"
 	"github.com/getlawrence/cli/internal/detector/issues"
 	"github.com/getlawrence/cli/internal/detector/languages"
+	"github.com/getlawrence/cli/internal/ui"
 	"github.com/spf13/cobra"
 )
 
@@ -77,7 +77,7 @@ func init() {
 }
 
 func runCodegen(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
+	ctx := cmd.Context()
 
 	targetPath := "."
 	if len(args) > 0 {
@@ -152,7 +152,10 @@ func runCodegen(cmd *cobra.Command, args []string) error {
 		},
 	}
 
-	return codeGenerator.Generate(ctx, req)
+	// Always show spinner for generation
+	return ui.RunSpinner(ctx, "Generating code...", func() error {
+		return codeGenerator.Generate(ctx, req)
+	})
 }
 
 func listAvailableAgents(generator *generator.Generator) error {
