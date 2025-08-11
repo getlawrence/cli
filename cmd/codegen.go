@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"path/filepath"
 
@@ -10,6 +9,7 @@ import (
 	"github.com/getlawrence/cli/internal/detector"
 	"github.com/getlawrence/cli/internal/detector/issues"
 	"github.com/getlawrence/cli/internal/detector/languages"
+	"github.com/getlawrence/cli/internal/logger"
 	"github.com/spf13/cobra"
 )
 
@@ -64,7 +64,7 @@ func init() {
 	codegenCmd.Flags().BoolVar(&listStrategies, "list-strategies", false,
 		"List available generation strategies")
 	codegenCmd.Flags().StringVarP(&generationMode, "mode", "", "",
-		"Generation mode (ai, template). Defaults to ai if agents available, otherwise template")
+		"Generation mode (agent, template). Defaults to agent if agents available, otherwise template")
 	codegenCmd.Flags().StringVarP(&outputDir, "output", "o", "",
 		"Output directory for generated files (template mode only)")
 	codegenCmd.Flags().BoolVar(&dryRun, "dry-run", false,
@@ -77,7 +77,7 @@ func init() {
 }
 
 func runCodegen(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
+	ctx := cmd.Context()
 
 	targetPath := "."
 	if len(args) > 0 {
@@ -122,20 +122,19 @@ func runCodegen(cmd *cobra.Command, args []string) error {
 		return listAvailableStrategies(codeGenerator)
 	}
 
-	// Determine generation mode
 	mode := types.GenerationMode(generationMode)
 	if mode == "" {
 		mode = codeGenerator.GetDefaultStrategy()
 	}
 
 	// Validate mode
-	if mode != types.AIMode && mode != types.TemplateMode {
-		return fmt.Errorf("invalid generation mode %s. Valid options: ai, template", mode)
+	if mode != types.AgentMode && mode != types.TemplateMode {
+		return fmt.Errorf("invalid generation mode %s. Valid options: agent, template", mode)
 	}
 
 	// Validate mode-specific requirements
-	if mode == types.AIMode && agentType == "" {
-		return fmt.Errorf("agent type is required for AI mode. Use --list-agents to see available options")
+	if mode == types.AgentMode && agentType == "" {
+		return fmt.Errorf("agent type is required for agent mode. Use --list-agents to see available options")
 	}
 
 	req := types.GenerationRequest{
@@ -152,6 +151,7 @@ func runCodegen(cmd *cobra.Command, args []string) error {
 		},
 	}
 
+	// Always show spinner for generation
 	return codeGenerator.Generate(ctx, req)
 }
 
@@ -159,17 +159,17 @@ func listAvailableAgents(generator *generator.Generator) error {
 	agents := generator.ListAvailableAgents()
 
 	if len(agents) == 0 {
-		fmt.Println("No coding agents detected on your system")
-		fmt.Println("\nTo use this feature, install one of the following:")
-		fmt.Println("  - GitHub CLI: gh extension install github/gh-copilot")
-		fmt.Println("  - Gemini CLI: Follow instructions at https://ai.google.dev/gemini-api/docs/cli")
-		fmt.Println("  - Claude Code: Follow instructions at https://docs.anthropic.com/claude/docs")
+		logger.Log("No coding agents detected on your system")
+		logger.Log("\nTo use this feature, install one of the following:")
+		logger.Log("  - GitHub CLI: gh extension install github/gh-copilot")
+		logger.Log("  - Gemini CLI: Follow instructions at https://ai.google.dev/gemini-api/docs/cli")
+		logger.Log("  - Claude Code: Follow instructions at https://docs.anthropic.com/claude/docs")
 		return nil
 	}
 
-	fmt.Println("Available coding agents:")
+	logger.Log("Available coding agents:")
 	for _, agent := range agents {
-		fmt.Printf("  %s - %s (version: %s)\n",
+		logger.Logf("  %s - %s (version: %s)\n",
 			agent.Type, agent.Name, agent.Version)
 	}
 
@@ -179,9 +179,9 @@ func listAvailableAgents(generator *generator.Generator) error {
 func listAvailableTemplates(generator *generator.Generator) error {
 	templates := generator.ListAvailableTemplates()
 
-	fmt.Println("Available templates:")
+	logger.Log("Available templates:")
 	for _, template := range templates {
-		fmt.Printf("  %s\n", template)
+		logger.Logf("  %s\n", template)
 	}
 
 	return nil
@@ -190,16 +190,16 @@ func listAvailableTemplates(generator *generator.Generator) error {
 func listAvailableStrategies(generator *generator.Generator) error {
 	strategies := generator.ListAvailableStrategies()
 
-	fmt.Println("Available generation strategies:")
+	logger.Log("Available generation strategies:")
 	for mode, available := range strategies {
 		status := "available"
 		if !available {
 			status = "not available"
 		}
-		fmt.Printf("  %s - %s\n", mode, status)
+		logger.Logf("  %s - %s\n", mode, status)
 	}
 
-	fmt.Printf("\nDefault strategy: %s\n", generator.GetDefaultStrategy())
+	logger.Logf("\nDefault strategy: %s\n", generator.GetDefaultStrategy())
 
 	return nil
 }

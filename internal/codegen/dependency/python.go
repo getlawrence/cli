@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"github.com/getlawrence/cli/internal/logger"
 )
 
 // PythonInjector implements DependencyHandler for Python projects
@@ -208,7 +210,7 @@ func (h *PythonInjector) ValidateProjectStructure(projectPath string) error {
 		h.hasSetupPy(projectPath)
 
 	if !hasDepFile {
-		fmt.Printf("No Python dependency file found in %s, will create requirements.txt\n", projectPath)
+		logger.Logf("No Python dependency file found in %s, will create requirements.txt\n", projectPath)
 	}
 
 	return nil
@@ -260,17 +262,17 @@ func (h *PythonInjector) addToRequirementsTxt(projectPath string, dependencies [
 	}
 
 	if len(neededDeps) == 0 {
-		fmt.Println("All required dependencies are already present in requirements.txt")
+		logger.Log("All required dependencies are already present in requirements.txt")
 		return nil
 	}
 
 	if dryRun {
-		fmt.Printf("Would add the following Python dependencies to %s:\n", reqPath)
+		logger.Logf("Would add the following Python dependencies to %s:\n", reqPath)
 		for _, dep := range neededDeps {
 			if dep.Version != "" {
-				fmt.Printf("  - %s==%s\n", dep.ImportPath, dep.Version)
+				logger.Logf("  - %s==%s\n", dep.ImportPath, dep.Version)
 			} else {
-				fmt.Printf("  - %s\n", dep.ImportPath)
+				logger.Logf("  - %s\n", dep.ImportPath)
 			}
 		}
 		return nil
@@ -299,7 +301,7 @@ func (h *PythonInjector) addToRequirementsTxt(projectPath string, dependencies [
 		}
 	}
 
-	fmt.Printf("Adding %d dependencies to requirements.txt...\n", len(neededDeps))
+	logger.Logf("Adding %d dependencies to requirements.txt...\n", len(neededDeps))
 
 	for _, dep := range neededDeps {
 		var line string
@@ -313,22 +315,22 @@ func (h *PythonInjector) addToRequirementsTxt(projectPath string, dependencies [
 			return fmt.Errorf("failed to write dependency %s: %w", dep.ImportPath, err)
 		}
 
-		fmt.Printf("  Added %s\n", dep.ImportPath)
+		logger.Logf("  Added %s\n", dep.ImportPath)
 	}
 
-	fmt.Printf("Successfully added %d dependencies to requirements.txt\n", len(neededDeps))
+	logger.Logf("Successfully added %d dependencies to requirements.txt\n", len(neededDeps))
 	return nil
 }
 
 // addToPyprojectToml adds dependencies to pyproject.toml
 func (h *PythonInjector) addToPyprojectToml(projectPath string, dependencies []Dependency, dryRun bool) error {
 	if dryRun {
-		fmt.Printf("Would add the following Python dependencies to pyproject.toml:\n")
+		logger.Logf("Would add the following Python dependencies to pyproject.toml:\n")
 		for _, dep := range dependencies {
 			if dep.Version != "" {
-				fmt.Printf("  - %s = \"%s\"\n", dep.ImportPath, dep.Version)
+				logger.Logf("  - %s = \"%s\"\n", dep.ImportPath, dep.Version)
 			} else {
-				fmt.Printf("  - %s = \"*\"\n", dep.ImportPath)
+				logger.Logf("  - %s = \"*\"\n", dep.ImportPath)
 			}
 		}
 		return nil
@@ -341,21 +343,21 @@ func (h *PythonInjector) addToPyprojectToml(projectPath string, dependencies []D
 // addWithPip installs dependencies using pip
 func (h *PythonInjector) addWithPip(ctx context.Context, projectPath string, dependencies []Dependency, dryRun bool) error {
 	if dryRun {
-		fmt.Printf("Would install the following Python dependencies with pip:\n")
+		logger.Logf("Would install the following Python dependencies with pip:\n")
 		for _, dep := range dependencies {
 			if dep.Version != "" {
-				fmt.Printf("  - %s==%s\n", dep.ImportPath, dep.Version)
+				logger.Logf("  - %s==%s\n", dep.ImportPath, dep.Version)
 			} else {
-				fmt.Printf("  - %s\n", dep.ImportPath)
+				logger.Logf("  - %s\n", dep.ImportPath)
 			}
 		}
 		return nil
 	}
 
-	fmt.Printf("Installing %d dependencies with pip...\n", len(dependencies))
+	logger.Logf("Installing %d dependencies with pip...\n", len(dependencies))
 
 	for _, dep := range dependencies {
-		fmt.Printf("  Installing %s...\n", dep.ImportPath)
+		logger.Logf("  Installing %s...\n", dep.ImportPath)
 
 		args := []string{"install"}
 		if dep.Version != "" {
@@ -373,7 +375,7 @@ func (h *PythonInjector) addWithPip(ctx context.Context, projectPath string, dep
 		}
 	}
 
-	fmt.Printf("Successfully installed %d dependencies\n", len(dependencies))
+	logger.Logf("Successfully installed %d dependencies\n", len(dependencies))
 	return nil
 }
 
@@ -382,12 +384,12 @@ func (h *PythonInjector) createRequirementsTxt(projectPath string, dependencies 
 	reqPath := filepath.Join(projectPath, "requirements.txt")
 
 	if dryRun {
-		fmt.Printf("Would create %s with the following dependencies:\n", reqPath)
+		logger.Logf("Would create %s with the following dependencies:\n", reqPath)
 		for _, dep := range dependencies {
 			if dep.Version != "" {
-				fmt.Printf("  - %s==%s\n", dep.ImportPath, dep.Version)
+				logger.Logf("  - %s==%s\n", dep.ImportPath, dep.Version)
 			} else {
-				fmt.Printf("  - %s\n", dep.ImportPath)
+				logger.Logf("  - %s\n", dep.ImportPath)
 			}
 		}
 		return nil
@@ -399,7 +401,7 @@ func (h *PythonInjector) createRequirementsTxt(projectPath string, dependencies 
 	}
 	defer file.Close()
 
-	fmt.Printf("Creating requirements.txt with %d dependencies...\n", len(dependencies))
+	logger.Logf("Creating requirements.txt with %d dependencies...\n", len(dependencies))
 
 	for _, dep := range dependencies {
 		var line string
@@ -413,10 +415,10 @@ func (h *PythonInjector) createRequirementsTxt(projectPath string, dependencies 
 			return fmt.Errorf("failed to write dependency %s: %w", dep.ImportPath, err)
 		}
 
-		fmt.Printf("  Added %s\n", dep.ImportPath)
+		logger.Logf("  Added %s\n", dep.ImportPath)
 	}
 
-	fmt.Printf("Successfully created requirements.txt with %d dependencies\n", len(dependencies))
+	logger.Logf("Successfully created requirements.txt with %d dependencies\n", len(dependencies))
 	return nil
 }
 

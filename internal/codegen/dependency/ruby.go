@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"github.com/getlawrence/cli/internal/logger"
 )
 
 // RubyInjector implements DependencyHandler for Ruby projects (Bundler)
@@ -41,12 +43,12 @@ func (h *RubyInjector) AddDependencies(ctx context.Context, projectPath string, 
 	}
 
 	if dryRun {
-		fmt.Printf("Would add the following Ruby gems to %s and run bundle install:\n", gemfile)
+		logger.Logf("Would add the following Ruby gems to %s and run bundle install:\n", gemfile)
 		for _, dep := range needed {
 			if dep.Version != "" {
-				fmt.Printf("  - gem '%s', '%s'\n", dep.ImportPath, dep.Version)
+				logger.Logf("  - gem '%s', '%s'\n", dep.ImportPath, dep.Version)
 			} else {
-				fmt.Printf("  - gem '%s'\n", dep.ImportPath)
+				logger.Logf("  - gem '%s'\n", dep.ImportPath)
 			}
 		}
 		return nil

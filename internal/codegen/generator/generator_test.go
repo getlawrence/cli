@@ -41,8 +41,8 @@ func TestNewGenerator_DefaultsAndListings(t *testing.T) {
 	if _, ok := strategies[types.TemplateMode]; !ok {
 		t.Fatalf("expected TemplateMode key in strategies map")
 	}
-	if _, ok := strategies[types.AIMode]; !ok {
-		t.Fatalf("expected AIMode key in strategies map")
+	if _, ok := strategies[types.AgentMode]; !ok {
+		t.Fatalf("expected AgentMode key in strategies map")
 	}
 }
 

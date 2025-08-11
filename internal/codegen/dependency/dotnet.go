@@ -6,6 +6,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+
+	"github.com/getlawrence/cli/internal/logger"
 )
 
 // DotNetInjector implements DependencyHandler for .NET projects
@@ -26,12 +28,12 @@ func (h *DotNetInjector) AddDependencies(ctx context.Context, projectPath string
 	}
 
 	if dryRun {
-		fmt.Printf("Would run dotnet add package in %s for:\n", projectPath)
+		logger.Logf("Would run dotnet add package in %s for:\n", projectPath)
 		for _, dep := range dependencies {
 			if dep.Version != "" {
-				fmt.Printf("  dotnet add %s package %s --version %s\n", filepath.Base(csproj), dep.ImportPath, dep.Version)
+				logger.Logf("  dotnet add %s package %s --version %s\n", filepath.Base(csproj), dep.ImportPath, dep.Version)
 			} else {
-				fmt.Printf("  dotnet add %s package %s\n", filepath.Base(csproj), dep.ImportPath)
+				logger.Logf("  dotnet add %s package %s\n", filepath.Base(csproj), dep.ImportPath)
 			}
 		}
 		return nil

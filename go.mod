@@ -1,8 +1,8 @@
 module github.com/getlawrence/cli
 
-go 1.23
+go 1.23.0
 
-toolchain go1.23.4
+toolchain go1.24.6
 
 require (
 	github.com/go-enry/go-enry/v2 v2.9.2

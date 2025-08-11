@@ -29,13 +29,10 @@ type Agent struct {
 
 // AgentExecutionRequest contains all parameters needed for agent execution
 type AgentExecutionRequest struct {
-	Language               string   `json:"language"`
-	Instructions           string   `json:"instructions"`
-	TargetDir              string   `json:"target_dir"`
-	DetectedFrameworks     []string `json:"detected_frameworks,omitempty"`
-	ServiceName            string   `json:"service_name,omitempty"`
-	AdditionalRequirements []string `json:"additional_requirements,omitempty"`
-	TemplateContent        string   `json:"template_content,omitempty"`
+	Language       string                    `json:"language"`
+	TargetDir      string                    `json:"target_dir"`
+	Directory      string                    `json:"directory,omitempty"`
+	DirectoryPlans []templates.DirectoryPlan `json:"directory_plans,omitempty"`
 }
 
 // Detector handles detection of available coding agents
@@ -106,12 +103,9 @@ func (d *Detector) ExecuteWithAgent(agentType AgentType, request AgentExecutionR
 // GeneratePrompt creates a prompt using the template engine
 func (d *Detector) GeneratePrompt(request AgentExecutionRequest) (string, error) {
 	promptData := templates.AgentPromptData{
-		Language:               request.Language,
-		Instructions:           request.Instructions,
-		DetectedFrameworks:     request.DetectedFrameworks,
-		ServiceName:            request.ServiceName,
-		AdditionalRequirements: request.AdditionalRequirements,
-		TemplateContent:        request.TemplateContent,
+		Language:       request.Language,
+		Directory:      request.Directory,
+		DirectoryPlans: request.DirectoryPlans,
 	}
 
 	return d.templateEngine.GenerateAgentPrompt(promptData)

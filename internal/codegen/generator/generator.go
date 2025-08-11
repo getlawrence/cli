@@ -10,6 +10,7 @@ import (
 	"github.com/getlawrence/cli/internal/codegen/types"
 	"github.com/getlawrence/cli/internal/detector"
 	"github.com/getlawrence/cli/internal/domain"
+	"github.com/getlawrence/cli/internal/logger"
 	"github.com/getlawrence/cli/internal/templates"
 )
 
@@ -36,7 +37,7 @@ func NewGenerator(codebaseAnalyzer *detector.CodebaseAnalyzer) (*Generator, erro
 
 	// Initialize strategies
 	strategies := make(map[types.GenerationMode]types.CodeGenerationStrategy)
-	strategies[types.AIMode] = agent.NewAIGenerationStrategy(agentDetector, templateEngine)
+	strategies[types.AgentMode] = agent.NewAIGenerationStrategy(agentDetector, templateEngine)
 	strategies[types.TemplateMode] = template.NewTemplateGenerationStrategy(templateEngine)
 	defaultStrategy := types.TemplateMode
 
@@ -66,7 +67,7 @@ func (g *Generator) Generate(ctx context.Context, req types.GenerationRequest) e
 	}
 
 	if len(opportunities) == 0 {
-		fmt.Println("Generate: No code generation opportunities found")
+		logger.Log("Generate: No code generation opportunities found")
 		return nil
 	}
 
@@ -92,7 +93,12 @@ func (g *Generator) Generate(ctx context.Context, req types.GenerationRequest) e
 		return err
 	}
 
-	fmt.Printf("Using %s generation strategy\n", strategy.GetName())
+	logger.Logf("Using %s generation strategy\n", strategy.GetName())
+
+	// Provide analysis context to AI strategy (if applicable)
+	if ai, ok := strategy.(*agent.AIGenerationStrategy); ok {
+		ai.SetAnalysisContext(analysis)
+	}
 
 	// Execute generation using the selected strategy
 	return strategy.GenerateCode(ctx, opportunities, req)

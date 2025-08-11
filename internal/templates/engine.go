@@ -27,12 +27,24 @@ type TemplateData struct {
 
 // AgentPromptData contains all data needed for agent prompt generation
 type AgentPromptData struct {
-	Language               string   `json:"language"`
-	Instructions           string   `json:"instructions"`
-	DetectedFrameworks     []string `json:"detected_frameworks,omitempty"`
-	ServiceName            string   `json:"service_name,omitempty"`
-	AdditionalRequirements []string `json:"additional_requirements,omitempty"`
-	TemplateContent        string   `json:"template_content,omitempty"`
+	Language       string          `json:"language"`
+	Directory      string          `json:"directory,omitempty"`
+	DirectoryPlans []DirectoryPlan `json:"directory_plans,omitempty"`
+}
+
+// DirectoryPlan summarizes the tech stack and planned actions for a directory
+type DirectoryPlan struct {
+	Directory                string              `json:"directory"`
+	Language                 string              `json:"language"`
+	Libraries                []string            `json:"libraries,omitempty"`
+	Packages                 []string            `json:"packages,omitempty"`
+	DetectedFrameworks       []string            `json:"detected_frameworks,omitempty"`
+	ExistingInstrumentations []string            `json:"existing_instrumentations,omitempty"`
+	InstallOTEL              bool                `json:"install_otel,omitempty"`
+	InstallInstrumentations  []string            `json:"install_instrumentations,omitempty"`
+	InstallComponents        map[string][]string `json:"install_components,omitempty"`
+	RemoveComponents         map[string][]string `json:"remove_components,omitempty"`
+	Issues                   []string            `json:"issues,omitempty"`
 }
 
 // TemplateEngine handles template loading and execution
@@ -83,33 +95,6 @@ func (e *TemplateEngine) GenerateInstructions(lang string, data TemplateData) (s
 	}
 
 	return buf.String(), nil
-}
-
-// GenerateComprehensiveInstructions creates a single comprehensive instruction
-// that includes all instrumentations for a given language
-func (e *TemplateEngine) GenerateComprehensiveInstructions(lang string, allInstrumentations []string, serviceName string) (string, error) {
-	// Use comprehensive template if available
-	comprehensiveKey := fmt.Sprintf("%s_comprehensive", lang)
-	if tmpl, exists := e.templates[comprehensiveKey]; exists {
-		data := TemplateData{
-			Language:         lang,
-			Instrumentations: allInstrumentations,
-			ServiceName:      serviceName,
-		}
-
-		var buf bytes.Buffer
-		if err := tmpl.Execute(&buf, data); err != nil {
-			return "", fmt.Errorf("comprehensive template execution failed: %w", err)
-		}
-		return buf.String(), nil
-	}
-
-	// Fallback: generate individual instructions and combine them
-	return e.GenerateInstructions(lang, TemplateData{
-		Language:         lang,
-		Instrumentations: allInstrumentations,
-		ServiceName:      serviceName,
-	})
 }
 
 func (e *TemplateEngine) loadTemplates() error {
