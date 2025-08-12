@@ -74,13 +74,22 @@ func (h *JavaScriptInjector) GetCoreDependencies() []Dependency {
 func (h *JavaScriptInjector) GetInstrumentationDependency(instrumentation string) *Dependency {
 	// Map known instrumentation names to @opentelemetry/instrumentation-* packages
 	m := map[string]Dependency{
-		"http":    {Name: "HTTP Instrumentation", Language: "javascript", ImportPath: "@opentelemetry/instrumentation-http", Category: "instrumentation"},
-		"express": {Name: "Express Instrumentation", Language: "javascript", ImportPath: "@opentelemetry/instrumentation-express", Category: "instrumentation"},
-		"koa":     {Name: "Koa Instrumentation", Language: "javascript", ImportPath: "@opentelemetry/instrumentation-koa", Category: "instrumentation"},
-		"mysql":   {Name: "MySQL Instrumentation", Language: "javascript", ImportPath: "@opentelemetry/instrumentation-mysql", Category: "instrumentation"},
-		"pg":      {Name: "Postgres Instrumentation", Language: "javascript", ImportPath: "@opentelemetry/instrumentation-pg", Category: "instrumentation"},
-		"mongodb": {Name: "MongoDB Instrumentation", Language: "javascript", ImportPath: "@opentelemetry/instrumentation-mongodb", Category: "instrumentation"},
-		"redis":   {Name: "Redis Instrumentation", Language: "javascript", ImportPath: "@opentelemetry/instrumentation-redis", Category: "instrumentation"},
+		// Auto instrumentation bundle from opentelemetry-js-contrib
+		"auto":        {Name: "Node Auto Instrumentations", Language: "javascript", ImportPath: "@opentelemetry/auto-instrumentations-node", Category: "instrumentation"},
+		"http":        {Name: "HTTP Instrumentation", Language: "javascript", ImportPath: "@opentelemetry/instrumentation-http", Category: "instrumentation"},
+		"express":     {Name: "Express Instrumentation", Language: "javascript", ImportPath: "@opentelemetry/instrumentation-express", Category: "instrumentation"},
+		"fastify":     {Name: "Fastify Instrumentation", Language: "javascript", ImportPath: "@opentelemetry/instrumentation-fastify", Category: "instrumentation"},
+		"hapi":        {Name: "Hapi Instrumentation", Language: "javascript", ImportPath: "@opentelemetry/instrumentation-hapi", Category: "instrumentation"},
+		"restify":     {Name: "Restify Instrumentation", Language: "javascript", ImportPath: "@opentelemetry/instrumentation-restify", Category: "instrumentation"},
+		"nestjs-core": {Name: "NestJS Core Instrumentation", Language: "javascript", ImportPath: "@opentelemetry/instrumentation-nestjs-core", Category: "instrumentation"},
+		"next":        {Name: "Next.js Instrumentation", Language: "javascript", ImportPath: "@opentelemetry/instrumentation-next", Category: "instrumentation"},
+		"socket.io":   {Name: "Socket.io Instrumentation", Language: "javascript", ImportPath: "@opentelemetry/instrumentation-socket.io", Category: "instrumentation"},
+		"koa":         {Name: "Koa Instrumentation", Language: "javascript", ImportPath: "@opentelemetry/instrumentation-koa", Category: "instrumentation"},
+		"mysql":       {Name: "MySQL Instrumentation", Language: "javascript", ImportPath: "@opentelemetry/instrumentation-mysql", Category: "instrumentation"},
+		"mysql2":      {Name: "MySQL2 Instrumentation", Language: "javascript", ImportPath: "@opentelemetry/instrumentation-mysql2", Category: "instrumentation"},
+		"pg":          {Name: "Postgres Instrumentation", Language: "javascript", ImportPath: "@opentelemetry/instrumentation-pg", Category: "instrumentation"},
+		"mongodb":     {Name: "MongoDB Instrumentation", Language: "javascript", ImportPath: "@opentelemetry/instrumentation-mongodb", Category: "instrumentation"},
+		"redis":       {Name: "Redis Instrumentation", Language: "javascript", ImportPath: "@opentelemetry/instrumentation-redis", Category: "instrumentation"},
 	}
 	if dep, ok := m[instrumentation]; ok {
 		return &dep
@@ -90,6 +99,20 @@ func (h *JavaScriptInjector) GetInstrumentationDependency(instrumentation string
 
 // GetComponentDependency returns exporter/propagator components if needed
 func (h *JavaScriptInjector) GetComponentDependency(componentType, component string) *Dependency {
+	switch componentType {
+	case "propagator":
+		switch strings.ToLower(component) {
+		case "b3", "b3multi":
+			return &Dependency{Name: "B3 Propagator", Language: "javascript", ImportPath: "@opentelemetry/propagator-b3", Category: "propagator"}
+		}
+	case "exporter":
+		switch strings.ToLower(component) {
+		case "otlphttp", "otlp":
+			return &Dependency{Name: "OTLP HTTP Trace Exporter", Language: "javascript", ImportPath: "@opentelemetry/exporter-trace-otlp-http", Category: "exporter"}
+		case "otlpgrpc":
+			return &Dependency{Name: "OTLP gRPC Trace Exporter", Language: "javascript", ImportPath: "@opentelemetry/exporter-trace-otlp-grpc", Category: "exporter"}
+		}
+	}
 	return nil
 }
 
@@ -103,8 +126,13 @@ func (h *JavaScriptInjector) ResolveInstrumentationPrerequisites(instrumentation
 	for _, inst := range instrumentations {
 		seen[strings.ToLower(inst)] = true
 	}
-	// Add http if express/koa present
-	if (seen["express"] || seen["koa"]) && !seen["http"] {
+	// If using the auto bundle, prerequisites are handled internally
+	if seen["auto"] {
+		return instrumentations
+	}
+
+	// Add http if any web framework instrumentation is present
+	if (seen["express"] || seen["koa"] || seen["fastify"] || seen["hapi"] || seen["restify"] || seen["nestjs-core"] || seen["next"] || seen["socket.io"]) && !seen["http"] {
 		instrumentations = append(instrumentations, "http")
 	}
 	return instrumentations

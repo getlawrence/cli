@@ -200,8 +200,20 @@ func (h *PythonInjector) GetComponentDependency(componentType, component string)
 	return nil
 }
 
-// ResolveInstrumentationPrerequisites for Python currently returns the list unchanged.
+// ResolveInstrumentationPrerequisites adds known prerequisites for Python instrumentations.
+// Example: FastAPI builds on Starlette; include Starlette if FastAPI is requested.
 func (h *PythonInjector) ResolveInstrumentationPrerequisites(instrumentations []string) []string {
+	if len(instrumentations) == 0 {
+		return instrumentations
+	}
+	seen := make(map[string]bool)
+	for _, inst := range instrumentations {
+		seen[strings.ToLower(inst)] = true
+	}
+	// Ensure starlette when fastapi is requested
+	if seen["fastapi"] && !seen["starlette"] {
+		instrumentations = append(instrumentations, "starlette")
+	}
 	return instrumentations
 }
 

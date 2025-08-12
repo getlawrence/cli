@@ -8,8 +8,28 @@ require 'opentelemetry-exporter-otlp'
 require 'opentelemetry-instrumentation-{{.}}'
 {{end}}
 
+OTEL_EXPORTER_OTLP_ENDPOINT = ENV.fetch('OTEL_EXPORTER_OTLP_ENDPOINT', '{{if .TraceEndpoint}}{{.TraceEndpoint}}{{else}}http://localhost:4318{{end}}')
+
 OpenTelemetry::SDK.configure do |c|
   c.service_name = '{{.ServiceName}}'
+
+  # Exporter
+  c.add_span_processor(
+    OpenTelemetry::SDK::Trace::Export::BatchSpanProcessor.new(
+      OpenTelemetry::Exporter::OTLP::Exporter.new(
+        endpoint: OTEL_EXPORTER_OTLP_ENDPOINT
+      )
+    )
+  )
+
+  # Propagators
+  propagators = ['tracecontext', 'baggage']
+  {{- if .Propagators }}
+  propagators |= {{ printf "%#v" .Propagators }}
+  {{- end }}
+  OpenTelemetry.propagation = OpenTelemetry::Context::Propagation.build(propagators)
+
+  # Instrumentations
   {{range .Instrumentations}}
   c.use 'OpenTelemetry::Instrumentation::{{.}}'
   {{end}}

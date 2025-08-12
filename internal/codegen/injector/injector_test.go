@@ -102,8 +102,8 @@ public class Program {
 			source: `# ruby app
 puts 'hi'
 `,
-			expectInitSub:   "Lawrence::OTel.setup",
-			expectImportSub: "require \"opentelemetry-sdk\"",
+			expectInitSub:   "require_relative \"./otel\"",
+			expectImportSub: "",
 		},
 		{
 			name:     "PHP",

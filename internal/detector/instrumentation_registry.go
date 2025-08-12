@@ -152,11 +152,3 @@ func (s *InstrumentationRegistryService) CanonicalLanguage(language string) stri
 		return lang
 	}
 }
-
-// GetAvailableInstrumentations returns all instrumentations for a given language
-func (s *InstrumentationRegistryService) GetAvailableInstrumentations(ctx context.Context, language string) ([]domain.InstrumentationInfo, error) {
-	// This would require listing all instrumentation files for a language
-	// For now, we'll implement package-specific lookup only
-	// This could be extended to fetch directory listings or use a registry API
-	return nil, fmt.Errorf("listing all instrumentations not yet implemented")
-}

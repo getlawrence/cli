@@ -154,6 +154,31 @@ func (s *AIGenerationStrategy) generateInstructionsForLanguages(languageOpportun
 				Language:         language,
 				Instrumentations: allInstrumentations,
 				ServiceName:      filepath.Base(req.CodebasePath),
+				// Best-effort include exporter/propagator hints from config
+				TraceExporterType: func() string {
+					if req.OTEL != nil {
+						return req.OTEL.Exporters.Traces.Type
+					}
+					return ""
+				}(),
+				TraceProtocol: func() string {
+					if req.OTEL != nil {
+						return req.OTEL.Exporters.Traces.Protocol
+					}
+					return ""
+				}(),
+				TraceEndpoint: func() string {
+					if req.OTEL != nil {
+						return req.OTEL.Exporters.Traces.Endpoint
+					}
+					return ""
+				}(),
+				Propagators: func() []string {
+					if req.OTEL != nil {
+						return req.OTEL.Propagators
+					}
+					return nil
+				}(),
 			},
 		)
 		if err != nil {

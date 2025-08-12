@@ -4,10 +4,14 @@
 package telemetry;
 
 import io.opentelemetry.api.GlobalOpenTelemetry;
+import io.opentelemetry.api.trace.propagation.W3CTraceContextPropagator;
+import io.opentelemetry.context.propagation.ContextPropagators;
 import io.opentelemetry.exporter.otlp.trace.OtlpGrpcSpanExporter;
+import io.opentelemetry.exporter.otlp.http.trace.OtlpHttpSpanExporter;
 import io.opentelemetry.sdk.OpenTelemetrySdk;
 import io.opentelemetry.sdk.resources.Resource;
 import io.opentelemetry.sdk.trace.SdkTracerProvider;
+import io.opentelemetry.sdk.trace.samplers.Sampler;
 import io.opentelemetry.sdk.trace.export.BatchSpanProcessor;
 import static io.opentelemetry.semconv.ResourceAttributes.SERVICE_NAME;
 
@@ -15,13 +19,48 @@ public final class OtelBootstrap {
   private OtelBootstrap() {}
 
   public static OpenTelemetrySdk start() {
-    OtlpGrpcSpanExporter exporter = OtlpGrpcSpanExporter.builder().build();
+    String endpoint = System.getenv("OTEL_EXPORTER_OTLP_ENDPOINT");
+    if (endpoint == null || endpoint.isEmpty()) {
+      endpoint = "{{if .TraceEndpoint}}{{.TraceEndpoint}}{{else}}http://localhost:4318{{end}}";
+    }
+
+    // Choose exporter (http default)
+    boolean useHttp = true;
+    {{- if .TraceProtocol }}
+    useHttp = "{{.TraceProtocol}}".startsWith("http");
+    {{- end }}
+
+    var builder = useHttp ?
+      OtlpHttpSpanExporter.builder().setEndpoint(endpoint.endsWith("/v1/traces") ? endpoint : endpoint + "/v1/traces") :
+      OtlpGrpcSpanExporter.builder().setEndpoint(endpoint);
+
+    var exporter = (useHttp ? ((OtlpHttpSpanExporter.Builder)builder).build() : ((OtlpGrpcSpanExporter.Builder)builder).build());
+
+    // Sampler
+    Sampler sampler = Sampler.alwaysOn();
+    {{- if .SamplerType }}
+    if ("{{.SamplerType}}".equals("always_off")) {
+      sampler = Sampler.alwaysOff();
+    } else if ("{{.SamplerType}}".equals("traceidratio")) {
+      sampler = Sampler.traceIdRatioBased({{if gt .SamplerRatio 0.0}}{{.SamplerRatio}}{{else}}1.0{{end}});
+    }
+    {{- end }}
+
     SdkTracerProvider provider = SdkTracerProvider.builder()
         .addSpanProcessor(BatchSpanProcessor.builder(exporter).build())
+        .setSampler(sampler)
         .setResource(Resource.getDefault().toBuilder().put(SERVICE_NAME, "{{.ServiceName}}").build())
         .build();
+
     OpenTelemetrySdk sdk = OpenTelemetrySdk.builder().setTracerProvider(provider).build();
+
+    // Propagators
+    sdk = sdk.toBuilder()
+        .setPropagators(ContextPropagators.create(W3CTraceContextPropagator.getInstance()))
+        .build();
+
     GlobalOpenTelemetry.resetForTest();
+    GlobalOpenTelemetry.set(sdk);
     return sdk;
   }
 }

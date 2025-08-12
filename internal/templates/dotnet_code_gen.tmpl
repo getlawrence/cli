@@ -4,12 +4,13 @@ using Microsoft.Extensions.DependencyInjection;
 using OpenTelemetry;
 using OpenTelemetry.Trace;
 using OpenTelemetry.Resources;
+using OpenTelemetry.Context.Propagation;
 
 public static class Otel
 {
     public static void Configure(IServiceCollection services)
     {
-        var endpoint = Environment.GetEnvironmentVariable("OTEL_EXPORTER_OTLP_ENDPOINT") ?? "http://localhost:4318";
+        var endpoint = Environment.GetEnvironmentVariable("OTEL_EXPORTER_OTLP_ENDPOINT") ?? "{{if .TraceEndpoint}}{{.TraceEndpoint}}{{else}}http://localhost:4318{{end}}";
 
         services.AddOpenTelemetry()
             .WithTracing(tracing => tracing
@@ -19,7 +20,16 @@ public static class Otel
                 .AddGrpcClientInstrumentation()
                 .AddRuntimeInstrumentation()
                 .AddProcessInstrumentation()
-                .AddOtlpExporter());
+                .SetSampler(new TraceIdRatioBasedSampler({{if gt .SamplerRatio 0.0}}{{.SamplerRatio}}{{else}}1.0{{end}}))
+                .AddOtlpExporter(o => {
+                    o.Endpoint = new Uri(endpoint);
+                }));
+
+        // Propagators (defaults: TraceContext + Baggage)
+        Sdk.SetDefaultTextMapPropagator(new CompositeTextMapPropagator(new TextMapPropagator[] {
+            new TraceContextPropagator(),
+            new BaggagePropagator()
+        }));
     }
 }
 

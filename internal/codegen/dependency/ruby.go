@@ -104,8 +104,20 @@ func (h *RubyInjector) GetComponentDependency(componentType, component string) *
 	return nil
 }
 
-// ResolveInstrumentationPrerequisites for Ruby currently returns the list unchanged.
+// ResolveInstrumentationPrerequisites adds known prerequisites for Ruby instrumentations.
+// For example, Rails and Sinatra run on Rack; include Rack if not explicitly requested.
 func (h *RubyInjector) ResolveInstrumentationPrerequisites(instrumentations []string) []string {
+	if len(instrumentations) == 0 {
+		return instrumentations
+	}
+	seen := make(map[string]bool)
+	for _, inst := range instrumentations {
+		seen[strings.ToLower(inst)] = true
+	}
+	// Ensure rack is present when rails or sinatra is requested
+	if (seen["rails"] || seen["sinatra"]) && !seen["rack"] {
+		instrumentations = append(instrumentations, "rack")
+	}
 	return instrumentations
 }
 

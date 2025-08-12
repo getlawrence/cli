@@ -161,6 +161,30 @@ func (s *TemplateGenerationStrategy) generateCodeWithLanguage(
 		RemoveComponents:  operationsData.RemoveComponents,
 	}
 
+	// Apply advanced OTEL config to template data when provided
+	if req.OTEL != nil {
+		if req.OTEL.ServiceName != "" {
+			data.ServiceName = req.OTEL.ServiceName
+		}
+		if len(req.OTEL.Propagators) > 0 {
+			data.Propagators = append([]string{}, req.OTEL.Propagators...)
+		}
+		// Sampler config
+		if sType := strings.ToLower(req.OTEL.Sampler.Type); sType != "" {
+			data.SamplerType = sType
+			if req.OTEL.Sampler.Ratio > 0 {
+				data.SamplerRatio = req.OTEL.Sampler.Ratio
+			}
+		}
+		if req.OTEL.Exporters.Traces.Type != "" {
+			data.TraceExporterType = req.OTEL.Exporters.Traces.Type
+			data.TraceProtocol = req.OTEL.Exporters.Traces.Protocol
+			data.TraceEndpoint = req.OTEL.Exporters.Traces.Endpoint
+			data.TraceHeaders = req.OTEL.Exporters.Traces.Headers
+			data.TraceInsecure = req.OTEL.Exporters.Traces.Insecure
+		}
+	}
+
 	// Generate code using template
 	code, err := s.templateEngine.GenerateInstructions(language, data)
 	if err != nil {

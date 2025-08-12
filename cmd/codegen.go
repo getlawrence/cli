@@ -2,10 +2,12 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 
 	"github.com/getlawrence/cli/internal/codegen/generator"
 	"github.com/getlawrence/cli/internal/codegen/types"
+	cfg "github.com/getlawrence/cli/internal/config"
 	"github.com/getlawrence/cli/internal/detector"
 	"github.com/getlawrence/cli/internal/detector/issues"
 	"github.com/getlawrence/cli/internal/detector/languages"
@@ -48,6 +50,7 @@ var (
 	dryRun         bool
 	showPrompt     bool
 	savePrompt     string
+	configPath     string
 )
 
 func init() {
@@ -74,6 +77,8 @@ func init() {
 		"Print the generated agent prompt before execution (AI mode only)")
 	codegenCmd.Flags().StringVar(&savePrompt, "save-prompt", "",
 		"Save the generated agent prompt to the given file path (AI mode only)")
+	// Advanced config
+	codegenCmd.Flags().StringVarP(&configPath, "config", "c", "", "Path to advanced OpenTelemetry config YAML")
 }
 
 func runCodegen(cmd *cobra.Command, args []string) error {
@@ -139,6 +144,53 @@ func runCodegen(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("agent type is required for agent mode. Use --list-agents to see available options")
 	}
 
+	// Optionally load advanced OTEL config from YAML
+	var otelCfg *types.OTELConfig
+	if configPath != "" {
+		content, err := os.ReadFile(configPath)
+		if err != nil {
+			return fmt.Errorf("failed to read config file: %w", err)
+		}
+		parsed, err := cfg.LoadOTELConfig(content)
+		if err != nil {
+			return err
+		}
+		if err := parsed.Validate(); err != nil {
+			return err
+		}
+		// Map to types.OTELConfig for now (keeps request stable)
+		converted := &types.OTELConfig{
+			ServiceName:      parsed.ServiceName,
+			ServiceVersion:   parsed.ServiceVersion,
+			Environment:      parsed.Environment,
+			ResourceAttrs:    parsed.ResourceAttrs,
+			Instrumentations: parsed.Instrumentations,
+			Propagators:      parsed.Propagators,
+			SpanProcessors:   parsed.SpanProcessors,
+			SDK:              parsed.SDK,
+		}
+		converted.Sampler.Type = parsed.Sampler.Type
+		converted.Sampler.Ratio = parsed.Sampler.Ratio
+		converted.Sampler.Parent = parsed.Sampler.Parent
+		converted.Sampler.Rules = parsed.Sampler.Rules
+		// exporters
+		converted.Exporters.Traces.Type = parsed.Exporters.Traces.Type
+		converted.Exporters.Traces.Protocol = parsed.Exporters.Traces.Protocol
+		converted.Exporters.Traces.Endpoint = parsed.Exporters.Traces.Endpoint
+		converted.Exporters.Traces.Headers = parsed.Exporters.Traces.Headers
+		converted.Exporters.Traces.Insecure = parsed.Exporters.Traces.Insecure
+		converted.Exporters.Traces.TimeoutMs = parsed.Exporters.Traces.TimeoutMs
+		converted.Exporters.Metrics.Type = parsed.Exporters.Metrics.Type
+		converted.Exporters.Metrics.Protocol = parsed.Exporters.Metrics.Protocol
+		converted.Exporters.Metrics.Endpoint = parsed.Exporters.Metrics.Endpoint
+		converted.Exporters.Metrics.Insecure = parsed.Exporters.Metrics.Insecure
+		converted.Exporters.Logs.Type = parsed.Exporters.Logs.Type
+		converted.Exporters.Logs.Protocol = parsed.Exporters.Logs.Protocol
+		converted.Exporters.Logs.Endpoint = parsed.Exporters.Logs.Endpoint
+		converted.Exporters.Logs.Insecure = parsed.Exporters.Logs.Insecure
+		otelCfg = converted
+	}
+
 	req := types.GenerationRequest{
 		CodebasePath: absPath,
 		Language:     language,
@@ -151,6 +203,7 @@ func runCodegen(cmd *cobra.Command, args []string) error {
 			ShowPrompt:      showPrompt,
 			SavePrompt:      savePrompt,
 		},
+		OTEL: otelCfg,
 	}
 
 	// Show spinner only in interactive terminals to keep test/CI output stable
@@ -218,13 +271,4 @@ func listAvailableStrategies(generator *generator.Generator, logger logger.Logge
 	logger.Logf("\nDefault strategy: %s\n", generator.GetDefaultStrategy())
 
 	return nil
-}
-
-func contains(slice []string, item string) bool {
-	for _, s := range slice {
-		if s == item {
-			return true
-		}
-	}
-	return false
 }

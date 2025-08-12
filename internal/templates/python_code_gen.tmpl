@@ -10,8 +10,13 @@ from opentelemetry import trace
 from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from opentelemetry.sdk.trace.sampling import AlwaysOnSampler, AlwaysOffSampler, TraceIdRatioBased
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.semconv.resource import ResourceAttributes
+from opentelemetry.propagate import set_global_textmap
+from opentelemetry.propagators.composite import CompositePropagator
+from opentelemetry.propagators.tracecontext import TraceContextTextMapPropagator
+from opentelemetry.propagators.baggage import BaggagePropagator
 {{range .Instrumentations}}
 from opentelemetry.instrumentation.{{.}} import {{.}}Instrumentor
 {{end}}
@@ -29,11 +34,22 @@ def init_tracer() -> Optional[TracerProvider]:
         ResourceAttributes.DEPLOYMENT_ENVIRONMENT: os.getenv("OTEL_DEPLOYMENT_ENVIRONMENT", "development"),
     })
     
+    # Sampler
+    sampler = AlwaysOnSampler()
+    {{- if .SamplerType }}
+    {{- if eq .SamplerType "always_off" }}
+    sampler = AlwaysOffSampler()
+    {{- else if eq .SamplerType "traceidratio" }}
+    sampler = TraceIdRatioBased({{if gt .SamplerRatio 0.0}}{{.SamplerRatio}}{{else}}1.0{{end}})
+    {{- end }}
+    {{- end }}
+
     # Create tracer provider
-    tracer_provider = TracerProvider(resource=resource)
+    tracer_provider = TracerProvider(resource=resource, sampler=sampler)
     
     # Create OTLP exporter
-    base_endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4318")
+    default_endpoint = "{{if .TraceEndpoint}}{{.TraceEndpoint}}{{else}}http://localhost:4318{{end}}"
+    base_endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", default_endpoint)
     endpoint = base_endpoint if base_endpoint.endswith("/v1/traces") else base_endpoint.rstrip("/") + "/v1/traces"
     try:
         otlp_exporter = OTLPSpanExporter(endpoint=endpoint)
@@ -45,10 +61,29 @@ def init_tracer() -> Optional[TracerProvider]:
     
     # Set global tracer provider
     trace.set_tracer_provider(tracer_provider)
+
+    # Propagators
+    propagators = [TraceContextTextMapPropagator(), BaggagePropagator()]
+    {{- if .Propagators }}
+    try:
+        from opentelemetry.propagators.b3 import B3MultiFormat, B3Format
+        for p in {{printf "%#v" .Propagators}}:
+            if p == "b3":
+                propagators.append(B3Format())
+            elif p == "b3multi":
+                propagators.append(B3MultiFormat())
+    except Exception:
+        pass
+    {{- end }}
+    set_global_textmap(CompositePropagator(propagators))
     
     # Initialize instrumentations
     try:
         {{range .Instrumentations}}
+        try:
+            {{.}}Instrumentor().instrument()
+        except Exception as e:
+            logger.warning(f"Failed to initialize instrumentation '{{.}}': {e}")
         {{end}}
         logger.info("Successfully initialized OpenTelemetry instrumentations")
     except Exception as e:

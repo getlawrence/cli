@@ -1,14 +1,25 @@
 // OpenTelemetry bootstrap for {{.ServiceName}} (JavaScript/Node.js, CommonJS)
 
 // Install packages:
-// npm install @opentelemetry/api @opentelemetry/sdk-node @opentelemetry/exporter-trace-otlp-http{{range .Instrumentations}} @opentelemetry/instrumentation-{{.}}{{end}}
+// npm install @opentelemetry/api @opentelemetry/sdk-node @opentelemetry/exporter-trace-otlp-http{{range .Instrumentations}} {{if eq . "auto"}}@opentelemetry/auto-instrumentations-node{{else}}@opentelemetry/instrumentation-{{.}}{{end}}{{end}}
 
 // Create file: otel.js and require it at process start
 
 const { NodeSDK } = require("@opentelemetry/sdk-node");
+{{- if or (eq .TraceExporterType "otlp") (eq .TraceExporterType "") }}
+{{- if or (eq .TraceProtocol "http") (eq .TraceProtocol "http/protobuf") (eq .TraceProtocol "") }}
 const { OTLPTraceExporter } = require("@opentelemetry/exporter-trace-otlp-http");
+{{- else }}
+const { OTLPTraceExporter } = require("@opentelemetry/exporter-trace-otlp-grpc");
+{{- end }}
+{{- end }}
+{{- if .Propagators }}
+const { propagation } = require("@opentelemetry/api");
+{{- end }}
 {{- if .Instrumentations }}
+// Prepare instrumentations list
 const instrumentations = [];
+// Manual instrumentations
 {{- range .Instrumentations }}
 {{- if eq . "express" }}
 instrumentations.push(new (require("@opentelemetry/instrumentation-express").ExpressInstrumentation)());
@@ -16,18 +27,51 @@ instrumentations.push(new (require("@opentelemetry/instrumentation-express").Exp
 instrumentations.push(new (require("@opentelemetry/instrumentation-http").HttpInstrumentation)());
 {{- else if eq . "koa" }}
 instrumentations.push(new (require("@opentelemetry/instrumentation-koa").KoaInstrumentation)());
-{{- else }}
-// TODO: add support for {{.}} instrumentation
+{{- end }}
+{{- end }}
+// Auto-instrumentations (contrib bundle)
+{{- range .Instrumentations }}
+{{- if eq . "auto" }}
+const { getNodeAutoInstrumentations } = require("@opentelemetry/auto-instrumentations-node");
+instrumentations.unshift(getNodeAutoInstrumentations());
 {{- end }}
 {{- end }}
 {{- end }}
 
 const sdk = new NodeSDK({
-  traceExporter: new OTLPTraceExporter({}),
+  {{- if or (eq .TraceExporterType "otlp") (eq .TraceExporterType "") }}
+  traceExporter: new OTLPTraceExporter({
+    {{- if .TraceEndpoint }}
+    url: "{{.TraceEndpoint}}",
+    {{- end }}
+    {{- if .TraceHeaders }}
+    headers: {{ printf "%#v" .TraceHeaders }},
+    {{- end }}
+  }),
+  {{- end }}
   {{- if .Instrumentations }}
   instrumentations,
   {{- end }}
 });
+
+{{- if .Propagators }}
+// Configure global propagators
+const propagators = [];
+{{- range .Propagators }}
+{{- if or (eq . "tracecontext") (eq . "w3c") }}
+propagators.push(new (require("@opentelemetry/core").W3CTraceContextPropagator)());
+{{- else if eq . "baggage" }}
+propagators.push(new (require("@opentelemetry/core").W3CBaggagePropagator)());
+{{- else if eq . "b3" }}
+propagators.push(new (require("@opentelemetry/propagator-b3").B3Propagator)());
+{{- else if eq . "b3multi" }}
+propagators.push(new (require("@opentelemetry/propagator-b3").B3Propagator)({ injectEncoding: require("@opentelemetry/propagator-b3").B3InjectEncoding.MULTI_HEADER }));
+{{- end }}
+{{- end }}
+if (propagators.length > 0) {
+  propagation.setGlobalPropagator(new (require("@opentelemetry/core").CompositePropagator)({ propagators }));
+}
+{{- end }}
 
 sdk.start();
 

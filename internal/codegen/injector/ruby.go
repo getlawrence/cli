@@ -43,7 +43,6 @@ func NewRubyInjector() *RubyInjector {
 			InitializationTemplate: `
 # Initialize OpenTelemetry
 require_relative "./otel"
-Lawrence::OTel.setup
 `,
 			CleanupTemplate: ``,
 		},
