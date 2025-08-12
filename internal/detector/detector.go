@@ -8,6 +8,7 @@ import (
 
 	"github.com/getlawrence/cli/internal/codegen/injector"
 	"github.com/getlawrence/cli/internal/domain"
+	"github.com/getlawrence/cli/internal/logger"
 )
 
 // Language represents a programming language detector
@@ -62,11 +63,11 @@ type CodebaseAnalyzer struct {
 }
 
 // NewCodebaseAnalyzer creates a new analysis engine
-func NewCodebaseAnalyzer(detectors []IssueDetector, languages map[string]Language) *CodebaseAnalyzer {
+func NewCodebaseAnalyzer(detectors []IssueDetector, languages map[string]Language, logger logger.Logger) *CodebaseAnalyzer {
 	return &CodebaseAnalyzer{
 		detectors:         detectors,
 		languageDetectors: languages,
-		codeInjector:      injector.NewCodeInjector(),
+		codeInjector:      injector.NewCodeInjector(logger),
 	}
 }
 

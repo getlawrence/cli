@@ -14,10 +14,14 @@ import (
 )
 
 // RubyInjector implements DependencyHandler for Ruby projects (Bundler)
-type RubyInjector struct{}
+type RubyInjector struct {
+	logger logger.Logger
+}
 
 // NewRubyInjector creates a new Ruby dependency handler
-func NewRubyInjector() *RubyInjector { return &RubyInjector{} }
+func NewRubyInjector(logger logger.Logger) *RubyInjector {
+	return &RubyInjector{logger: logger}
+}
 
 // GetLanguage returns the language this handler supports
 func (h *RubyInjector) GetLanguage() string { return "ruby" }
@@ -43,12 +47,12 @@ func (h *RubyInjector) AddDependencies(ctx context.Context, projectPath string, 
 	}
 
 	if dryRun {
-		logger.Logf("Would add the following Ruby gems to %s and run bundle install:\n", gemfile)
+		h.logger.Logf("Would add the following Ruby gems to %s and run bundle install:\n", gemfile)
 		for _, dep := range needed {
 			if dep.Version != "" {
-				logger.Logf("  - gem '%s', '%s'\n", dep.ImportPath, dep.Version)
+				h.logger.Logf("  - gem '%s', '%s'\n", dep.ImportPath, dep.Version)
 			} else {
-				logger.Logf("  - gem '%s'\n", dep.ImportPath)
+				h.logger.Logf("  - gem '%s'\n", dep.ImportPath)
 			}
 		}
 		return nil

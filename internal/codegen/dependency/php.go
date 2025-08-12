@@ -13,10 +13,14 @@ import (
 )
 
 // PHPInjector implements DependencyHandler for PHP projects (Composer)
-type PHPInjector struct{}
+type PHPInjector struct {
+	logger logger.Logger
+}
 
 // NewPHPInjector creates a new PHP dependency handler
-func NewPHPInjector() *PHPInjector { return &PHPInjector{} }
+func NewPHPInjector(logger logger.Logger) *PHPInjector {
+	return &PHPInjector{logger: logger}
+}
 
 // GetLanguage returns the language this handler supports
 func (h *PHPInjector) GetLanguage() string { return "php" }
@@ -73,13 +77,13 @@ func (h *PHPInjector) AddDependencies(ctx context.Context, projectPath string, d
 	}
 
 	if dryRun {
-		logger.Logf("Would add the following PHP dependencies to composer.json in %s:\n", projectPath)
+		h.logger.Logf("Would add the following PHP dependencies to composer.json in %s:\n", projectPath)
 		for _, dep := range toAdd {
 			version := dep.Version
 			if version == "" {
 				version = "*"
 			}
-			logger.Logf("  - %s: %s\n", dep.ImportPath, version)
+			h.logger.Logf("  - %s: %s\n", dep.ImportPath, version)
 		}
 		return nil
 	}
@@ -120,7 +124,7 @@ func (h *PHPInjector) AddDependencies(ctx context.Context, projectPath string, d
 	if err := os.WriteFile(composerPath, output, 0644); err != nil {
 		return fmt.Errorf("failed to write composer.json: %w", err)
 	}
-	logger.Logf("Updated %s with %d dependencies\n", composerPath, len(toAdd))
+	h.logger.Logf("Updated %s with %d dependencies\n", composerPath, len(toAdd))
 	return nil
 }
 
@@ -153,7 +157,7 @@ func (h *PHPInjector) ResolveInstrumentationPrerequisites(instrumentations []str
 func (h *PHPInjector) ValidateProjectStructure(projectPath string) error {
 	composerPath := filepath.Join(projectPath, "composer.json")
 	if _, err := os.Stat(composerPath); os.IsNotExist(err) {
-		logger.Logf("No composer.json found in %s, will create one if needed.\n", projectPath)
+		h.logger.Logf("No composer.json found in %s, will create one if needed.\n", projectPath)
 	}
 	return nil
 }

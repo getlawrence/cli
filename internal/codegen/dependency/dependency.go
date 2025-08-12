@@ -5,25 +5,27 @@ import (
 	"fmt"
 
 	"github.com/getlawrence/cli/internal/codegen/types"
+	"github.com/getlawrence/cli/internal/logger"
 )
 
 // DependencyWriter handles adding dependencies to projects
 type DependencyWriter struct {
 	handlers map[string]DependencyHandler
+	logger   logger.Logger
 }
 
 // NewDependencyWriter creates a new dependency manager with all supported handlers
-func NewDependencyWriter() *DependencyWriter {
+func NewDependencyWriter(logger logger.Logger) *DependencyWriter {
 	return &DependencyWriter{
 		handlers: map[string]DependencyHandler{
-			"go":         NewGoInjector(),
-			"javascript": NewJavaScriptInjector(),
-			"python":     NewPythonInjector(),
-			"java":       NewJavaInjector(),
-			"csharp":     NewDotNetInjector(),
-			"dotnet":     NewDotNetInjector(),
-			"ruby":       NewRubyInjector(),
-			"php":        NewPHPInjector(),
+			"go":         NewGoInjector(logger),
+			"javascript": NewJavaScriptInjector(logger),
+			"python":     NewPythonInjector(logger),
+			"java":       NewJavaInjector(logger),
+			"csharp":     NewDotNetInjector(logger),
+			"dotnet":     NewDotNetInjector(logger),
+			"ruby":       NewRubyInjector(logger),
+			"php":        NewPHPInjector(logger),
 		},
 	}
 }

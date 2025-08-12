@@ -11,9 +11,13 @@ import (
 )
 
 // DotNetInjector implements DependencyHandler for .NET projects
-type DotNetInjector struct{}
+type DotNetInjector struct {
+	logger logger.Logger
+}
 
-func NewDotNetInjector() *DotNetInjector { return &DotNetInjector{} }
+func NewDotNetInjector(logger logger.Logger) *DotNetInjector {
+	return &DotNetInjector{logger: logger}
+}
 
 func (h *DotNetInjector) GetLanguage() string { return "csharp" }
 
@@ -28,12 +32,12 @@ func (h *DotNetInjector) AddDependencies(ctx context.Context, projectPath string
 	}
 
 	if dryRun {
-		logger.Logf("Would run dotnet add package in %s for:\n", projectPath)
+		h.logger.Logf("Would run dotnet add package in %s for:\n", projectPath)
 		for _, dep := range dependencies {
 			if dep.Version != "" {
-				logger.Logf("  dotnet add %s package %s --version %s\n", filepath.Base(csproj), dep.ImportPath, dep.Version)
+				h.logger.Logf("  dotnet add %s package %s --version %s\n", filepath.Base(csproj), dep.ImportPath, dep.Version)
 			} else {
-				logger.Logf("  dotnet add %s package %s\n", filepath.Base(csproj), dep.ImportPath)
+				h.logger.Logf("  dotnet add %s package %s\n", filepath.Base(csproj), dep.ImportPath)
 			}
 		}
 		return nil

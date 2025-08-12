@@ -90,6 +90,8 @@ func runCodegen(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to resolve path: %w", err)
 	}
 
+	ui := logger.NewUILogger()
+
 	// Create analysis engine
 	codebaseAnalyzer := detector.NewCodebaseAnalyzer([]detector.IssueDetector{
 		issues.NewMissingOTelDetector(),
@@ -101,25 +103,25 @@ func runCodegen(cmd *cobra.Command, args []string) error {
 		"csharp":     languages.NewDotNetDetector(),
 		"ruby":       languages.NewRubyDetector(),
 		"php":        languages.NewPHPDetector(),
-	})
+	}, ui)
 
 	// Initialize generator with existing detector system
-	codeGenerator, err := generator.NewGenerator(codebaseAnalyzer)
+	codeGenerator, err := generator.NewGenerator(codebaseAnalyzer, ui)
 	if err != nil {
 		return fmt.Errorf("failed to initialize generator: %w", err)
 	}
 
 	// Handle list commands
 	if listAgents {
-		return listAvailableAgents(codeGenerator)
+		return listAvailableAgents(codeGenerator, ui)
 	}
 
 	if listTemplates {
-		return listAvailableTemplates(codeGenerator)
+		return listAvailableTemplates(codeGenerator, ui)
 	}
 
 	if listStrategies {
-		return listAvailableStrategies(codeGenerator)
+		return listAvailableStrategies(codeGenerator, ui)
 	}
 
 	mode := types.GenerationMode(generationMode)
@@ -151,11 +153,25 @@ func runCodegen(cmd *cobra.Command, args []string) error {
 		},
 	}
 
-	// Always show spinner for generation
-	return codeGenerator.Generate(ctx, req)
+	// Show spinner only in interactive terminals to keep test/CI output stable
+	var sp logger.Spinner
+	if logger.IsInteractive() {
+		sp = ui.StartSpinner("Analyzing and generating code...")
+	}
+	err = codeGenerator.Generate(ctx, req)
+	if err != nil {
+		if sp != nil {
+			sp.Fail()
+		}
+		return err
+	}
+	if sp != nil {
+		sp.Stop()
+	}
+	return nil
 }
 
-func listAvailableAgents(generator *generator.Generator) error {
+func listAvailableAgents(generator *generator.Generator, logger logger.Logger) error {
 	agents := generator.ListAvailableAgents()
 
 	if len(agents) == 0 {
@@ -176,7 +192,7 @@ func listAvailableAgents(generator *generator.Generator) error {
 	return nil
 }
 
-func listAvailableTemplates(generator *generator.Generator) error {
+func listAvailableTemplates(generator *generator.Generator, logger logger.Logger) error {
 	templates := generator.ListAvailableTemplates()
 
 	logger.Log("Available templates:")
@@ -187,7 +203,7 @@ func listAvailableTemplates(generator *generator.Generator) error {
 	return nil
 }
 
-func listAvailableStrategies(generator *generator.Generator) error {
+func listAvailableStrategies(generator *generator.Generator, logger logger.Logger) error {
 	strategies := generator.ListAvailableStrategies()
 
 	logger.Log("Available generation strategies:")

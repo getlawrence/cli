@@ -65,8 +65,10 @@ func runAnalyze(cmd *cobra.Command, args []string) error {
 	detailed, _ := cmd.Flags().GetBool("detailed")
 	outputFormat, _ := cmd.Flags().GetString("output")
 
+	uiLogger := logger.NewUILogger()
+
 	if verbose {
-		logger.Logf("Analyzing codebase at: %s\n", absPath)
+		uiLogger.Logf("Analyzing codebase at: %s\n", absPath)
 	}
 
 	// Create analysis engine
@@ -80,23 +82,33 @@ func runAnalyze(cmd *cobra.Command, args []string) error {
 		"csharp":     languages.NewDotNetDetector(),
 		"ruby":       languages.NewRubyDetector(),
 		"php":        languages.NewPHPDetector(),
-	})
+	}, uiLogger)
 
-	// Run analysis
+	// Run analysis; show spinner only for text output to keep JSON clean
+	var spinner logger.Spinner
+	if outputFormat == "text" {
+		spinner = uiLogger.StartSpinner("Analyzing codebase...")
+	}
 	analysis, err := codebaseAnalyzer.AnalyzeCodebase(cmd.Context(), absPath)
 	if err != nil {
+		if spinner != nil {
+			spinner.Fail()
+		}
 		return err
+	}
+	if spinner != nil {
+		spinner.Stop()
 	}
 
 	switch outputFormat {
 	case "json":
 		return outputJSON(analysis)
 	default:
-		return outputText(analysis, detailed)
+		return outputText(analysis, detailed, uiLogger)
 	}
 }
 
-func outputText(analysis *detector.Analysis, detailed bool) error {
+func outputText(analysis *detector.Analysis, detailed bool, logger logger.Logger) error {
 	if analysis == nil || len(analysis.DirectoryAnalyses) == 0 {
 		logger.Logf("No analysis results to display.\n")
 		return nil

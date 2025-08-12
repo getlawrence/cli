@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/getlawrence/cli/internal/domain"
+	"github.com/getlawrence/cli/internal/logger"
 )
 
 type fakeLanguage struct{}
@@ -39,7 +40,7 @@ func (n *noOpDetector) Detect(ctx context.Context, analysis *DirectoryAnalysis) 
 }
 
 func TestCalculateDirectoryPath(t *testing.T) {
-	ca := NewCodebaseAnalyzer(nil, nil)
+	ca := NewCodebaseAnalyzer(nil, nil, &logger.StdoutLogger{})
 	root := "/path/to/root"
 	if got := ca.calculateDirectoryPath(root, "root"); got != root {
 		t.Fatalf("expected %s, got %s", root, got)
@@ -55,7 +56,7 @@ func TestAnalyzeCodebase_NoLanguages(t *testing.T) {
 
 	ca := NewCodebaseAnalyzer([]IssueDetector{&noOpDetector{}}, map[string]Language{
 		"go": &fakeLanguage{},
-	})
+	}, &logger.StdoutLogger{})
 
 	// With empty dir and enry detection, expect an error: no languages detected
 	_, err := ca.AnalyzeCodebase(context.Background(), dir)
@@ -69,7 +70,7 @@ func TestProcessDirectory_ErrorFromPackages(t *testing.T) {
 	// put a trivial file to satisfy walker
 	_ = os.WriteFile(filepath.Join(dir, "main.fake"), []byte(""), 0o644)
 
-	ca := NewCodebaseAnalyzer(nil, map[string]Language{"fake": &errorLanguage{}})
+	ca := NewCodebaseAnalyzer(nil, map[string]Language{"fake": &errorLanguage{}}, &logger.StdoutLogger{})
 	_, err := ca.processDirectory(context.Background(), "root", dir, "fake", &errorLanguage{})
 	if err == nil {
 		t.Fatalf("expected error from package collection")

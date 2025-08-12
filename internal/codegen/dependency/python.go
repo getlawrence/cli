@@ -14,11 +14,13 @@ import (
 )
 
 // PythonInjector implements DependencyHandler for Python projects
-type PythonInjector struct{}
+type PythonInjector struct {
+	logger logger.Logger
+}
 
 // NewPythonInjector creates a new Python dependency handler
-func NewPythonInjector() *PythonInjector {
-	return &PythonInjector{}
+func NewPythonInjector(logger logger.Logger) *PythonInjector {
+	return &PythonInjector{logger: logger}
 }
 
 // GetLanguage returns the language this handler supports
@@ -210,7 +212,7 @@ func (h *PythonInjector) ValidateProjectStructure(projectPath string) error {
 		h.hasSetupPy(projectPath)
 
 	if !hasDepFile {
-		logger.Logf("No Python dependency file found in %s, will create requirements.txt\n", projectPath)
+		h.logger.Logf("No Python dependency file found in %s, will create requirements.txt\n", projectPath)
 	}
 
 	return nil
@@ -262,17 +264,17 @@ func (h *PythonInjector) addToRequirementsTxt(projectPath string, dependencies [
 	}
 
 	if len(neededDeps) == 0 {
-		logger.Log("All required dependencies are already present in requirements.txt")
+		h.logger.Log("All required dependencies are already present in requirements.txt")
 		return nil
 	}
 
 	if dryRun {
-		logger.Logf("Would add the following Python dependencies to %s:\n", reqPath)
+		h.logger.Logf("Would add the following Python dependencies to %s:\n", reqPath)
 		for _, dep := range neededDeps {
 			if dep.Version != "" {
-				logger.Logf("  - %s==%s\n", dep.ImportPath, dep.Version)
+				h.logger.Logf("  - %s==%s\n", dep.ImportPath, dep.Version)
 			} else {
-				logger.Logf("  - %s\n", dep.ImportPath)
+				h.logger.Logf("  - %s\n", dep.ImportPath)
 			}
 		}
 		return nil
@@ -301,7 +303,7 @@ func (h *PythonInjector) addToRequirementsTxt(projectPath string, dependencies [
 		}
 	}
 
-	logger.Logf("Adding %d dependencies to requirements.txt...\n", len(neededDeps))
+	h.logger.Logf("Adding %d dependencies to requirements.txt...\n", len(neededDeps))
 
 	for _, dep := range neededDeps {
 		var line string
@@ -315,22 +317,22 @@ func (h *PythonInjector) addToRequirementsTxt(projectPath string, dependencies [
 			return fmt.Errorf("failed to write dependency %s: %w", dep.ImportPath, err)
 		}
 
-		logger.Logf("  Added %s\n", dep.ImportPath)
+		h.logger.Logf("  Added %s\n", dep.ImportPath)
 	}
 
-	logger.Logf("Successfully added %d dependencies to requirements.txt\n", len(neededDeps))
+	h.logger.Logf("Successfully added %d dependencies to requirements.txt\n", len(neededDeps))
 	return nil
 }
 
 // addToPyprojectToml adds dependencies to pyproject.toml
 func (h *PythonInjector) addToPyprojectToml(projectPath string, dependencies []Dependency, dryRun bool) error {
 	if dryRun {
-		logger.Logf("Would add the following Python dependencies to pyproject.toml:\n")
+		h.logger.Logf("Would add the following Python dependencies to pyproject.toml:\n")
 		for _, dep := range dependencies {
 			if dep.Version != "" {
-				logger.Logf("  - %s = \"%s\"\n", dep.ImportPath, dep.Version)
+				h.logger.Logf("  - %s = \"%s\"\n", dep.ImportPath, dep.Version)
 			} else {
-				logger.Logf("  - %s = \"*\"\n", dep.ImportPath)
+				h.logger.Logf("  - %s = \"*\"\n", dep.ImportPath)
 			}
 		}
 		return nil
@@ -343,21 +345,21 @@ func (h *PythonInjector) addToPyprojectToml(projectPath string, dependencies []D
 // addWithPip installs dependencies using pip
 func (h *PythonInjector) addWithPip(ctx context.Context, projectPath string, dependencies []Dependency, dryRun bool) error {
 	if dryRun {
-		logger.Logf("Would install the following Python dependencies with pip:\n")
+		h.logger.Logf("Would install the following Python dependencies with pip:\n")
 		for _, dep := range dependencies {
 			if dep.Version != "" {
-				logger.Logf("  - %s==%s\n", dep.ImportPath, dep.Version)
+				h.logger.Logf("  - %s==%s\n", dep.ImportPath, dep.Version)
 			} else {
-				logger.Logf("  - %s\n", dep.ImportPath)
+				h.logger.Logf("  - %s\n", dep.ImportPath)
 			}
 		}
 		return nil
 	}
 
-	logger.Logf("Installing %d dependencies with pip...\n", len(dependencies))
+	h.logger.Logf("Installing %d dependencies with pip...\n", len(dependencies))
 
 	for _, dep := range dependencies {
-		logger.Logf("  Installing %s...\n", dep.ImportPath)
+		h.logger.Logf("  Installing %s...\n", dep.ImportPath)
 
 		args := []string{"install"}
 		if dep.Version != "" {
@@ -375,7 +377,7 @@ func (h *PythonInjector) addWithPip(ctx context.Context, projectPath string, dep
 		}
 	}
 
-	logger.Logf("Successfully installed %d dependencies\n", len(dependencies))
+	h.logger.Logf("Successfully installed %d dependencies\n", len(dependencies))
 	return nil
 }
 
@@ -384,12 +386,12 @@ func (h *PythonInjector) createRequirementsTxt(projectPath string, dependencies 
 	reqPath := filepath.Join(projectPath, "requirements.txt")
 
 	if dryRun {
-		logger.Logf("Would create %s with the following dependencies:\n", reqPath)
+		h.logger.Logf("Would create %s with the following dependencies:\n", reqPath)
 		for _, dep := range dependencies {
 			if dep.Version != "" {
-				logger.Logf("  - %s==%s\n", dep.ImportPath, dep.Version)
+				h.logger.Logf("  - %s==%s\n", dep.ImportPath, dep.Version)
 			} else {
-				logger.Logf("  - %s\n", dep.ImportPath)
+				h.logger.Logf("  - %s\n", dep.ImportPath)
 			}
 		}
 		return nil
@@ -401,7 +403,7 @@ func (h *PythonInjector) createRequirementsTxt(projectPath string, dependencies 
 	}
 	defer file.Close()
 
-	logger.Logf("Creating requirements.txt with %d dependencies...\n", len(dependencies))
+	h.logger.Logf("Creating requirements.txt with %d dependencies...\n", len(dependencies))
 
 	for _, dep := range dependencies {
 		var line string
@@ -415,10 +417,10 @@ func (h *PythonInjector) createRequirementsTxt(projectPath string, dependencies 
 			return fmt.Errorf("failed to write dependency %s: %w", dep.ImportPath, err)
 		}
 
-		logger.Logf("  Added %s\n", dep.ImportPath)
+		h.logger.Logf("  Added %s\n", dep.ImportPath)
 	}
 
-	logger.Logf("Successfully created requirements.txt with %d dependencies\n", len(dependencies))
+	h.logger.Logf("Successfully created requirements.txt with %d dependencies\n", len(dependencies))
 	return nil
 }
 

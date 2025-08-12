@@ -14,11 +14,13 @@ import (
 )
 
 // GoInjector implements DependencyHandler for Go projects
-type GoInjector struct{}
+type GoInjector struct {
+	logger logger.Logger
+}
 
 // NewGoInjector creates a new Go dependency handler
-func NewGoInjector() *GoInjector {
-	return &GoInjector{}
+func NewGoInjector(logger logger.Logger) *GoInjector {
+	return &GoInjector{logger: logger}
 }
 
 // GetLanguage returns the language this handler supports
@@ -42,17 +44,17 @@ func (h *GoInjector) AddDependencies(ctx context.Context, projectPath string, de
 	}
 
 	if len(neededDeps) == 0 {
-		logger.Log("All required dependencies are already present")
+		h.logger.Log("All required dependencies are already present")
 		return nil
 	}
 
 	if dryRun {
-		logger.Logf("Would add the following Go dependencies to %s:\n", goModPath)
+		h.logger.Logf("Would add the following Go dependencies to %s:\n", goModPath)
 		for _, dep := range neededDeps {
 			if dep.Version != "" {
-				logger.Logf("  - %s@%s\n", dep.ImportPath, dep.Version)
+				h.logger.Logf("  - %s@%s\n", dep.ImportPath, dep.Version)
 			} else {
-				logger.Logf("  - %s\n", dep.ImportPath)
+				h.logger.Logf("  - %s\n", dep.ImportPath)
 			}
 		}
 		return nil
@@ -322,10 +324,10 @@ func (h *GoInjector) getExistingDependencies(goModPath string) (map[string]bool,
 
 // addDependenciesWithGoGet adds dependencies using the go get command
 func (h *GoInjector) addDependenciesWithGoGet(ctx context.Context, projectPath string, dependencies []Dependency) error {
-	logger.Logf("Adding %d dependencies to Go project...\n", len(dependencies))
+	h.logger.Logf("Adding %d dependencies to Go project...\n", len(dependencies))
 
 	for _, dep := range dependencies {
-		logger.Logf("  Adding %s...\n", dep.ImportPath)
+		h.logger.Logf("  Adding %s...\n", dep.ImportPath)
 
 		args := []string{"get"}
 		if dep.Version != "" {
@@ -343,6 +345,6 @@ func (h *GoInjector) addDependenciesWithGoGet(ctx context.Context, projectPath s
 		}
 	}
 
-	logger.Logf("Successfully added %d dependencies\n", len(dependencies))
+	h.logger.Logf("Successfully added %d dependencies\n", len(dependencies))
 	return nil
 }

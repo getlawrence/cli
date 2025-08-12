@@ -16,10 +16,12 @@ import (
 
 type CodeInjector struct {
 	handlers map[string]LanguageInjector
+	logger   logger.Logger
 }
 
-func NewCodeInjector() *CodeInjector {
+func NewCodeInjector(logger logger.Logger) *CodeInjector {
 	return &CodeInjector{
+		logger: logger,
 		handlers: map[string]LanguageInjector{
 			"go":         NewGoInjector(),
 			"javascript": NewJavaScriptInjector(),
@@ -463,10 +465,10 @@ func (ci *CodeInjector) applyModifications(filePath string, modifications []type
 	modifiedContent := strings.Join(lines, "\n")
 
 	if dryRun {
-		logger.Logf("Would modify file: %s\n", filePath)
-		logger.Logf("Modifications:\n")
+		ci.logger.Logf("Would modify file: %s\n", filePath)
+		ci.logger.Logf("Modifications:\n")
 		for _, mod := range modifications {
-			logger.Logf("  Line %d: %s\n", mod.LineNumber, strings.TrimSpace(mod.Content))
+			ci.logger.Logf("  Line %d: %s\n", mod.LineNumber, strings.TrimSpace(mod.Content))
 		}
 		return nil
 	}
@@ -474,7 +476,7 @@ func (ci *CodeInjector) applyModifications(filePath string, modifications []type
 	// Create backup
 	backupPath := filePath + ".backup"
 	if err := os.WriteFile(backupPath, content, 0644); err != nil {
-		logger.Logf("Warning: failed to create backup: %v\n", err)
+		ci.logger.Logf("Warning: failed to create backup: %v\n", err)
 	}
 
 	// Write modified content
@@ -482,6 +484,6 @@ func (ci *CodeInjector) applyModifications(filePath string, modifications []type
 		return fmt.Errorf("failed to write modified file: %w", err)
 	}
 
-	logger.Logf("Successfully modified: %s (backup: %s)\n", filePath, backupPath)
+	ci.logger.Logf("Successfully modified: %s (backup: %s)\n", filePath, backupPath)
 	return nil
 }

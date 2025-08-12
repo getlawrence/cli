@@ -12,10 +12,14 @@ import (
 )
 
 // JavaScriptInjector implements DependencyHandler for JavaScript/Node.js projects
-type JavaScriptInjector struct{}
+type JavaScriptInjector struct {
+	logger logger.Logger
+}
 
 // NewJavaScriptInjector creates a new JS dependency handler
-func NewJavaScriptInjector() *JavaScriptInjector { return &JavaScriptInjector{} }
+func NewJavaScriptInjector(logger logger.Logger) *JavaScriptInjector {
+	return &JavaScriptInjector{logger: logger}
+}
 
 // GetLanguage returns the language this handler supports
 func (h *JavaScriptInjector) GetLanguage() string { return "javascript" }
@@ -44,7 +48,7 @@ func (h *JavaScriptInjector) AddDependencies(ctx context.Context, projectPath st
 	}
 
 	if dryRun {
-		logger.Logf("Would run: npm %v in %s\n", args, projectPath)
+		h.logger.Logf("Would run: npm %v in %s\n", args, projectPath)
 		return nil
 	}
 

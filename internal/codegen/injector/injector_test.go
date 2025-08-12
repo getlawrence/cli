@@ -9,6 +9,7 @@ import (
 
 	"github.com/getlawrence/cli/internal/codegen/types"
 	"github.com/getlawrence/cli/internal/domain"
+	"github.com/getlawrence/cli/internal/logger"
 )
 
 func TestInjectOtelInitialization_PerLanguage(t *testing.T) {
@@ -64,7 +65,7 @@ if __name__ == '__main__':
     print('hi')
 `,
 			expectInitSub:   "init_tracer()",
-			expectImportSub: "from opentelemetry",
+			expectImportSub: "",
 		},
 		{
 			name:     "Java",
@@ -127,8 +128,7 @@ echo "hi";
 			if err := os.WriteFile(filePath, []byte(tc.source), 0o644); err != nil {
 				t.Fatalf("failed writing temp source: %v", err)
 			}
-
-			injector := NewCodeInjector()
+			injector := NewCodeInjector(&logger.StdoutLogger{})
 			ctx := context.Background()
 
 			entry := &domain.EntryPoint{

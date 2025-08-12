@@ -12,10 +12,14 @@ import (
 )
 
 // JavaInjector implements DependencyHandler for Java projects (Maven/Gradle)
-type JavaInjector struct{}
+type JavaInjector struct {
+	logger logger.Logger
+}
 
 // NewJavaInjector creates a new Java dependency handler
-func NewJavaInjector() *JavaInjector { return &JavaInjector{} }
+func NewJavaInjector(logger logger.Logger) *JavaInjector {
+	return &JavaInjector{logger: logger}
+}
 
 // GetLanguage returns the language this handler supports
 func (h *JavaInjector) GetLanguage() string { return "java" }
@@ -38,9 +42,9 @@ func (h *JavaInjector) AddDependencies(ctx context.Context, projectPath string, 
 	}
 
 	if dryRun {
-		logger.Logf("Java dependencies required (add to pom.xml or build.gradle):\n")
+		h.logger.Logf("Java dependencies required (add to pom.xml or build.gradle):\n")
 		for _, dep := range dependencies {
-			logger.Logf("  - %s\n", h.formatCoordinate(dep))
+			h.logger.Logf("  - %s\n", h.formatCoordinate(dep))
 		}
 		return nil
 	}
@@ -61,9 +65,9 @@ func (h *JavaInjector) AddDependencies(ctx context.Context, projectPath string, 
 
 	// If Gradle project, just inform user to add to build file
 	if hasGradle {
-		logger.Log("Please add the following dependencies to your Gradle build file (dependencies block):")
+		h.logger.Log("Please add the following dependencies to your Gradle build file (dependencies block):")
 		for _, dep := range dependencies {
-			logger.Logf("  implementation '%s'\n", h.formatCoordinate(dep))
+			h.logger.Logf("  implementation '%s'\n", h.formatCoordinate(dep))
 		}
 		return nil
 	}

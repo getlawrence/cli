@@ -1,81 +1,67 @@
-name: E2E Tests
+name: e2e-examples
 
 on:
-  push:
-    branches: [ main, develop ]
   pull_request:
-    branches: [ main, develop ]
+    branches: [ main ]
   workflow_dispatch:
 
+concurrency:
+  group: e2e-examples-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  e2e-tests:
+  e2e:
+    name: Run E2E examples test
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        test-suite: [basic, instrumentation]
-    
+    timeout-minutes: 60
+    permissions:
+      contents: read
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
-      
-    - name: Create results directory
-      run: mkdir -p e2e-results
-      
-    - name: Run E2E Tests - Basic Suite
-      if: matrix.test-suite == 'basic'
-      run: |
-        docker-compose -f docker-compose.e2e.yml up --build --abort-on-container-exit lawrence-e2e
-        
-    - name: Run E2E Tests - Instrumentation Suite
-      if: matrix.test-suite == 'instrumentation'
-      run: |
-        docker-compose -f docker-compose.e2e.yml up --build --abort-on-container-exit lawrence-instrumentation-tests
-        
-    - name: Upload test results
-      if: always()
-      uses: actions/upload-artifact@v4
-      with:
-        name: e2e-test-results-${{ matrix.test-suite }}
-        path: e2e-results/
-        retention-days: 7
-        
-    - name: Clean up
-      if: always()
-      run: |
-        docker-compose -f docker-compose.e2e.yml down --volumes --remove-orphans
-        docker system prune -f
-        
-  e2e-multi-distro:
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
-      
-    - name: Create results directory
-      run: mkdir -p e2e-results
-      
-    - name: Run Multi-Distribution E2E Tests
-      run: |
-        docker-compose -f docker-compose.e2e.yml --profile multi-distro up --build --abort-on-container-exit
-        
-    - name: Upload multi-distro test results
-      if: always()
-      uses: actions/upload-artifact@v4
-      with:
-        name: e2e-test-results-multi-distro
-        path: e2e-results/
-        retention-days: 7
-        
-    - name: Clean up
-      if: always()
-      run: |
-        docker-compose -f docker-compose.e2e.yml down --volumes --remove-orphans
-        docker system prune -f
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.x'
+          check-latest: true
+          cache: true
+
+      - name: Show Docker versions
+        run: |
+          docker version
+          docker compose version
+
+      - name: Pre-pull base images (best-effort)
+        run: |
+          set -euxo pipefail
+          docker pull otel/opentelemetry-collector-contrib:0.98.0
+          docker pull golang:1.23-alpine
+          docker pull gcr.io/distroless/base-debian12 || true
+          docker pull node:20-alpine
+          docker pull python:3.12-slim
+          docker pull php:8.2-cli
+          docker pull ruby:3.3
+          docker pull maven:3.9.6-eclipse-temurin-17
+          docker pull eclipse-temurin:17
+          docker pull mcr.microsoft.com/dotnet/sdk:8.0
+          docker pull mcr.microsoft.com/dotnet/aspnet:8.0
+
+      - name: Download Go modules
+        run: go mod download
+
+      - name: Run E2E examples test
+        env:
+          DOCKER_BUILDKIT: 1
+        run: |
+          set -euxo pipefail
+          go test -v -run TestExamplesStackCodegenAndOTEL ./e2e
+
+      - name: Diagnostics on failure
+        if: failure()
+        run: |
+          set +e
+          docker ps -a || true
+          docker images || true
+          # Compose logs are already emitted by the test on failure for key services
+

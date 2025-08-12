@@ -21,10 +21,11 @@ type Generator struct {
 	agentDetector   *agents.Detector
 	strategies      map[types.GenerationMode]types.CodeGenerationStrategy
 	defaultStrategy types.GenerationMode
+	logger          logger.Logger
 }
 
 // NewGenerator creates a new code generator
-func NewGenerator(codebaseAnalyzer *detector.CodebaseAnalyzer) (*Generator, error) {
+func NewGenerator(codebaseAnalyzer *detector.CodebaseAnalyzer, logger logger.Logger) (*Generator, error) {
 	templateEngine, err := templates.NewTemplateEngine()
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize template engine: %w", err)
@@ -37,8 +38,8 @@ func NewGenerator(codebaseAnalyzer *detector.CodebaseAnalyzer) (*Generator, erro
 
 	// Initialize strategies
 	strategies := make(map[types.GenerationMode]types.CodeGenerationStrategy)
-	strategies[types.AgentMode] = agent.NewAIGenerationStrategy(agentDetector, templateEngine)
-	strategies[types.TemplateMode] = template.NewTemplateGenerationStrategy(templateEngine)
+	strategies[types.AgentMode] = agent.NewAIGenerationStrategy(agentDetector, templateEngine, logger)
+	strategies[types.TemplateMode] = template.NewTemplateGenerationStrategy(templateEngine, logger)
 	defaultStrategy := types.TemplateMode
 
 	return &Generator{
@@ -47,6 +48,7 @@ func NewGenerator(codebaseAnalyzer *detector.CodebaseAnalyzer) (*Generator, erro
 		agentDetector:   agentDetector,
 		strategies:      strategies,
 		defaultStrategy: defaultStrategy,
+		logger:          logger,
 	}, nil
 }
 
@@ -67,7 +69,7 @@ func (g *Generator) Generate(ctx context.Context, req types.GenerationRequest) e
 	}
 
 	if len(opportunities) == 0 {
-		logger.Log("Generate: No code generation opportunities found")
+		g.logger.Log("Generate: No code generation opportunities found")
 		return nil
 	}
 
@@ -93,7 +95,7 @@ func (g *Generator) Generate(ctx context.Context, req types.GenerationRequest) e
 		return err
 	}
 
-	logger.Logf("Using %s generation strategy\n", strategy.GetName())
+	g.logger.Logf("Using %s generation strategy\n", strategy.GetName())
 
 	// Provide analysis context to AI strategy (if applicable)
 	if ai, ok := strategy.(*agent.AIGenerationStrategy); ok {
