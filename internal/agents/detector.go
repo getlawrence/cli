@@ -2,6 +2,7 @@ package agents
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 
@@ -118,51 +119,40 @@ func (d *Detector) executeCommand(agent Agent, request AgentExecutionRequest) er
 		return fmt.Errorf("failed to generate prompt: %w", err)
 	}
 
-	// Implementation depends on each agent's API
+	var cmd *exec.Cmd
+
 	switch agent.Type {
 	case GitHubCLI:
-		return d.executeGitHubCopilot(prompt, request.TargetDir)
+		cmd = d.getGitHubCopilotCommand(prompt)
 	case GeminiCLI:
-		return d.executeGemini(prompt, request.TargetDir)
+		cmd = d.getGeminiCommand(prompt)
 	case ClaudeCode:
-		return d.executeClaude(prompt, request.TargetDir)
+		cmd = d.getClaudeCommand(prompt)
 	case OpenAICodex:
-		return d.executeOpenAI(prompt, request.TargetDir)
+		cmd = d.getOpenAICommand(prompt)
 	default:
 		return fmt.Errorf("agent execution not implemented for %s", agent.Type)
 	}
-}
 
-func (d *Detector) executeGitHubCopilot(prompt string, targetDir string) error {
-	cmd := exec.Command("gh", "copilot", "suggest", prompt)
-	cmd.Dir = targetDir
-	cmd.Stdout = nil // Let output go to terminal
-	cmd.Stderr = nil
+	cmd.Dir = request.TargetDir
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
 	return cmd.Run()
 }
 
-func (d *Detector) executeGemini(prompt string, targetDir string) error {
-	// Use --yolo flag to automatically accept file modifications
-	// Use --all-files to ensure Gemini can see all files in the directory
-	cmd := exec.Command("gemini", "--prompt", prompt, "--yolo", "--all-files")
-	cmd.Dir = targetDir
-	cmd.Stdout = nil
-	cmd.Stderr = nil
-	return cmd.Run()
+func (d *Detector) getGitHubCopilotCommand(prompt string) *exec.Cmd {
+	return exec.Command("gh", "copilot", "suggest", prompt)
 }
 
-func (d *Detector) executeClaude(prompt string, targetDir string) error {
-	cmd := exec.Command("claude", "-p", prompt)
-	cmd.Dir = targetDir
-	cmd.Stdout = nil
-	cmd.Stderr = nil
-	return cmd.Run()
+func (d *Detector) getGeminiCommand(prompt string) *exec.Cmd {
+	return exec.Command("gemini", "--prompt", prompt, "--yolo", "--all-files")
+
 }
 
-func (d *Detector) executeOpenAI(prompt string, targetDir string) error {
-	cmd := exec.Command("codex", prompt)
-	cmd.Dir = targetDir
-	cmd.Stdout = nil
-	cmd.Stderr = nil
-	return cmd.Run()
+func (d *Detector) getClaudeCommand(prompt string) *exec.Cmd {
+	return exec.Command("claude", "-p", prompt)
+}
+
+func (d *Detector) getOpenAICommand(prompt string) *exec.Cmd {
+	return exec.Command("codex", prompt)
 }
