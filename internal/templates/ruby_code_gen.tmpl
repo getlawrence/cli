@@ -8,7 +8,14 @@ require 'opentelemetry-exporter-otlp'
 require 'opentelemetry-instrumentation-{{.}}'
 {{end}}
 
-OTEL_EXPORTER_OTLP_ENDPOINT = ENV.fetch('OTEL_EXPORTER_OTLP_ENDPOINT', '{{if .TraceEndpoint}}{{.TraceEndpoint}}{{else}}http://localhost:4318{{end}}')
+# Resolve exporter endpoint from env and ensure /v1/traces suffix
+base = ENV.fetch('OTEL_EXPORTER_OTLP_ENDPOINT', '{{if .TraceEndpoint}}{{.TraceEndpoint}}{{else}}http://localhost:4318{{end}}')
+if base && !base.empty?
+  base = base.sub(%r{/*$}, '')
+  OTEL_EXPORTER_OTLP_ENDPOINT = base + '/v1/traces'
+else
+  OTEL_EXPORTER_OTLP_ENDPOINT = 'http://localhost:4318/v1/traces'
+end
 
 OpenTelemetry::SDK.configure do |c|
   c.service_name = '{{.ServiceName}}'
@@ -34,5 +41,9 @@ OpenTelemetry::SDK.configure do |c|
   c.use 'OpenTelemetry::Instrumentation::{{.}}'
   {{end}}
 end
+
+# Emit a bootstrap span
+tracer = OpenTelemetry.tracer_provider.tracer('bootstrap')
+tracer.in_span('startup') {}
 
 

@@ -365,6 +365,12 @@ func (s *TemplateGenerationStrategy) handleEntryPointModifications(
 
 	// Use any opportunity as a reference for language and directory
 	for _, opp := range opportunities {
+		// Skip entry point modifications for C#/.NET for now to avoid breaking
+		// top-level Program.cs with premature references to builder/app.
+		// Dependency updates and generated bootstrap files are still produced.
+		if lang := strings.ToLower(opp.Language); lang == "csharp" || lang == "dotnet" {
+			continue
+		}
 		entryPoint := &domain.EntryPoint{}
 		dirPath := req.CodebasePath
 		if opp.FilePath != "" && opp.FilePath != "root" {

@@ -57,6 +57,7 @@ func NewPythonInjector() *PythonInjector {
 			ImportTemplate: `from opentelemetry import %s`,
 			InitializationTemplate: `
     # Initialize OpenTelemetry
+    from otel import init_tracer
     tracer_provider = init_tracer()
 `,
 			CleanupTemplate: `tp.shutdown()`,

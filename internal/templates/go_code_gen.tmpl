@@ -5,6 +5,8 @@ import (
 	"log"
 	"os"
 	"time"
+    "strings"
+    "net/url"
 
 	"go.opentelemetry.io/otel"
 	attribute "go.opentelemetry.io/otel/attribute"
@@ -72,8 +74,38 @@ func InitializeOTEL(config *OTELConfig) (*trace.TracerProvider, error) {
     var exporter trace.SpanExporter
     {{- if or (eq .TraceExporterType "otlp") (eq .TraceExporterType "") }}
     {{- if or (eq .TraceProtocol "http") (eq .TraceProtocol "http/protobuf") (eq .TraceProtocol "") }}
+    // Normalize endpoint for HTTP exporter: accept either full URL or host:port and ensure /v1/traces
+    endpoint := strings.TrimSpace(config.ExporterURL)
+    if endpoint == "" {
+        endpoint = "http://localhost:4318"
+    }
+    // Build a full URL with /v1/traces
+    var fullURL string
+    if strings.HasPrefix(endpoint, "http://") || strings.HasPrefix(endpoint, "https://") {
+        u, perr := url.Parse(endpoint)
+        if perr != nil {
+            return nil, perr
+        }
+        if u.Path == "" || u.Path == "/" {
+            u.Path = "/v1/traces"
+        } else if !strings.HasSuffix(u.Path, "/v1/traces") {
+            if strings.HasSuffix(u.Path, "/") {
+                u.Path = u.Path + "v1/traces"
+            } else {
+                u.Path = u.Path + "/v1/traces"
+            }
+        }
+        fullURL = u.String()
+    } else {
+        // Treat as host:port; construct full URL
+        if strings.HasSuffix(endpoint, "/") {
+            endpoint = strings.TrimRight(endpoint, "/")
+        }
+        fullURL = "http://" + endpoint + "/v1/traces"
+    }
+
     exporter, err = otlptracehttp.New(ctx,
-        otlptracehttp.WithEndpoint(config.ExporterURL),
+        otlptracehttp.WithEndpointURL(fullURL),
         otlptracehttp.WithInsecure(),
     )
     {{- else }}
@@ -132,6 +164,11 @@ func InitializeOTEL(config *OTELConfig) (*trace.TracerProvider, error) {
         propagation.Baggage{},
     ))
     {{- end }}
+
+    // Emit a bootstrap span to verify pipeline
+    tracer := otel.Tracer("bootstrap")
+    _, span := tracer.Start(context.Background(), "startup")
+    span.End()
 
 	return tp, nil
 }

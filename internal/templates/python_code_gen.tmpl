@@ -89,6 +89,11 @@ def init_tracer() -> Optional[TracerProvider]:
     except Exception as e:
         logger.error(f"Failed to initialize instrumentations: {e}")
     
+    # Emit a bootstrap span to verify pipeline
+    tracer = trace.get_tracer("bootstrap")
+    with tracer.start_as_current_span("startup"):
+        pass
+
     return tracer_provider
 
 

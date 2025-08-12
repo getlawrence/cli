@@ -27,6 +27,11 @@ function setup_otel(): void {
         $spanProcessor = new \OpenTelemetry\SDK\Trace\SpanProcessor\BatchSpanProcessor($exporter);
         $tracerProvider = new \OpenTelemetry\SDK\Trace\TracerProvider($spanProcessor, null, $resource);
         \OpenTelemetry\API\Globals::setTracerProvider($tracerProvider);
+
+        // Emit a bootstrap span
+        $tracer = \OpenTelemetry\API\Trace\Globals::tracerProvider()->getTracer('bootstrap');
+        $span = $tracer->spanBuilder('startup')->startSpan();
+        $span->end();
     } catch (\Throwable $e) {
         error_log('Failed to initialize OpenTelemetry: ' . $e->getMessage());
     }

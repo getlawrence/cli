@@ -9,7 +9,7 @@ COPY . /app
 
 EXPOSE 4567
 
-ENV OTEL_EXPORTER_OTLP_ENDPOINT=
+ENV OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
 ENV OTEL_SERVICE_NAME=examples-ruby
 
 CMD ["ruby", "app.rb", "-o", "0.0.0.0", "-p", "4567"]

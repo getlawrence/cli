@@ -38,3 +38,4 @@ main
 
 node_modules
 vendor
+otel-examples/** 

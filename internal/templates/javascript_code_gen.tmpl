@@ -38,12 +38,24 @@ instrumentations.unshift(getNodeAutoInstrumentations());
 {{- end }}
 {{- end }}
 
+// Resolve OTLP HTTP endpoint from environment if not explicitly set
+let otlpUrl = undefined;
+{{- if .TraceEndpoint }}
+otlpUrl = "{{.TraceEndpoint}}";
+{{- else }}
+if (process.env.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT) {
+  otlpUrl = process.env.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT;
+} else if (process.env.OTEL_EXPORTER_OTLP_ENDPOINT) {
+  const base = process.env.OTEL_EXPORTER_OTLP_ENDPOINT.replace(/\/$/, "");
+  otlpUrl = `${base}/v1/traces`;
+}
+{{- end }}
+
 const sdk = new NodeSDK({
   {{- if or (eq .TraceExporterType "otlp") (eq .TraceExporterType "") }}
   traceExporter: new OTLPTraceExporter({
-    {{- if .TraceEndpoint }}
-    url: "{{.TraceEndpoint}}",
-    {{- end }}
+    {{- /* always pass url if we have one to avoid defaulting to localhost */ -}}
+    ...(otlpUrl ? { url: otlpUrl } : {}),
     {{- if .TraceHeaders }}
     headers: {{ printf "%#v" .TraceHeaders }},
     {{- end }}
@@ -74,5 +86,10 @@ if (propagators.length > 0) {
 {{- end }}
 
 sdk.start();
+
+// Emit a bootstrap span using API to ensure at least one span is produced
+const api = require("@opentelemetry/api");
+const tracer = api.trace.getTracer("bootstrap");
+tracer.startActiveSpan("startup", (span) => { span.end(); });
 
 process.on("SIGTERM", async () => { await sdk.shutdown(); });
