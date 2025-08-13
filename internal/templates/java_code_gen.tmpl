@@ -4,6 +4,8 @@
 package telemetry;
 
 import io.opentelemetry.api.GlobalOpenTelemetry;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.Tracer;
 import io.opentelemetry.api.trace.propagation.W3CTraceContextPropagator;
 import io.opentelemetry.context.propagation.ContextPropagators;
 import io.opentelemetry.exporter.otlp.trace.OtlpGrpcSpanExporter;
@@ -61,6 +63,11 @@ public final class OtelBootstrap {
 
     GlobalOpenTelemetry.resetForTest();
     GlobalOpenTelemetry.set(sdk);
+
+    // Emit a bootstrap span to verify pipeline
+    Tracer tracer = sdk.getTracer("bootstrap");
+    Span span = tracer.spanBuilder("startup").startSpan();
+    span.end();
     return sdk;
   }
 }

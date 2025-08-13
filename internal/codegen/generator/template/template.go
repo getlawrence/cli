@@ -7,8 +7,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/getlawrence/cli/internal/codegen/dependency"
-	"github.com/getlawrence/cli/internal/codegen/injector"
 	"github.com/getlawrence/cli/internal/codegen/types"
 	"github.com/getlawrence/cli/internal/domain"
 	"github.com/getlawrence/cli/internal/logger"
@@ -21,22 +19,20 @@ const (
 	defaultServiceName  = "my-service"
 )
 
+// TemplateRenderer abstracts template execution for testability
+type TemplateRenderer interface {
+	GenerateInstructions(lang string, data templates.TemplateData) (string, error)
+}
+
 // TemplateGenerationStrategy implements direct code generation using templates
 type TemplateGenerationStrategy struct {
-	logger           logger.Logger
-	templateEngine   *templates.TemplateEngine
-	codeInjector     *injector.CodeInjector
-	dependencyWriter *dependency.DependencyWriter
+	logger         logger.Logger
+	templateEngine TemplateRenderer
 }
 
 // NewTemplateGenerationStrategy creates a new template-based generation strategy
 func NewTemplateGenerationStrategy(templateEngine *templates.TemplateEngine, logger logger.Logger) *TemplateGenerationStrategy {
-	return &TemplateGenerationStrategy{
-		logger:           logger,
-		templateEngine:   templateEngine,
-		codeInjector:     injector.NewCodeInjector(logger),
-		dependencyWriter: dependency.NewDependencyWriter(logger),
-	}
+	return &TemplateGenerationStrategy{logger: logger, templateEngine: templateEngine}
 }
 
 // NOTE: Language-specific instrumentation prerequisite resolution is handled
@@ -65,11 +61,13 @@ func (s *TemplateGenerationStrategy) GetSupportedLanguages() []string {
 // GenerateCode generates code directly using templates
 func (s *TemplateGenerationStrategy) GenerateCode(ctx context.Context, opportunities []domain.Opportunity, req types.GenerationRequest) error {
 	if len(opportunities) == 0 {
-		s.logger.Log("No code generation opportunities found")
-		return nil
+		s.logger.Log("No code generation opportunities found; attempting fallback discovery")
 	}
 
 	directoryOpportunities := s.groupOpportunitiesByDirectory(opportunities)
+	// Fallback: if some well-known language subdirectories exist but have no opportunities,
+	// synthesize minimal InstallOTEL opportunities so we still generate bootstrap and inject init.
+	s.addFallbackLanguageOpportunities(req.CodebasePath, directoryOpportunities)
 	if len(directoryOpportunities) == 0 {
 		s.logger.Log("No opportunities to process")
 		return nil
@@ -85,22 +83,7 @@ func (s *TemplateGenerationStrategy) GenerateCode(ctx context.Context, opportuni
 			normalizedLanguage := normalizeLanguageForGeneration(language)
 			operationsData := s.analyzeOpportunities(langOpportunities)
 			operationsSummary = append(operationsSummary, s.createOperationsSummary(normalizedLanguage, operationsData)...)
-			dependencyPath := s.determineOutputDirectory(req, directory)
-
-			if err := s.addDependencies(ctx, dependencyPath, normalizedLanguage, operationsData, req); err != nil {
-				s.logger.Logf("Warning: failed to add dependencies for %s: %v\n", normalizedLanguage, err)
-				// If dependency installation fails, skip entry point modifications and file generation
-				// to avoid producing code that won't compile/run (e.g., missing packages).
-				continue
-			}
-
-			// Handle entry point modifications
-			entryPointFiles, err := s.handleEntryPointModifications(langOpportunities, req, operationsData)
-			if err != nil {
-				s.logger.Logf("Warning: failed to modify entry points for %s: %v\n", language, err)
-			} else {
-				generatedFiles = append(generatedFiles, entryPointFiles...)
-			}
+			_ = s.determineOutputDirectory(req, directory) // compute path for generation below
 
 			// Handle regular file generation
 			files, err := s.generateCodeForLanguage(normalizedLanguage, langOpportunities, req, directory)
@@ -279,7 +262,11 @@ func (s *TemplateGenerationStrategy) analyzeOpportunities(opportunities []domain
 			data.RemoveComponents[componentType] = append(data.RemoveComponents[componentType], opp.Component)
 		}
 	}
-
+	// If instrumentations or components are planned, ensure OTEL core is also installed and initialized.
+	// Many projects need the bootstrap even if the "missing otel" issue wasn't explicitly raised.
+	if !data.InstallOTEL && (len(data.InstallInstrumentations) > 0 || len(data.InstallComponents) > 0) {
+		data.InstallOTEL = true
+	}
 	return data
 }
 
@@ -338,102 +325,157 @@ func (s *TemplateGenerationStrategy) groupOpportunitiesByLanguage(opportunities 
 	return grouped
 }
 
+// addFallbackLanguageOpportunities discovers common language subdirectories (e.g. python/, php/, ruby/, csharp/, javascript/, go/)
+// under the provided root, and ensures there is at least one InstallOTEL opportunity per discovered directory.
+func (s *TemplateGenerationStrategy) addFallbackLanguageOpportunities(root string, dirOpps map[string][]domain.Opportunity) {
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		return
+	}
+	// Heuristic: map subdir name to language identifier
+	langByDir := map[string]string{
+		"python":     "python",
+		"php":        "php",
+		"ruby":       "ruby",
+		"go":         "go",
+		"js":         "javascript",
+		"javascript": "javascript",
+		"csharp":     "dotnet",
+		"dotnet":     "dotnet",
+		"java":       "java",
+	}
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		name := strings.ToLower(e.Name())
+		lang, ok := langByDir[name]
+		if !ok {
+			continue
+		}
+		// If this directory already has opportunities, skip
+		if _, exists := dirOpps[name]; exists {
+			continue
+		}
+		// Quick sanity: verify directory contains some file indicative of a project to avoid polluting arbitrary dirs
+		subdir := filepath.Join(root, name)
+		if !s.seemsLikeProjectDir(subdir, lang) {
+			continue
+		}
+		// Create a minimal InstallOTEL opportunity
+		opp := domain.Opportunity{Type: domain.OpportunityInstallOTEL, Language: lang, FilePath: name}
+		dirOpps[name] = []domain.Opportunity{opp}
+	}
+}
+
+// seemsLikeProjectDir checks for a minimal marker file for the given language directory
+func (s *TemplateGenerationStrategy) seemsLikeProjectDir(dir string, lang string) bool {
+	lang = strings.ToLower(lang)
+	checks := map[string][]string{
+		"python":     {"requirements.txt", "app.py", "main.py"},
+		"php":        {"composer.json", "index.php"},
+		"ruby":       {"Gemfile", "app.rb"},
+		"go":         {"go.mod", "main.go"},
+		"javascript": {"package.json", "index.js"},
+		"dotnet":     {"*.csproj", "Program.cs"},
+		"java":       {"pom.xml", "build.gradle", "build.gradle.kts"},
+	}
+	markers := checks[lang]
+	if len(markers) == 0 {
+		return false
+	}
+	for _, m := range markers {
+		if strings.Contains(m, "*") {
+			if matches, _ := filepath.Glob(filepath.Join(dir, m)); len(matches) > 0 {
+				return true
+			}
+			continue
+		}
+		if _, err := os.Stat(filepath.Join(dir, m)); err == nil {
+			return true
+		}
+	}
+	return false
+}
+
 // normalizeLanguageForGeneration maps language aliases to the canonical identifiers used by
 // dependency management, templates, and injectors.
 func normalizeLanguageForGeneration(language string) string {
 	switch strings.ToLower(language) {
 	case "js", "node", "nodejs":
 		return "javascript"
+	case "csharp":
+		return "dotnet"
 	default:
 		return strings.ToLower(language)
 	}
 }
 
-// handleEntryPointModifications processes entry point modification opportunities
-func (s *TemplateGenerationStrategy) handleEntryPointModifications(
-	opportunities []domain.Opportunity,
-	req types.GenerationRequest,
-	operationsData *types.OperationsData,
-) ([]string, error) {
-	var modifiedFiles []string
+// Note: dependency management and entry-point modification are orchestrated outside this strategy now.
 
-	// Perform entry point modification if we plan to install OTEL or any instrumentations/components
-	shouldModify := operationsData.InstallOTEL || len(operationsData.InstallInstrumentations) > 0 || len(operationsData.InstallComponents) > 0
-	if !shouldModify {
-		return modifiedFiles, nil
+// findLanguageProjectDir tries to discover a more specific project directory for a language
+// under the provided root. This helps when opportunities are grouped under "root" but the
+// actual dependency files live in subfolders like "ruby/", "php/", etc.
+// findLanguageProjectDir is retained for potential orchestrator use but currently unused in this strategy.
+//
+//lint:ignore U1000 kept for compatibility with orchestrators relying on this behavior
+func (s *TemplateGenerationStrategy) findLanguageProjectDir(root, language string) (string, bool) {
+	language = strings.ToLower(language)
+	// Quick common folder names for examples
+	candidates := []string{language}
+	if language == "dotnet" || language == "csharp" {
+		candidates = append(candidates, "csharp")
 	}
-
-	// Use any opportunity as a reference for language and directory
-	for _, opp := range opportunities {
-		// Skip entry point modifications for C#/.NET for now to avoid breaking
-		// top-level Program.cs with premature references to builder/app.
-		// Dependency updates and generated bootstrap files are still produced.
-		if lang := strings.ToLower(opp.Language); lang == "csharp" || lang == "dotnet" {
+	// Try candidate directories directly
+	for _, c := range candidates {
+		p := filepath.Join(root, c)
+		if info, err := os.Stat(p); err == nil && info.IsDir() {
+			// Without dependency validation, consider the presence of the directory sufficient here
+			return p, true
+		}
+	}
+	// Fallback: shallow scan for key files
+	keyFiles := map[string][]string{
+		"ruby":       {"Gemfile"},
+		"php":        {"composer.json"},
+		"python":     {"requirements.txt", "pyproject.toml"},
+		"go":         {"go.mod"},
+		"java":       {"pom.xml", "build.gradle", "build.gradle.kts"},
+		"dotnet":     {".csproj"},
+		"csharp":     {".csproj"},
+		"javascript": {"package.json"},
+	}
+	wanted := keyFiles[language]
+	if len(wanted) == 0 {
+		return "", false
+	}
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		return "", false
+	}
+	for _, e := range entries {
+		if !e.IsDir() {
 			continue
 		}
-		entryPoint := &domain.EntryPoint{}
-		dirPath := req.CodebasePath
-		if opp.FilePath != "" && opp.FilePath != "root" {
-			dirPath = filepath.Join(req.CodebasePath, opp.FilePath)
-		}
-
-		eps, err := s.codeInjector.DetectEntryPoints(dirPath, strings.ToLower(opp.Language))
-		if err != nil || len(eps) == 0 {
-			continue
-		}
-
-		best := eps[0]
-		for _, ep := range eps {
-			if ep.Confidence > best.Confidence {
-				best = ep
+		dir := filepath.Join(root, e.Name())
+		// Look for any of the wanted files in this subdir
+		for _, k := range wanted {
+			// Support suffix match for dotnet (csproj)
+			if strings.HasPrefix(k, ".") {
+				// suffix-only marker, handled below
+				continue
+			}
+			if _, err := os.Stat(filepath.Join(dir, k)); err == nil {
+				return dir, true
 			}
 		}
-		entryPoint = &best
-		files, err := s.codeInjector.InjectOtelInitialization(
-			context.Background(),
-			entryPoint,
-			operationsData,
-			req,
-		)
-		if err != nil {
-			return nil, fmt.Errorf("failed to modify entry point %s: %w", entryPoint.FilePath, err)
+		if language == "dotnet" || language == "csharp" {
+			// look for any *.csproj
+			matches, _ := filepath.Glob(filepath.Join(dir, "*.csproj"))
+			if len(matches) > 0 {
+				return dir, true
+			}
 		}
-		modifiedFiles = append(modifiedFiles, files...)
-		break
 	}
-
-	return modifiedFiles, nil
-}
-
-// addDependencies handles adding required dependencies to the project
-func (s *TemplateGenerationStrategy) addDependencies(
-	ctx context.Context,
-	projectPath, language string,
-	operationsData *types.OperationsData,
-	req types.GenerationRequest,
-) error {
-	// Skip if no dependencies need to be added
-	if !operationsData.InstallOTEL && len(operationsData.InstallInstrumentations) == 0 && len(operationsData.InstallComponents) == 0 {
-		return nil
-	}
-
-	// In dry-run, don't touch the project filesystem. Just compute and display what would be added.
-	if req.Config.DryRun {
-		deps, err := s.dependencyWriter.GetRequiredDependencies(language, operationsData)
-		if err != nil {
-			return nil // best-effort: don't block generation on preview failures
-		}
-		if len(deps) > 0 {
-			s.logger.Logf("Would add %d %s dependencies\n", len(deps), language)
-		}
-		return nil
-	}
-
-	// Validate project structure
-	if err := s.dependencyWriter.ValidateProjectStructure(projectPath, language); err != nil {
-		s.logger.Logf("Warning: %v\n", err)
-	}
-
-	// Add dependencies
-	return s.dependencyWriter.AddDependencies(ctx, projectPath, language, operationsData, req)
+	return "", false
 }

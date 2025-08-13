@@ -92,7 +92,7 @@ public class Program {
     }
 }
 `,
-			expectInitSub:   "AddOpenTelemetry(",
+			expectInitSub:   "Otel.Configure(",
 			expectImportSub: "using OpenTelemetry;",
 		},
 		{

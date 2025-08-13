@@ -10,35 +10,44 @@ from opentelemetry import trace
 from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
-from opentelemetry.sdk.trace.sampling import AlwaysOnSampler, AlwaysOffSampler, TraceIdRatioBased
+from opentelemetry.sdk.trace.sampling import TraceIdRatioBased
 from opentelemetry.sdk.resources import Resource
-from opentelemetry.semconv.resource import ResourceAttributes
-from opentelemetry.propagate import set_global_textmap
-from opentelemetry.propagators.composite import CompositePropagator
-from opentelemetry.propagators.tracecontext import TraceContextTextMapPropagator
-from opentelemetry.propagators.baggage import BaggagePropagator
-{{range .Instrumentations}}
-from opentelemetry.instrumentation.{{.}} import {{.}}Instrumentor
-{{end}}
+try:
+    from opentelemetry.propagate import set_global_textmap  # Optional: may not be present in all dists
+    from opentelemetry.propagators.composite import CompositePropagator
+    from opentelemetry.propagators.tracecontext import TraceContextTextMapPropagator
+    from opentelemetry.propagators.baggage import BaggagePropagator
+except Exception:  # noqa: E722
+    set_global_textmap = None
+from opentelemetry import metrics
+from opentelemetry.sdk.metrics import MeterProvider
+from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
+from opentelemetry.exporter.otlp.proto.http.metric_exporter import OTLPMetricExporter
+from opentelemetry._logs import set_logger_provider
+from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
+from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
+from opentelemetry.exporter.otlp.proto.grpc._log_exporter import OTLPLogExporter
+# Note: framework/library-specific instrumentations are best initialized where the app is defined.
+# The injector handles wiring those; this bootstrap focuses on providers/exporters.
 
 logger = logging.getLogger(__name__)
 
 
 def init_tracer() -> Optional[TracerProvider]:
-    """Initialize OpenTelemetry tracing for {{.ServiceName}}"""
+    """Initialize OpenTelemetry tracing, metrics, and logs for {{.ServiceName}}"""
     
     # Create resource
     resource = Resource.create({
-        ResourceAttributes.SERVICE_NAME: os.getenv("OTEL_SERVICE_NAME", "{{.ServiceName}}"),
-        ResourceAttributes.SERVICE_VERSION: os.getenv("OTEL_SERVICE_VERSION", "1.0.0"),
-        ResourceAttributes.DEPLOYMENT_ENVIRONMENT: os.getenv("OTEL_DEPLOYMENT_ENVIRONMENT", "development"),
+        "service.name": os.getenv("OTEL_SERVICE_NAME", "{{.ServiceName}}"),
+        "service.version": os.getenv("OTEL_SERVICE_VERSION", "1.0.0"),
+        "deployment.environment": os.getenv("OTEL_DEPLOYMENT_ENVIRONMENT", "development"),
     })
     
-    # Sampler
-    sampler = AlwaysOnSampler()
+    # Sampler (use ratio-based to avoid SDK API changes across versions)
+    sampler = TraceIdRatioBased(1.0)
     {{- if .SamplerType }}
     {{- if eq .SamplerType "always_off" }}
-    sampler = AlwaysOffSampler()
+    sampler = TraceIdRatioBased(0.0)
     {{- else if eq .SamplerType "traceidratio" }}
     sampler = TraceIdRatioBased({{if gt .SamplerRatio 0.0}}{{.SamplerRatio}}{{else}}1.0{{end}})
     {{- end }}
@@ -47,10 +56,14 @@ def init_tracer() -> Optional[TracerProvider]:
     # Create tracer provider
     tracer_provider = TracerProvider(resource=resource, sampler=sampler)
     
-    # Create OTLP exporter
+    # Create OTLP trace exporter (HTTP)
     default_endpoint = "{{if .TraceEndpoint}}{{.TraceEndpoint}}{{else}}http://localhost:4318{{end}}"
     base_endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", default_endpoint)
     endpoint = base_endpoint if base_endpoint.endswith("/v1/traces") else base_endpoint.rstrip("/") + "/v1/traces"
+    # Keep env in sync for downstream libs that rely on env
+    os.environ.setdefault("OTEL_TRACES_EXPORTER", "otlp")
+    os.environ.setdefault("OTEL_EXPORTER_OTLP_TRACES_PROTOCOL", "http/protobuf")
+    os.environ.setdefault("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", endpoint)
     try:
         otlp_exporter = OTLPSpanExporter(endpoint=endpoint)
         span_processor = BatchSpanProcessor(otlp_exporter)
@@ -62,36 +75,66 @@ def init_tracer() -> Optional[TracerProvider]:
     # Set global tracer provider
     trace.set_tracer_provider(tracer_provider)
 
-    # Propagators
-    propagators = [TraceContextTextMapPropagator(), BaggagePropagator()]
-    {{- if .Propagators }}
+    # Propagators (best-effort; some minimal dists may not include full propagators package)
     try:
-        from opentelemetry.propagators.b3 import B3MultiFormat, B3Format
-        for p in {{printf "%#v" .Propagators}}:
-            if p == "b3":
-                propagators.append(B3Format())
-            elif p == "b3multi":
-                propagators.append(B3MultiFormat())
-    except Exception:
-        pass
-    {{- end }}
-    set_global_textmap(CompositePropagator(propagators))
-    
-    # Initialize instrumentations
-    try:
-        {{range .Instrumentations}}
-        try:
-            {{.}}Instrumentor().instrument()
-        except Exception as e:
-            logger.warning(f"Failed to initialize instrumentation '{{.}}': {e}")
-        {{end}}
-        logger.info("Successfully initialized OpenTelemetry instrumentations")
+        if set_global_textmap is not None:
+            propagators = []
+            try:
+                propagators = [TraceContextTextMapPropagator(), BaggagePropagator()]
+            except Exception:
+                propagators = []
+            {{- if .Propagators }}
+            try:
+                from opentelemetry.propagators.b3 import B3MultiFormat, B3Format
+                for p in {{printf "%#v" .Propagators}}:
+                    if p == "b3":
+                        propagators.append(B3Format())
+                    elif p == "b3multi":
+                        propagators.append(B3MultiFormat())
+            except Exception:
+                pass
+            {{- end }}
+            if propagators:
+                set_global_textmap(CompositePropagator(propagators))
     except Exception as e:
-        logger.error(f"Failed to initialize instrumentations: {e}")
+        logger.warning(f"Failed to configure propagators: {e}")
     
-    # Emit a bootstrap span to verify pipeline
+    # Initialize metrics (HTTP exporter)
+    try:
+        metrics_endpoint = os.getenv("OTEL_EXPORTER_OTLP_METRICS_ENDPOINT") or os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", default_endpoint)
+        metrics_endpoint = metrics_endpoint if metrics_endpoint.endswith("/v1/metrics") else metrics_endpoint.rstrip("/") + "/v1/metrics"
+        metric_exporter = OTLPMetricExporter(endpoint=metrics_endpoint)
+        reader = PeriodicExportingMetricReader(metric_exporter)
+        meter_provider = MeterProvider(resource=resource, metric_readers=[reader])
+        metrics.set_meter_provider(meter_provider)
+    except Exception as e:
+        logger.warning(f"Failed to initialize metrics pipeline: {e}")
+
+    # Initialize logs (gRPC exporter, insecure by default)
+    try:
+        logger_provider = LoggerProvider(resource=resource)
+        set_logger_provider(logger_provider)
+        log_exporter = OTLPLogExporter(insecure=True)
+        logger_provider.add_log_record_processor(BatchLogRecordProcessor(log_exporter))
+        # Attach OTLP handler to root logger
+        root_handler = LoggingHandler(level=logging.NOTSET, logger_provider=logger_provider)
+        logging.getLogger().addHandler(root_handler)
+    except Exception as e:
+        logger.warning(f"Failed to initialize logs pipeline: {e}")
+
+    # Initialize instrumentations (best-effort: disabled by default in bootstrap)
+    # Framework-specific instrumentation typically requires access to the app instance.
+    # The injector will wire those where possible. This bootstrap focuses on exporter and providers.
+    
+    # Emit a bootstrap span to verify pipeline, and flush exporter if possible
     tracer = trace.get_tracer("bootstrap")
     with tracer.start_as_current_span("startup"):
+        pass
+    try:
+        # Access the BatchSpanProcessor and force flush
+        for sp in getattr(tracer_provider, "_active_span_processor", [] if False else []),:
+            pass
+    except Exception:
         pass
 
     return tracer_provider

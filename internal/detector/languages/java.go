@@ -114,15 +114,16 @@ func (j *JavaDetector) parsePomForOTel(pomPath string) ([]domain.Library, error)
 	var libs []domain.Library
 	scanner := bufio.NewScanner(file)
 	// Very simple XML regexes to detect artifact coordinates containing opentelemetry
-	depRegex := regexp.MustCompile(`<(groupId|artifactId)>([^<]+)</\1>`) // capture group/artifact ids
+	// Use a non-backreference pattern to avoid Go's regexp backreference limitation
+	depRegex := regexp.MustCompile(`<(groupId|artifactId)>([^<]+)</(groupId|artifactId)>`) // capture group/artifact ids
 	var groupID, artifactID string
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
-		if m := depRegex.FindStringSubmatch(line); len(m) == 3 {
-			if m[1] == "groupId" {
+		if m := depRegex.FindStringSubmatch(line); len(m) >= 4 {
+			if m[1] == "groupId" && m[3] == "groupId" {
 				groupID = m[2]
 			}
-			if m[1] == "artifactId" {
+			if m[1] == "artifactId" && m[3] == "artifactId" {
 				artifactID = m[2]
 			}
 			if groupID != "" && artifactID != "" {

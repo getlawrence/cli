@@ -8,6 +8,7 @@ services:
       - ./.otel-data:/data
     ports:
       - "4318:4318"  # OTLP HTTP receiver
+      - "4317:4317"  # OTLP gRPC receiver
 
   go-service:
     build:

@@ -42,9 +42,14 @@ func NewRubyInjector() *RubyInjector {
 			ImportTemplate: `require "%s"`,
 			InitializationTemplate: `
 # Initialize OpenTelemetry
-require_relative "./otel"
+begin
+  require_relative "./otel"
+rescue LoadError
+  # no-op if not present
+end
 `,
 			CleanupTemplate: ``,
+			InitAtTop:       true,
 		},
 	}
 }

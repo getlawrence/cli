@@ -2,6 +2,7 @@ package dependency
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -36,14 +37,17 @@ func (h *JavaScriptInjector) AddDependencies(ctx context.Context, projectPath st
 		return nil
 	}
 
+	// Ensure each dependency has an explicit version
+	resolved, err := h.resolveLatestVersions(ctx, projectPath, dependencies)
+	if err != nil {
+		return err
+	}
+
 	// Build install args
 	var args []string
 	args = append(args, "install")
-	for _, dep := range dependencies {
-		spec := dep.ImportPath
-		if dep.Version != "" {
-			spec = fmt.Sprintf("%s@%s", dep.ImportPath, dep.Version)
-		}
+	for _, dep := range resolved {
+		spec := fmt.Sprintf("%s@%s", dep.ImportPath, dep.Version)
 		args = append(args, spec)
 	}
 
@@ -150,4 +154,40 @@ func (h *JavaScriptInjector) ValidateProjectStructure(projectPath string) error 
 // GetDependencyFiles returns dependency file paths
 func (h *JavaScriptInjector) GetDependencyFiles(projectPath string) []string {
 	return []string{filepath.Join(projectPath, "package.json"), filepath.Join(projectPath, "package-lock.json")}
+}
+
+// resolveLatestVersions fills in the Version field for any dependency missing it using npm registry
+func (h *JavaScriptInjector) resolveLatestVersions(ctx context.Context, projectPath string, deps []Dependency) ([]Dependency, error) {
+	resolved := make([]Dependency, 0, len(deps))
+	for _, d := range deps {
+		if d.Version != "" {
+			resolved = append(resolved, d)
+			continue
+		}
+
+		ver, err := h.npmViewVersion(ctx, projectPath, d.ImportPath)
+		if err != nil || strings.TrimSpace(ver) == "" {
+			return nil, fmt.Errorf("failed to resolve latest version for %s: %w", d.ImportPath, err)
+		}
+		d.Version = strings.TrimSpace(ver)
+		resolved = append(resolved, d)
+	}
+	return resolved, nil
+}
+
+func (h *JavaScriptInjector) npmViewVersion(ctx context.Context, projectPath, pkg string) (string, error) {
+	args := []string{"view", pkg, "version", "--json"}
+	cmd := exec.CommandContext(ctx, "npm", args...)
+	cmd.Dir = projectPath
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("npm view failed: %w\nOutput: %s", err, string(out))
+	}
+	// Output may be a JSON string like "1.2.3"
+	var s string
+	if err := json.Unmarshal(out, &s); err == nil {
+		return s, nil
+	}
+	// Fallback: raw string
+	return strings.TrimSpace(string(out)), nil
 }

@@ -28,6 +28,11 @@ func (h *RubyInjector) GetLanguage() string { return "ruby" }
 
 // AddDependencies adds the specified dependencies using Bundler
 func (h *RubyInjector) AddDependencies(ctx context.Context, projectPath string, dependencies []Dependency, dryRun bool) error {
+	// Resolve and pin versions for all gems
+	deps, err := h.resolveLatestVersions(ctx, projectPath, dependencies)
+	if err != nil {
+		return err
+	}
 	gemfile := filepath.Join(projectPath, "Gemfile")
 	if _, err := os.Stat(gemfile); os.IsNotExist(err) {
 		return fmt.Errorf("Gemfile not found in %s", projectPath)
@@ -38,7 +43,7 @@ func (h *RubyInjector) AddDependencies(ctx context.Context, projectPath string, 
 	}
 
 	// Add gems to Gemfile if they are not already present
-	needed, err := h.filterExistingDependencies(gemfile, dependencies)
+	needed, err := h.filterExistingDependencies(gemfile, deps)
 	if err != nil {
 		return err
 	}
@@ -49,11 +54,7 @@ func (h *RubyInjector) AddDependencies(ctx context.Context, projectPath string, 
 	if dryRun {
 		h.logger.Logf("Would add the following Ruby gems to %s and run bundle install:\n", gemfile)
 		for _, dep := range needed {
-			if dep.Version != "" {
-				h.logger.Logf("  - gem '%s', '%s'\n", dep.ImportPath, dep.Version)
-			} else {
-				h.logger.Logf("  - gem '%s'\n", dep.ImportPath)
-			}
+			h.logger.Logf("  - gem '%s', '%s'\n", dep.ImportPath, dep.Version)
 		}
 		return nil
 	}
@@ -181,15 +182,47 @@ func (h *RubyInjector) appendGemsToGemfile(gemfile string, dependencies []Depend
 		if _, err := f.WriteString(line); err != nil {
 			return err
 		}
-		if dep.Version != "" {
-			if _, err := f.WriteString(fmt.Sprintf("gem '%s', '%s'\n", dep.ImportPath, dep.Version)); err != nil {
-				return err
-			}
-		} else {
-			if _, err := f.WriteString(fmt.Sprintf("gem '%s'\n", dep.ImportPath)); err != nil {
-				return err
-			}
+		if _, err := f.WriteString(fmt.Sprintf("gem '%s', '%s'\n", dep.ImportPath, dep.Version)); err != nil {
+			return err
 		}
 	}
 	return nil
+}
+
+// resolveLatestVersions uses `bundle info` or `gem` to determine the latest version for each gem if not specified
+func (h *RubyInjector) resolveLatestVersions(ctx context.Context, projectPath string, deps []Dependency) ([]Dependency, error) {
+	resolved := make([]Dependency, 0, len(deps))
+	for _, d := range deps {
+		if strings.TrimSpace(d.Version) != "" {
+			resolved = append(resolved, d)
+			continue
+		}
+		// Use `gem list -ra ^name$` to get available versions, then parse first
+		cmd := exec.CommandContext(ctx, "gem", "list", "-ra", "^"+d.ImportPath+"$")
+		cmd.Dir = projectPath
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			return nil, fmt.Errorf("failed to resolve latest gem version for %s: %w\nOutput: %s", d.ImportPath, err, string(out))
+		}
+		// Output example first line: opentelemetry-api (1.2.3, 1.2.2, ...)
+		lines := strings.Split(strings.TrimSpace(string(out)), "\n")
+		if len(lines) == 0 {
+			return nil, fmt.Errorf("no output from gem list for %s", d.ImportPath)
+		}
+		line := strings.TrimSpace(lines[0])
+		// Find first pair of parentheses and take first version inside
+		start := strings.Index(line, "(")
+		end := strings.Index(line, ")")
+		if start == -1 || end == -1 || end <= start+1 {
+			return nil, fmt.Errorf("could not parse gem versions for %s from output: %s", d.ImportPath, line)
+		}
+		versions := line[start+1 : end]
+		parts := strings.Split(versions, ",")
+		if len(parts) == 0 {
+			return nil, fmt.Errorf("no versions found for gem %s", d.ImportPath)
+		}
+		d.Version = strings.TrimSpace(parts[0])
+		resolved = append(resolved, d)
+	}
+	return resolved, nil
 }

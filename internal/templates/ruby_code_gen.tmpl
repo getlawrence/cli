@@ -8,26 +8,33 @@ require 'opentelemetry-exporter-otlp'
 require 'opentelemetry-instrumentation-{{.}}'
 {{end}}
 
-# Resolve exporter endpoint from env and ensure /v1/traces suffix
+# Resolve exporter endpoints and ensure proper suffixes
 base = ENV.fetch('OTEL_EXPORTER_OTLP_ENDPOINT', '{{if .TraceEndpoint}}{{.TraceEndpoint}}{{else}}http://localhost:4318{{end}}')
-if base && !base.empty?
-  base = base.sub(%r{/*$}, '')
-  OTEL_EXPORTER_OTLP_ENDPOINT = base + '/v1/traces'
-else
-  OTEL_EXPORTER_OTLP_ENDPOINT = 'http://localhost:4318/v1/traces'
-end
+base = (base || '').sub(%r{/*$}, '')
+TRACES_ENDPOINT = (base.empty? ? 'http://localhost:4318' : base) + '/v1/traces'
+METRICS_ENDPOINT = (base.empty? ? 'http://localhost:4318' : base) + '/v1/metrics'
+
+# Ensure env is aligned for HTTP/protobuf OTLP
+ENV['OTEL_SERVICE_NAME'] ||= '{{.ServiceName}}'
+ENV['OTEL_TRACES_EXPORTER'] ||= 'otlp'
+ENV['OTEL_EXPORTER_OTLP_TRACES_PROTOCOL'] ||= 'http/protobuf'
+ENV['OTEL_EXPORTER_OTLP_TRACES_ENDPOINT'] ||= TRACES_ENDPOINT
 
 OpenTelemetry::SDK.configure do |c|
-  c.service_name = '{{.ServiceName}}'
+  c.service_name = ENV['OTEL_SERVICE_NAME'] || '{{.ServiceName}}'
 
   # Exporter
-  c.add_span_processor(
-    OpenTelemetry::SDK::Trace::Export::BatchSpanProcessor.new(
-      OpenTelemetry::Exporter::OTLP::Exporter.new(
-        endpoint: OTEL_EXPORTER_OTLP_ENDPOINT
+  begin
+    c.add_span_processor(
+      OpenTelemetry::SDK::Trace::Export::BatchSpanProcessor.new(
+        OpenTelemetry::Exporter::OTLP::Exporter.new(
+          endpoint: TRACES_ENDPOINT
+        )
       )
     )
-  )
+  rescue => e
+    warn "failed to configure OTLP exporter: #{e.message}"
+  end
 
   # Propagators
   propagators = ['tracecontext', 'baggage']
@@ -40,10 +47,16 @@ OpenTelemetry::SDK.configure do |c|
   {{range .Instrumentations}}
   c.use 'OpenTelemetry::Instrumentation::{{.}}'
   {{end}}
+
+  # Optional: configure metrics via env (OTel Ruby supports metrics via SDK env config in recent versions)
 end
 
-# Emit a bootstrap span
-tracer = OpenTelemetry.tracer_provider.tracer('bootstrap')
-tracer.in_span('startup') {}
+begin
+  # Emit a bootstrap span
+  tracer = OpenTelemetry.tracer_provider.tracer('bootstrap')
+  tracer.in_span('startup') {}
+rescue StandardError => e
+  warn "OTEL bootstrap failed: #{e.message}"
+end
 
 

@@ -5,8 +5,10 @@ import (
 	"fmt"
 
 	"github.com/getlawrence/cli/internal/agents"
+	"github.com/getlawrence/cli/internal/codegen/dependency"
 	"github.com/getlawrence/cli/internal/codegen/generator/agent"
 	"github.com/getlawrence/cli/internal/codegen/generator/template"
+	"github.com/getlawrence/cli/internal/codegen/injector"
 	"github.com/getlawrence/cli/internal/codegen/types"
 	"github.com/getlawrence/cli/internal/detector"
 	"github.com/getlawrence/cli/internal/domain"
@@ -39,7 +41,14 @@ func NewGenerator(codebaseAnalyzer *detector.CodebaseAnalyzer, logger logger.Log
 	// Initialize strategies
 	strategies := make(map[types.GenerationMode]types.CodeGenerationStrategy)
 	strategies[types.AgentMode] = agent.NewAIGenerationStrategy(agentDetector, templateEngine, logger)
-	strategies[types.TemplateMode] = template.NewTemplateGenerationStrategy(templateEngine, logger)
+	// Compose the pure template strategy with an orchestrator for deps/injection
+	pureTemplate := template.NewTemplateGenerationStrategy(templateEngine, logger)
+	strategies[types.TemplateMode] = NewOrchestratedTemplateStrategy(
+		pureTemplate,
+		dependency.NewDependencyWriter(logger),
+		injector.NewCodeInjector(logger),
+		logger,
+	)
 	defaultStrategy := types.TemplateMode
 
 	return &Generator{

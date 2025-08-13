@@ -60,8 +60,13 @@ func (h *GoInjector) AddDependencies(ctx context.Context, projectPath string, de
 		return nil
 	}
 
+	// Resolve explicit versions for all dependencies (use latest if missing)
+	resolved, rerr := h.resolveLatestVersions(ctx, projectPath, neededDeps)
+	if rerr != nil {
+		return rerr
+	}
 	// Add dependencies using go get
-	return h.addDependenciesWithGoGet(ctx, projectPath, neededDeps)
+	return h.addDependenciesWithGoGet(ctx, projectPath, resolved)
 }
 
 // GetCoreDependencies returns the core OpenTelemetry dependencies for Go
@@ -330,7 +335,7 @@ func (h *GoInjector) addDependenciesWithGoGet(ctx context.Context, projectPath s
 		h.logger.Logf("  Adding %s...\n", dep.ImportPath)
 
 		args := []string{"get"}
-		if dep.Version != "" {
+		if strings.TrimSpace(dep.Version) != "" {
 			args = append(args, dep.ImportPath+"@"+dep.Version)
 		} else {
 			args = append(args, dep.ImportPath)
@@ -347,4 +352,65 @@ func (h *GoInjector) addDependenciesWithGoGet(ctx context.Context, projectPath s
 
 	h.logger.Logf("Successfully added %d dependencies\n", len(dependencies))
 	return nil
+}
+
+// resolveLatestVersions queries `go list -m -versions -json` to find latest tag when version missing
+func (h *GoInjector) resolveLatestVersions(ctx context.Context, projectPath string, deps []Dependency) ([]Dependency, error) {
+	resolved := make([]Dependency, 0, len(deps))
+	for _, d := range deps {
+		if strings.TrimSpace(d.Version) != "" {
+			resolved = append(resolved, d)
+			continue
+		}
+		// If the import path encodes a version in its path (e.g., semconv/v1.34.0), skip resolution
+		if hasPathEncodedVersion(d.ImportPath) {
+			resolved = append(resolved, d)
+			continue
+		}
+		// Use go list to fetch module info
+		cmd := exec.CommandContext(ctx, "go", "list", "-m", "-versions", "-json", d.ImportPath)
+		cmd.Dir = projectPath
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			return nil, fmt.Errorf("failed to resolve latest version for %s: %w\nOutput: %s", d.ImportPath, err, string(out))
+		}
+		// Simple parse: find last occurrence of "Versions":["v1.0.0","v1.2.3"] and take last
+		text := string(out)
+		start := strings.Index(text, "\"Versions\":")
+		latest := ""
+		if start != -1 {
+			// find brackets
+			lb := strings.Index(text[start:], "[")
+			rb := strings.Index(text[start+lb+1:], "]")
+			if lb != -1 && rb != -1 {
+				list := text[start+lb+1 : start+lb+1+rb]
+				parts := strings.Split(list, ",")
+				if len(parts) > 0 {
+					last := strings.TrimSpace(parts[len(parts)-1])
+					last = strings.Trim(last, "\" ")
+					latest = last
+				}
+			}
+		}
+		if latest == "" {
+			// Fallback to @latest directive
+			latest = "latest"
+		}
+		d.Version = latest
+		resolved = append(resolved, d)
+	}
+	return resolved, nil
+}
+
+// hasPathEncodedVersion detects if the module path encodes a version in the last segment (e.g., "/v1.34.0")
+func hasPathEncodedVersion(importPath string) bool {
+	// Find last segment
+	lastSlash := strings.LastIndex(importPath, "/")
+	seg := importPath
+	if lastSlash != -1 {
+		seg = importPath[lastSlash+1:]
+	}
+	// Match vMAJOR.MINOR.PATCH
+	matched, _ := regexp.MatchString(`^v\d+\.\d+\.\d+$`, seg)
+	return matched
 }

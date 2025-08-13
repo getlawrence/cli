@@ -34,6 +34,12 @@ func (h *JavaInjector) AddDependencies(ctx context.Context, projectPath string, 
 		return nil
 	}
 
+	// Resolve and pin versions using Maven Central where possible
+	resolved, rerr := h.resolveLatestVersions(ctx, projectPath, dependencies)
+	if rerr != nil {
+		return rerr
+	}
+
 	hasPom := h.hasPom(projectPath)
 	hasGradle := h.hasGradle(projectPath)
 
@@ -43,7 +49,7 @@ func (h *JavaInjector) AddDependencies(ctx context.Context, projectPath string, 
 
 	if dryRun {
 		h.logger.Logf("Java dependencies required (add to pom.xml or build.gradle):\n")
-		for _, dep := range dependencies {
+		for _, dep := range resolved {
 			h.logger.Logf("  - %s\n", h.formatCoordinate(dep))
 		}
 		return nil
@@ -51,7 +57,7 @@ func (h *JavaInjector) AddDependencies(ctx context.Context, projectPath string, 
 
 	// Best effort: try to fetch with mvn if available and pom exists
 	if hasPom && commandExists("mvn") {
-		for _, dep := range dependencies {
+		for _, dep := range resolved {
 			coord := h.formatCoordinate(dep)
 			args := []string{"dependency:get", fmt.Sprintf("-Dartifact=%s", coord)}
 			cmd := exec.CommandContext(ctx, "mvn", args...)
@@ -167,6 +173,37 @@ func (h *JavaInjector) formatCoordinate(dep Dependency) string {
 		coord = coord + ":" + dep.Version
 	}
 	return coord
+}
+
+// resolveLatestVersions attempts to find latest release version for Maven coordinates missing version
+func (h *JavaInjector) resolveLatestVersions(ctx context.Context, projectPath string, deps []Dependency) ([]Dependency, error) {
+	resolved := make([]Dependency, 0, len(deps))
+	for _, d := range deps {
+		if strings.TrimSpace(d.Version) != "" || hasVersionSuffix(d.ImportPath) || strings.Count(d.Name, ":") >= 2 {
+			resolved = append(resolved, d)
+			continue
+		}
+		coord := d.ImportPath
+		if !strings.Contains(coord, ":") && strings.Contains(d.Name, ":") {
+			coord = d.Name
+		}
+		// Query Maven using mvn help:evaluate -Dexpression=project.version with temporary pom
+		// Simpler: use `mvn -q -Dexec.executable=echo -Dexec.args='${project.version}' --non-recursive` requires a project.
+		// Fallback: try `mvn dependency:get -Dartifact=group:artifact:LATEST -Dtransitive=false` which resolves LATEST.
+		if commandExists("mvn") {
+			args := []string{"dependency:get", fmt.Sprintf("-Dartifact=%s:LATEST", coord), "-Dtransitive=false"}
+			cmd := exec.CommandContext(ctx, "mvn", args...)
+			cmd.Dir = projectPath
+			if _, err := cmd.CombinedOutput(); err == nil {
+				d.Version = "LATEST"
+				resolved = append(resolved, d)
+				continue
+			}
+		}
+		// As a last resort, leave unresolved and error
+		return nil, fmt.Errorf("failed to resolve latest version for %s", coord)
+	}
+	return resolved, nil
 }
 
 func hasVersionSuffix(coord string) bool {

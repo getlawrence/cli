@@ -44,14 +44,8 @@ func NewDotNetInjector() *DotNetInjector {
 			},
 			ImportTemplate: `using %s;`,
 			InitializationTemplate: `
-    // Initialize OpenTelemetry (basic tracing)
-    builder.Services.AddOpenTelemetry()
-        .WithTracing(tracing => tracing
-            .AddAspNetCoreInstrumentation()
-            .AddGrpcClientInstrumentation()
-            .AddHttpClientInstrumentation()
-            .AddRedisInstrumentation()
-            .AddOtlpExporter());
+    // Initialize OpenTelemetry via generated bootstrap
+    Otel.Configure(builder.Services);
 `,
 			CleanupTemplate: `// no-op`,
 		},
@@ -68,6 +62,7 @@ func (h *DotNetInjector) GetRequiredImports() []string {
 		"OpenTelemetry.Resources",
 		"OpenTelemetry.Exporter",
 		"Microsoft.Extensions.DependencyInjection",
+		"System",
 	}
 }
 
@@ -137,6 +132,16 @@ func (h *DotNetInjector) GetInsertionPointPriority(captureName string) int {
 }
 
 func (h *DotNetInjector) findBestInsertionPoint(node *sitter.Node, content []byte, config *types.LanguageConfig) types.InsertionPoint {
+	// Try to locate a line containing WebApplication.CreateBuilder to insert after builder is defined
+	body := node.Content(content)
+	lines := strings.Split(body, "\n")
+	for i, ln := range lines {
+		if strings.Contains(ln, "WebApplication.CreateBuilder") {
+			// Insert on the next line after the builder is created
+			baseLine := int(node.StartPoint().Row) + 1
+			return types.InsertionPoint{LineNumber: uint32(baseLine + i + 1), Column: 1, Priority: 10}
+		}
+	}
 	defaultPoint := types.InsertionPoint{LineNumber: node.StartPoint().Row + 1, Column: node.StartPoint().Column + 1, Priority: 1}
 	if insertQuery, ok := config.InsertionQueries["optimal_insertion"]; ok {
 		q, err := sitter.NewQuery([]byte(insertQuery), h.GetLanguage())

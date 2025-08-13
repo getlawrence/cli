@@ -3,27 +3,48 @@
 using Microsoft.Extensions.DependencyInjection;
 using OpenTelemetry;
 using OpenTelemetry.Trace;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Logs;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Context.Propagation;
+using OpenTelemetry.Exporter;
+using System.Diagnostics;
+using Microsoft.Extensions.Hosting;
 
 public static class Otel
 {
     public static void Configure(IServiceCollection services)
     {
         var endpoint = Environment.GetEnvironmentVariable("OTEL_EXPORTER_OTLP_ENDPOINT") ?? "{{if .TraceEndpoint}}{{.TraceEndpoint}}{{else}}http://localhost:4318{{end}}";
+        var serviceName = Environment.GetEnvironmentVariable("OTEL_SERVICE_NAME") ?? "{{.ServiceName}}";
 
         services.AddOpenTelemetry()
+            .ConfigureResource(r => r.AddService(serviceName))
             .WithTracing(tracing => tracing
-                .SetResourceBuilder(ResourceBuilder.CreateDefault().AddService("{{.ServiceName}}"))
                 .AddAspNetCoreInstrumentation()
                 .AddHttpClientInstrumentation()
-                .AddGrpcClientInstrumentation()
-                .AddRuntimeInstrumentation()
-                .AddProcessInstrumentation()
+                .AddSource("bootstrap")
                 .SetSampler(new TraceIdRatioBasedSampler({{if gt .SamplerRatio 0.0}}{{.SamplerRatio}}{{else}}1.0{{end}}))
                 .AddOtlpExporter(o => {
-                    o.Endpoint = new Uri(endpoint);
-                }));
+                    o.Endpoint = new Uri($"{endpoint}/v1/traces");
+                    o.Protocol = OtlpExportProtocol.HttpProtobuf;
+                }))
+            .WithMetrics(metrics => metrics
+                .AddAspNetCoreInstrumentation()
+                .AddHttpClientInstrumentation()
+                .AddRuntimeInstrumentation()
+                .AddOtlpExporter(o => {
+                    o.Endpoint = new Uri($"{endpoint}/v1/metrics");
+                    o.Protocol = OtlpExportProtocol.HttpProtobuf;
+                }))
+            .WithLogging(logging =>
+            {
+                logging.AddOtlpExporter(o =>
+                {
+                    o.Endpoint = new Uri($"{endpoint}/v1/logs");
+                    o.Protocol = OtlpExportProtocol.HttpProtobuf;
+                });
+            });
 
         // Propagators (defaults: TraceContext + Baggage)
         Sdk.SetDefaultTextMapPropagator(new CompositeTextMapPropagator(new TextMapPropagator[] {

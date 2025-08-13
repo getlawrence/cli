@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -29,6 +30,11 @@ func (h *PHPInjector) GetLanguage() string { return "php" }
 func (h *PHPInjector) AddDependencies(ctx context.Context, projectPath string, dependencies []Dependency, dryRun bool) error {
 	if len(dependencies) == 0 {
 		return nil
+	}
+	// Resolve explicit versions for all composer packages
+	deps, err := h.resolveLatestVersions(ctx, projectPath, dependencies)
+	if err != nil {
+		return err
 	}
 
 	composerPath := filepath.Join(projectPath, "composer.json")
@@ -63,7 +69,7 @@ func (h *PHPInjector) AddDependencies(ctx context.Context, projectPath string, d
 	for k := range requireAny {
 		existing[strings.ToLower(k)] = true
 	}
-	for _, dep := range dependencies {
+	for _, dep := range deps {
 		key := strings.ToLower(dep.ImportPath)
 		if key == "" {
 			continue
@@ -79,22 +85,14 @@ func (h *PHPInjector) AddDependencies(ctx context.Context, projectPath string, d
 	if dryRun {
 		h.logger.Logf("Would add the following PHP dependencies to composer.json in %s:\n", projectPath)
 		for _, dep := range toAdd {
-			version := dep.Version
-			if version == "" {
-				version = "*"
-			}
-			h.logger.Logf("  - %s: %s\n", dep.ImportPath, version)
+			h.logger.Logf("  - %s: %s\n", dep.ImportPath, dep.Version)
 		}
 		return nil
 	}
 
 	// Add into require map
 	for _, dep := range toAdd {
-		version := dep.Version
-		if version == "" {
-			version = "*"
-		}
-		requireAny[dep.ImportPath] = version
+		requireAny[dep.ImportPath] = dep.Version
 	}
 
 	// Write back pretty-printed JSON with stable key order
@@ -126,6 +124,50 @@ func (h *PHPInjector) AddDependencies(ctx context.Context, projectPath string, d
 	}
 	h.logger.Logf("Updated %s with %d dependencies\n", composerPath, len(toAdd))
 	return nil
+}
+
+// resolveLatestVersions queries composer to resolve latest versions for any missing versions
+func (h *PHPInjector) resolveLatestVersions(ctx context.Context, projectPath string, deps []Dependency) ([]Dependency, error) {
+	resolved := make([]Dependency, 0, len(deps))
+	for _, d := range deps {
+		if strings.TrimSpace(d.Version) != "" {
+			resolved = append(resolved, d)
+			continue
+		}
+		// Use: composer show <package> --all --no-interaction
+		cmd := exec.CommandContext(ctx, "composer", "show", d.ImportPath, "--all", "--no-interaction")
+		cmd.Dir = projectPath
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			// If composer is not available on host, fallback to default version constraint that will allow docker build to resolve latest
+			// We still need an explicit version; fallback to "*" is not allowed per requirement, so return an error
+			return nil, fmt.Errorf("failed to resolve latest version for %s: %w", d.ImportPath, err)
+		}
+		latest := ""
+		lines := strings.Split(string(out), "\n")
+		for _, line := range lines {
+			line = strings.TrimSpace(line)
+			if strings.HasPrefix(strings.ToLower(line), "versions :") || strings.HasPrefix(strings.ToLower(line), "versions:") {
+				// e.g., versions : * 1.0.2, 1.0.1
+				// strip until '*' and take token after it
+				idx := strings.Index(line, "*")
+				if idx != -1 && idx+1 < len(line) {
+					rest := strings.TrimSpace(line[idx+1:])
+					parts := strings.Split(rest, ",")
+					if len(parts) > 0 {
+						latest = strings.TrimSpace(parts[0])
+					}
+				}
+				break
+			}
+		}
+		if latest == "" {
+			return nil, fmt.Errorf("could not parse latest version for %s from composer output", d.ImportPath)
+		}
+		d.Version = latest
+		resolved = append(resolved, d)
+	}
+	return resolved, nil
 }
 
 // GetCoreDependencies returns essential OpenTelemetry packages for PHP

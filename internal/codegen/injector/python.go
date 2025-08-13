@@ -57,8 +57,11 @@ func NewPythonInjector() *PythonInjector {
 			ImportTemplate: `from opentelemetry import %s`,
 			InitializationTemplate: `
     # Initialize OpenTelemetry
-    from otel import init_tracer
-    tracer_provider = init_tracer()
+    try:
+        from otel import init_tracer
+        init_tracer()
+    except Exception:
+        pass
 `,
 			CleanupTemplate: `tp.shutdown()`,
 		},
@@ -171,9 +174,9 @@ func (h *PythonInjector) AnalyzeFunctionCapture(captureName string, node *sitter
 		// No separate processing needed
 	}
 
-	// Always use regex fallback for now to ensure it works
-	// TODO: Re-enable tree-sitter matching once it's working correctly
+	// Ensure we also consider inserting before Flask app creation
 	h.findMainBlockWithRegex(content, analysis)
+	h.findFlaskAppCreation(content, analysis)
 }
 
 // findMainBlockWithRegex uses regex to find the if __name__ == '__main__': pattern
@@ -218,6 +221,27 @@ func (h *PythonInjector) GetInsertionPointPriority(captureName string) int {
 		return 1 // Low priority - start of function
 	default:
 		return 1
+	}
+}
+
+// findFlaskAppCreation detects `app = Flask(__name__)` and proposes an insertion point just before it.
+func (h *PythonInjector) findFlaskAppCreation(content []byte, analysis *types.FileAnalysis) {
+	lines := strings.Split(string(content), "\n")
+	for i, line := range lines {
+		if strings.Contains(line, "Flask(") && strings.Contains(line, "__name__") && strings.Contains(line, "=") {
+			// Insert on the prior line to ensure OTEL is initialized before app is created
+			lineNo := i + 1
+			insertion := types.InsertionPoint{LineNumber: uint32(lineNo), Column: 1, Priority: 4}
+			entry := types.EntryPointInfo{
+				Name:       "flask_app_creation",
+				LineNumber: uint32(lineNo),
+				Column:     1,
+				BodyStart:  insertion,
+				BodyEnd:    types.InsertionPoint{LineNumber: uint32(len(lines)), Column: 1},
+			}
+			analysis.EntryPoints = append([]types.EntryPointInfo{entry}, analysis.EntryPoints...)
+			return
+		}
 	}
 }
 

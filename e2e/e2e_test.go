@@ -1,7 +1,6 @@
 package e2e
 
 import (
-	"bufio"
 	"context"
 	"os"
 	"os/exec"
@@ -151,19 +150,68 @@ func TestExamplesStackCodegenAndOTEL(t *testing.T) {
 		t.Fatalf("failed to open traces file after waiting: %v", err)
 	}
 	t.Logf("Traces file opened successfully")
-	defer f.Close()
-	scanner := bufio.NewScanner(f)
-	found := false
-	// scan a few lines only
-	for i := 0; i < 100 && scanner.Scan(); i++ {
-		line := scanner.Text()
-		if strings.Contains(line, "resourceSpans") || strings.Contains(line, "scopeSpans") || strings.Contains(line, "spanId") {
-			found = true
+	f.Close()
+
+	// Verify we have at least one span for each expected service
+	expectedServices := map[string]bool{
+		"examples-go":     false,
+		"examples-js":     false,
+		"examples-python": false,
+		"examples-php":    false,
+		"examples-ruby":   false,
+		"examples-csharp": false,
+	}
+
+	deadline := time.Now().Add(60 * time.Second)
+	for time.Now().Before(deadline) {
+		// Re-read the file to capture newly written lines
+		data, err := os.ReadFile(tracesPath)
+		if err != nil {
+			t.Fatalf("failed to read traces file: %v", err)
+		}
+		lines := strings.Split(string(data), "\n")
+		for _, line := range lines {
+			line = strings.TrimSpace(line)
+			if line == "" {
+				continue
+			}
+			// Fast-path string checks to avoid brittleness across SDKs
+			for svc, found := range expectedServices {
+				if found {
+					continue
+				}
+				if strings.Contains(line, "\"service.name\"") && strings.Contains(line, svc) && strings.Contains(line, "\"spans\":") {
+					// Heuristic: ensure the line is not an empty spans array for this resource
+					if !strings.Contains(line, "\"spans\":[]") {
+						expectedServices[svc] = true
+					}
+				}
+			}
+		}
+
+		// Check if all services have been observed
+		allFound := true
+		for _, found := range expectedServices {
+			if !found {
+				allFound = false
+				break
+			}
+		}
+		if allFound {
 			break
 		}
+		time.Sleep(1 * time.Second)
 	}
-	if !found {
-		t.Fatalf("no OTEL trace signals detected in %s", tracesPath)
+
+	// Report any missing services
+	missing := make([]string, 0)
+	for svc, found := range expectedServices {
+		if !found {
+			missing = append(missing, svc)
+		}
 	}
-	t.Logf("Detected OTEL trace signals in %s", tracesPath)
+	if len(missing) > 0 {
+		t.Fatalf("did not observe spans for services: %v", strings.Join(missing, ", "))
+	}
+	t.Logf("Observed spans for all expected services")
 }

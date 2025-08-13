@@ -30,21 +30,26 @@ func (h *PythonInjector) GetLanguage() string {
 
 // AddDependencies adds the specified dependencies to the Python project
 func (h *PythonInjector) AddDependencies(ctx context.Context, projectPath string, dependencies []Dependency, dryRun bool) error {
+	// Resolve explicit versions for all dependencies before proceeding
+	resolved, rerr := h.resolveLatestVersions(ctx, projectPath, dependencies)
+	if rerr != nil {
+		return rerr
+	}
 	// Try different dependency management approaches
 	if h.hasRequirementsTxt(projectPath) {
-		return h.addToRequirementsTxt(projectPath, dependencies, dryRun)
+		return h.addToRequirementsTxt(projectPath, resolved, dryRun)
 	}
 
 	if h.hasPyprojectToml(projectPath) {
-		return h.addToPyprojectToml(projectPath, dependencies, dryRun)
+		return h.addToPyprojectToml(projectPath, resolved, dryRun)
 	}
 
 	if h.hasSetupPy(projectPath) {
-		return h.addWithPip(ctx, projectPath, dependencies, dryRun)
+		return h.addWithPip(ctx, projectPath, resolved, dryRun)
 	}
 
 	// Default: create requirements.txt
-	return h.createRequirementsTxt(projectPath, dependencies, dryRun)
+	return h.createRequirementsTxt(projectPath, resolved, dryRun)
 }
 
 // GetCoreDependencies returns the core OpenTelemetry dependencies for Python
@@ -485,4 +490,47 @@ func (h *PythonInjector) getExistingDependenciesFromRequirements(reqPath string)
 	}
 
 	return dependencies, scanner.Err()
+}
+
+// resolveLatestVersions ensures each dependency has a pinned version by querying pip index
+func (h *PythonInjector) resolveLatestVersions(ctx context.Context, projectPath string, deps []Dependency) ([]Dependency, error) {
+	resolved := make([]Dependency, 0, len(deps))
+	for _, d := range deps {
+		if strings.TrimSpace(d.Version) != "" {
+			resolved = append(resolved, d)
+			continue
+		}
+		cmd := exec.CommandContext(ctx, "python", "-m", "pip", "index", "versions", d.ImportPath)
+		cmd.Dir = projectPath
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			return nil, fmt.Errorf("failed to resolve latest version for %s: %w\nOutput: %s", d.ImportPath, err, string(out))
+		}
+		latest := ""
+		lines := strings.Split(string(out), "\n")
+		for _, line := range lines {
+			line = strings.TrimSpace(line)
+			if strings.HasPrefix(strings.ToLower(line), "available versions:") {
+				rest := strings.TrimSpace(strings.TrimPrefix(line, "Available versions:"))
+				parts := strings.Split(rest, ",")
+				if len(parts) > 0 {
+					latest = strings.TrimSpace(parts[0])
+				}
+				break
+			}
+			if latest == "" && strings.Contains(line, "(") && strings.Contains(line, ")") {
+				start := strings.Index(line, "(")
+				end := strings.Index(line, ")")
+				if start != -1 && end > start+1 {
+					latest = strings.TrimSpace(line[start+1 : end])
+				}
+			}
+		}
+		if latest == "" {
+			return nil, fmt.Errorf("could not parse latest version for %s from pip output", d.ImportPath)
+		}
+		d.Version = latest
+		resolved = append(resolved, d)
+	}
+	return resolved, nil
 }
