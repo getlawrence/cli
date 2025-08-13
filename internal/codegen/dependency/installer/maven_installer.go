@@ -1,10 +1,12 @@
 package installer
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/getlawrence/cli/internal/codegen/dependency/types"
@@ -34,10 +36,13 @@ func (i *MavenInstaller) Install(ctx context.Context, projectPath string, depend
 
 	// Check for Gradle
 	hasGradle := false
+	gradlePath := ""
 	if _, err := os.Stat(filepath.Join(projectPath, "build.gradle")); err == nil {
 		hasGradle = true
+		gradlePath = filepath.Join(projectPath, "build.gradle")
 	} else if _, err := os.Stat(filepath.Join(projectPath, "build.gradle.kts")); err == nil {
 		hasGradle = true
+		gradlePath = filepath.Join(projectPath, "build.gradle.kts")
 	}
 
 	if !hasPom && !hasGradle {
@@ -68,27 +73,17 @@ func (i *MavenInstaller) Install(ctx context.Context, projectPath string, depend
 		}
 	}
 
-	// For now, we don't auto-edit pom.xml or build.gradle
-	// Just provide instructions
+	// Auto-edit pom.xml or build.gradle files
 	if hasPom {
-		fmt.Println("Please add the following dependencies to your pom.xml:")
-		for _, dep := range resolved {
-			parts := strings.Split(dep, ":")
-			if len(parts) >= 2 {
-				fmt.Printf("  <dependency>\n")
-				fmt.Printf("    <groupId>%s</groupId>\n", parts[0])
-				fmt.Printf("    <artifactId>%s</artifactId>\n", parts[1])
-				if len(parts) >= 3 {
-					fmt.Printf("    <version>%s</version>\n", parts[2])
-				}
-				fmt.Printf("  </dependency>\n")
-			}
+		if err := i.addDependenciesToPom(pomPath, resolved); err != nil {
+			return fmt.Errorf("failed to add dependencies to pom.xml: %w", err)
 		}
+		fmt.Printf("Added %d dependencies to pom.xml\n", len(resolved))
 	} else if hasGradle {
-		fmt.Println("Please add the following dependencies to your build.gradle:")
-		for _, dep := range resolved {
-			fmt.Printf("  implementation '%s'\n", dep)
+		if err := i.addDependenciesToGradle(gradlePath, resolved); err != nil {
+			return fmt.Errorf("failed to add dependencies to build.gradle: %w", err)
 		}
+		fmt.Printf("Added %d dependencies to %s\n", len(resolved), filepath.Base(gradlePath))
 	}
 
 	return nil
@@ -112,4 +107,122 @@ func (i *MavenInstaller) resolveVersions(deps []string) ([]string, error) {
 	}
 
 	return resolved, nil
+}
+
+// addDependenciesToPom adds dependencies to pom.xml file
+func (i *MavenInstaller) addDependenciesToPom(pomPath string, dependencies []string) error {
+	content, err := os.ReadFile(pomPath)
+	if err != nil {
+		return err
+	}
+
+	// Find the dependencies section
+	depsPattern := regexp.MustCompile(`(<dependencies>)(.*?)(</dependencies>)`)
+	matches := depsPattern.FindSubmatch(content)
+
+	if len(matches) == 0 {
+		// No dependencies section found, create one after </project>
+		projectEndPattern := regexp.MustCompile(`(</project>)`)
+		if !projectEndPattern.Match(content) {
+			return fmt.Errorf("could not find </project> tag in pom.xml")
+		}
+
+		// Create new dependencies section
+		var newDeps strings.Builder
+		newDeps.WriteString("\n  <dependencies>\n")
+		for _, dep := range dependencies {
+			parts := strings.Split(dep, ":")
+			if len(parts) >= 2 {
+				newDeps.WriteString("    <dependency>\n")
+				newDeps.WriteString(fmt.Sprintf("      <groupId>%s</groupId>\n", parts[0]))
+				newDeps.WriteString(fmt.Sprintf("      <artifactId>%s</artifactId>\n", parts[1]))
+				if len(parts) >= 3 && parts[2] != "LATEST" {
+					newDeps.WriteString(fmt.Sprintf("      <version>%s</version>\n", parts[2]))
+				}
+				newDeps.WriteString("    </dependency>\n")
+			}
+		}
+		newDeps.WriteString("  </dependencies>\n")
+
+		// Insert before </project>
+		newContent := projectEndPattern.ReplaceAll(content, []byte(newDeps.String()+"</project>"))
+		return os.WriteFile(pomPath, newContent, 0644)
+	}
+
+	// Dependencies section exists, add to it
+	depsStart := matches[1]
+	depsContent := matches[2]
+	depsEnd := matches[3]
+
+	// Check if dependencies already exist to avoid duplicates
+	for _, dep := range dependencies {
+		parts := strings.Split(dep, ":")
+		if len(parts) >= 2 {
+			// Check if this dependency already exists
+			depPattern := regexp.MustCompile(fmt.Sprintf(`<groupId>%s</groupId>\s*<artifactId>%s</artifactId>`,
+				regexp.QuoteMeta(parts[0]), regexp.QuoteMeta(parts[1])))
+			if !depPattern.Match(depsContent) {
+				// Add new dependency
+				newDep := fmt.Sprintf("    <dependency>\n      <groupId>%s</groupId>\n      <artifactId>%s</artifactId>\n",
+					parts[0], parts[1])
+				if len(parts) >= 3 && parts[2] != "LATEST" {
+					newDep += fmt.Sprintf("      <version>%s</version>\n", parts[2])
+				}
+				newDep += "    </dependency>\n"
+
+				// Insert before </dependencies>
+				depsContent = append(depsContent, []byte(newDep)...)
+			}
+		}
+	}
+
+	// Reconstruct the file
+	newContent := bytes.Replace(content, matches[0], append(append(depsStart, depsContent...), depsEnd...), 1)
+	return os.WriteFile(pomPath, newContent, 0644)
+}
+
+// addDependenciesToGradle adds dependencies to build.gradle file
+func (i *MavenInstaller) addDependenciesToGradle(gradlePath string, dependencies []string) error {
+	content, err := os.ReadFile(gradlePath)
+	if err != nil {
+		return err
+	}
+
+	// Find the dependencies block
+	depsPattern := regexp.MustCompile(`(dependencies\s*\{)(.*?)(\})`)
+	matches := depsPattern.FindSubmatch(content)
+
+	if len(matches) == 0 {
+		// No dependencies block found, create one at the end of the file
+		var newDeps strings.Builder
+		newDeps.WriteString("\ndependencies {\n")
+		for _, dep := range dependencies {
+			newDeps.WriteString(fmt.Sprintf("    implementation '%s'\n", dep))
+		}
+		newDeps.WriteString("}\n")
+
+		// Append to the end of the file
+		newContent := append(content, []byte(newDeps.String())...)
+		return os.WriteFile(gradlePath, newContent, 0644)
+	}
+
+	// Dependencies block exists, add to it
+	depsStart := matches[1]
+	depsContent := matches[2]
+	depsEnd := matches[3]
+
+	// Check if dependencies already exist to avoid duplicates
+	for _, dep := range dependencies {
+		// Check if this dependency already exists
+		depPattern := regexp.MustCompile(fmt.Sprintf(`implementation\s+['"]%s['"]`, regexp.QuoteMeta(dep)))
+		if !depPattern.Match(depsContent) {
+			// Add new dependency
+			newDep := fmt.Sprintf("    implementation '%s'\n", dep)
+			depsContent = append(depsContent, []byte(newDep)...)
+		}
+	}
+
+	// Reconstruct the file
+	newContent := bytes.Replace(content, matches[0], append(append(depsStart, depsContent...), depsEnd...), 1)
+	return os.WriteFile(gradlePath, newContent, 0644)
 }

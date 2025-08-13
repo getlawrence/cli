@@ -52,8 +52,9 @@ func (i *GoInstaller) Install(ctx context.Context, projectPath string, dependenc
 			}
 		}
 
+		// Do not run as the otel init code has not been added yet and this will remove the new dependencies
 		// Best-effort tidy
-		_, _ = i.commander.Run(ctx, "go", []string{"mod", "tidy"}, projectPath)
+		// _, _ = i.commander.Run(ctx, "go", []string{"mod", "tidy"}, projectPath)
 		return nil
 	}
 

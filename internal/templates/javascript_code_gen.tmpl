@@ -23,10 +23,10 @@ const instrumentations = [];
 {{- range .Instrumentations }}
 {{- if eq . "express" }}
 instrumentations.push(new (require("@opentelemetry/instrumentation-express").ExpressInstrumentation)());
-{{- else if eq . "http" }}
 instrumentations.push(new (require("@opentelemetry/instrumentation-http").HttpInstrumentation)());
 {{- else if eq . "koa" }}
 instrumentations.push(new (require("@opentelemetry/instrumentation-koa").KoaInstrumentation)());
+instrumentations.push(new (require("@opentelemetry/instrumentation-http").HttpInstrumentation)());
 {{- end }}
 {{- end }}
 // Auto-instrumentations (contrib bundle)
