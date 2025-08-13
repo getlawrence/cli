@@ -3,30 +3,53 @@ package dependency
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 
-	"github.com/getlawrence/cli/internal/codegen/types"
+	"github.com/getlawrence/cli/internal/codegen/dependency/commander"
+	"github.com/getlawrence/cli/internal/codegen/dependency/knowledge"
+	"github.com/getlawrence/cli/internal/codegen/dependency/orchestrator"
+	"github.com/getlawrence/cli/internal/codegen/dependency/registry"
+	"github.com/getlawrence/cli/internal/codegen/dependency/types"
+	generatorTypes "github.com/getlawrence/cli/internal/codegen/types"
 	"github.com/getlawrence/cli/internal/logger"
 )
 
-// DependencyWriter handles adding dependencies to projects
+// DependencyWriter handles adding dependencies to projects using the new modular system
 type DependencyWriter struct {
-	handlers map[string]DependencyHandler
-	logger   logger.Logger
+	orchestrator *orchestrator.Orchestrator
+	kb           *knowledge.KnowledgeBase
+	logger       logger.Logger
 }
 
-// NewDependencyWriter creates a new dependency manager with all supported handlers
-func NewDependencyWriter(logger logger.Logger) *DependencyWriter {
+// NewDependencyWriter creates a new dependency manager using the modular orchestrator
+func NewDependencyWriter(l logger.Logger) *DependencyWriter {
+	// Get repo root (walk up to find go.mod)
+	repoRoot, err := findRepoRoot()
+	if err != nil {
+		l.Logf("Warning: could not find repo root: %v\n", err)
+		repoRoot = "."
+	}
+
+	// Load knowledge base
+	kb, err := knowledge.LoadFromFile(repoRoot)
+	if err != nil {
+		l.Logf("Warning: could not load knowledge base: %v\n", err)
+		// Create empty KB as fallback
+		kb = &knowledge.KnowledgeBase{
+			Languages: make(map[string]knowledge.LanguagePackages),
+		}
+	}
+
+	// Create registry and orchestrator
+	commander := commander.NewReal()
+	reg := registry.New(commander)
+	orch := orchestrator.New(reg, kb)
+
 	return &DependencyWriter{
-		handlers: map[string]DependencyHandler{
-			"go":         NewGoInjector(logger),
-			"javascript": NewJavaScriptInjector(logger),
-			"python":     NewPythonInjector(logger),
-			"java":       NewJavaInjector(logger),
-			"csharp":     NewDotNetInjector(logger),
-			"dotnet":     NewDotNetInjector(logger),
-			"ruby":       NewRubyInjector(logger),
-			"php":        NewPHPInjector(logger),
-		},
+		orchestrator: orch,
+		kb:           kb,
+		logger:       l,
 	}
 }
 
@@ -35,86 +58,129 @@ func (dm *DependencyWriter) AddDependencies(
 	ctx context.Context,
 	projectPath string,
 	language string,
-	operationsData *types.OperationsData,
-	req types.GenerationRequest,
+	operationsData *generatorTypes.OperationsData,
+	req generatorTypes.GenerationRequest,
 ) error {
-	handler, exists := dm.handlers[language]
-	if !exists {
-		return fmt.Errorf("unsupported language for dependency management: %s", language)
+	// Convert OperationsData to InstallPlan
+	plan := types.InstallPlan{
+		Language:                language,
+		InstallOTEL:             operationsData.InstallOTEL,
+		InstallInstrumentations: operationsData.InstallInstrumentations,
+		InstallComponents:       operationsData.InstallComponents,
 	}
 
-	// Expand instrumentation prerequisites via language handler
-	if len(operationsData.InstallInstrumentations) > 0 {
-		operationsData.InstallInstrumentations = handler.ResolveInstrumentationPrerequisites(operationsData.InstallInstrumentations)
+	// Run orchestrator
+	installed, err := dm.orchestrator.Run(ctx, projectPath, plan, req.Config.DryRun)
+	if err != nil {
+		return err
 	}
 
-	// Collect all required dependencies
-	dependencies := dm.collectRequiredDependencies(operationsData, handler)
-
-	if len(dependencies) == 0 {
-		return nil // No dependencies to add
+	// Log results
+	if req.Config.DryRun {
+		if len(installed) > 0 {
+			dm.logger.Logf("Would install the following %s dependencies:\n", language)
+			for _, dep := range installed {
+				dm.logger.Logf("  - %s\n", dep)
+			}
+		}
+	} else if len(installed) > 0 {
+		dm.logger.Logf("Installed %d %s dependencies\n", len(installed), language)
 	}
 
-	return handler.AddDependencies(ctx, projectPath, dependencies, req.Config.DryRun)
+	return nil
 }
 
-// collectRequiredDependencies gathers all dependencies needed based on operations data
-func (dm *DependencyWriter) collectRequiredDependencies(operationsData *types.OperationsData, handler DependencyHandler) []Dependency {
-	var dependencies []Dependency
-
-	if operationsData.InstallOTEL {
-		// Add core OTEL dependencies
-		dependencies = append(dependencies, handler.GetCoreDependencies()...)
+// GetRequiredDependencies returns all dependencies that would be added for the given operations
+func (dm *DependencyWriter) GetRequiredDependencies(language string, operationsData *generatorTypes.OperationsData) ([]types.Dependency, error) {
+	// Convert to InstallPlan
+	plan := types.InstallPlan{
+		Language:                language,
+		InstallOTEL:             operationsData.InstallOTEL,
+		InstallInstrumentations: operationsData.InstallInstrumentations,
+		InstallComponents:       operationsData.InstallComponents,
 	}
 
-	// Add instrumentation dependencies
-	for _, instrumentation := range operationsData.InstallInstrumentations {
-		if dep := handler.GetInstrumentationDependency(instrumentation); dep != nil {
-			dependencies = append(dependencies, *dep)
+	// Get all required packages from KB
+	var deps []types.Dependency
+
+	if plan.InstallOTEL {
+		for _, pkg := range dm.kb.GetCorePackages(language) {
+			deps = append(deps, types.Dependency{
+				Name:       pkg,
+				Language:   language,
+				ImportPath: pkg,
+				Category:   "core",
+				Required:   true,
+			})
 		}
 	}
 
-	// Add component dependencies
-	for componentType, components := range operationsData.InstallComponents {
-		for _, component := range components {
-			if dep := handler.GetComponentDependency(componentType, component); dep != nil {
-				dependencies = append(dependencies, *dep)
+	for _, inst := range plan.InstallInstrumentations {
+		if pkg := dm.kb.GetInstrumentationPackage(language, inst); pkg != "" {
+			deps = append(deps, types.Dependency{
+				Name:       inst,
+				Language:   language,
+				ImportPath: pkg,
+				Category:   "instrumentation",
+			})
+		}
+	}
+
+	for compType, components := range plan.InstallComponents {
+		for _, comp := range components {
+			if pkg := dm.kb.GetComponentPackage(language, compType, comp); pkg != "" {
+				deps = append(deps, types.Dependency{
+					Name:       comp,
+					Language:   language,
+					ImportPath: pkg,
+					Category:   compType,
+				})
 			}
 		}
 	}
 
-	return dependencies
-}
-
-// GetSupportedLanguages returns all languages supported by dependency management
-func (dm *DependencyWriter) GetSupportedLanguages() []string {
-	languages := make([]string, 0, len(dm.handlers))
-	for lang := range dm.handlers {
-		languages = append(languages, lang)
-	}
-	return languages
+	return deps, nil
 }
 
 // ValidateProjectStructure checks if the project has the required dependency management files
 func (dm *DependencyWriter) ValidateProjectStructure(projectPath, language string) error {
-	handler, exists := dm.handlers[language]
-	if !exists {
-		return fmt.Errorf("unsupported language: %s", language)
+	// Create a temporary registry to get scanner
+	commander := commander.NewReal()
+	reg := registry.New(commander)
+	
+	scanner, err := reg.GetScanner(language)
+	if err != nil {
+		return err
 	}
 
-	return handler.ValidateProjectStructure(projectPath)
+	if !scanner.Detect(projectPath) {
+		return fmt.Errorf("no dependency management file found for %s project", language)
+	}
+
+	return nil
 }
 
-// GetRequiredDependencies returns all dependencies that would be added for the given operations
-func (dm *DependencyWriter) GetRequiredDependencies(language string, operationsData *types.OperationsData) ([]Dependency, error) {
-	handler, exists := dm.handlers[language]
-	if !exists {
-		return nil, fmt.Errorf("unsupported language: %s", language)
+// GetSupportedLanguages returns all languages supported by dependency management
+func (dm *DependencyWriter) GetSupportedLanguages() []string {
+	return []string{"go", "javascript", "python", "ruby", "php", "java", "csharp", "dotnet"}
+}
+
+// findRepoRoot walks up directory tree to find go.mod
+func findRepoRoot() (string, error) {
+	dir, err := os.Getwd()
+	if err != nil {
+		return "", err
 	}
 
-	// Expand instrumentation prerequisites
-	if len(operationsData.InstallInstrumentations) > 0 {
-		operationsData.InstallInstrumentations = handler.ResolveInstrumentationPrerequisites(operationsData.InstallInstrumentations)
+	for {
+		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
+			return dir, nil
+		}
+
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return "", fmt.Errorf("go.mod not found")
+		}
+		dir = parent
 	}
-	return dm.collectRequiredDependencies(operationsData, handler), nil
 }

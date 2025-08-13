@@ -59,6 +59,7 @@ services:
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
       - OTEL_SERVICE_NAME=examples-php
       - OTEL_LOG_LEVEL=debug
+      - OTEL_PHP_LOG_DESTINATION=stderr
     depends_on:
       - otel-collector
     ports:

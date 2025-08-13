@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/getlawrence/cli/internal/codegen/dependency"
+	dependencyTypes "github.com/getlawrence/cli/internal/codegen/dependency/types"
 	"github.com/getlawrence/cli/internal/codegen/types"
 	"github.com/getlawrence/cli/internal/domain"
 	"github.com/getlawrence/cli/internal/logger"
@@ -17,7 +17,7 @@ import (
 type DependencyManager interface {
 	AddDependencies(ctx context.Context, projectPath, language string, operationsData *types.OperationsData, req types.GenerationRequest) error
 	ValidateProjectStructure(projectPath, language string) error
-	GetRequiredDependencies(language string, operationsData *types.OperationsData) ([]dependency.Dependency, error)
+	GetRequiredDependencies(language string, operationsData *types.OperationsData) ([]dependencyTypes.Dependency, error)
 }
 
 type EntryPointInjector interface {
