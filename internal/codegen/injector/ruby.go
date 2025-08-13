@@ -60,12 +60,33 @@ func (h *RubyInjector) GetLanguage() *sitter.Language { return rubylang.GetLangu
 // GetConfig returns the language configuration
 func (h *RubyInjector) GetConfig() *types.LanguageConfig { return h.config }
 
-// GetRequiredImports returns the list of requires needed for OTEL in Ruby
+// GetRequiredImports returns the list of imports needed for OTEL in Ruby
 func (h *RubyInjector) GetRequiredImports() []string {
 	return []string{
-		"opentelemetry-sdk",
-		"opentelemetry-exporter-otlp",
+		"opentelemetry/api",
+		"opentelemetry/sdk",
+		"opentelemetry/exporter/otlp",
+		"opentelemetry/sdk/trace",
+		"opentelemetry/sdk/trace/export",
 	}
+}
+
+// GetFrameworkImports returns framework-specific imports based on detected frameworks
+func (h *RubyInjector) GetFrameworkImports(content []byte) []string {
+	// Ruby doesn't have framework-specific imports like Python
+	return []string{}
+}
+
+// FormatFrameworkImports formats framework-specific import statements for Ruby
+func (h *RubyInjector) FormatFrameworkImports(imports []string) string {
+	// Ruby doesn't have framework-specific imports like Python
+	return ""
+}
+
+// GenerateFrameworkModifications generates framework-specific instrumentation modifications for Ruby
+func (h *RubyInjector) GenerateFrameworkModifications(content []byte, operationsData *types.OperationsData) []types.CodeModification {
+	// Ruby doesn't have framework-specific modifications like Python
+	return []types.CodeModification{}
 }
 
 // FormatImports formats Ruby require statements

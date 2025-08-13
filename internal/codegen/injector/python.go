@@ -64,6 +64,13 @@ func NewPythonInjector() *PythonInjector {
         pass
 `,
 			CleanupTemplate: `tp.shutdown()`,
+			FrameworkTemplates: map[string]string{
+				"flask": `
+    # Instrument Flask application
+    from opentelemetry.instrumentation.flask import FlaskInstrumentor
+    FlaskInstrumentor().instrument_app(app)
+`,
+			},
 		},
 	}
 }
@@ -83,6 +90,26 @@ func (h *PythonInjector) GetRequiredImports() []string {
 	// Rely on the generated otel.py bootstrap to handle OTEL imports.
 	// Avoid injecting imports into user files to prevent syntax issues.
 	return []string{}
+}
+
+// GetFrameworkImports returns framework-specific imports based on detected frameworks
+func (h *PythonInjector) GetFrameworkImports(content []byte) []string {
+	var imports []string
+
+	// Detect Flask usage
+	if h.detectFlaskUsage(content) {
+		imports = append(imports, "opentelemetry.instrumentation.flask")
+	}
+
+	return imports
+}
+
+// detectFlaskUsage checks if the code uses Flask
+func (h *PythonInjector) detectFlaskUsage(content []byte) bool {
+	contentStr := string(content)
+	return strings.Contains(contentStr, "from flask import") ||
+		strings.Contains(contentStr, "import flask") ||
+		strings.Contains(contentStr, "Flask(")
 }
 
 // FormatImports formats Python import statements
@@ -105,6 +132,19 @@ func (h *PythonInjector) FormatSingleImport(importPath string) string {
 		return fmt.Sprintf("from %s import %s\n", strings.Join(parts[:len(parts)-1], "."), parts[len(parts)-1])
 	}
 	return fmt.Sprintf("import %s\n", importPath)
+}
+
+// FormatFrameworkImports formats framework-specific import statements for Python
+func (h *PythonInjector) FormatFrameworkImports(imports []string) string {
+	if len(imports) == 0 {
+		return ""
+	}
+
+	var result strings.Builder
+	for _, importPath := range imports {
+		result.WriteString(h.FormatSingleImport(importPath))
+	}
+	return result.String()
 }
 
 // AnalyzeImportCapture processes an import capture from tree-sitter query for Python
@@ -179,38 +219,7 @@ func (h *PythonInjector) AnalyzeFunctionCapture(captureName string, node *sitter
 	h.findFlaskAppCreation(content, analysis)
 }
 
-// findMainBlockWithRegex uses regex to find the if __name__ == '__main__': pattern
-func (h *PythonInjector) findMainBlockWithRegex(content []byte, analysis *types.FileAnalysis) {
-	lines := strings.Split(string(content), "\n")
-
-	for i, line := range lines {
-		trimmed := strings.TrimSpace(line)
-		if strings.Contains(trimmed, `if __name__ == '__main__'`) || strings.Contains(trimmed, `if __name__ == "__main__"`) {
-			// Found the main block, create an entry point
-			// The insertion point should be right after this line
-			insertionPoint := types.InsertionPoint{
-				LineNumber: uint32(i + 2), // Next line after the if statement
-				Column:     1,
-				Priority:   3,
-			}
-
-			entryPoint := types.EntryPointInfo{
-				Name:       "if __name__ == '__main__'",
-				LineNumber: uint32(i + 1), // Line number is 1-based
-				Column:     1,
-				BodyStart:  insertionPoint,
-				BodyEnd: types.InsertionPoint{
-					LineNumber: uint32(len(lines)), // End of file
-					Column:     1,
-				},
-				HasOTELSetup: false, // Simple regex-based detection doesn't check for existing setup
-			}
-
-			analysis.EntryPoints = append(analysis.EntryPoints, entryPoint)
-			break // Only add one entry point
-		}
-	}
-} // GetInsertionPointPriority returns priority for Python insertion point types
+// GetInsertionPointPriority returns priority for Python insertion point types
 func (h *PythonInjector) GetInsertionPointPriority(captureName string) int {
 	switch captureName {
 	case "after_variables":
@@ -241,6 +250,39 @@ func (h *PythonInjector) findFlaskAppCreation(content []byte, analysis *types.Fi
 			}
 			analysis.EntryPoints = append([]types.EntryPointInfo{entry}, analysis.EntryPoints...)
 			return
+		}
+	}
+}
+
+// findMainBlockWithRegex uses regex to find the if __name__ == '__main__': pattern
+func (h *PythonInjector) findMainBlockWithRegex(content []byte, analysis *types.FileAnalysis) {
+	lines := strings.Split(string(content), "\n")
+
+	for i, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if strings.Contains(trimmed, `if __name__ == '__main__'`) || strings.Contains(trimmed, `if __name__ == "__main__"`) {
+			// Found the main block, create an entry point
+			// The insertion point should be right after this line
+			insertionPoint := types.InsertionPoint{
+				LineNumber: uint32(i + 2), // Next line after the if statement
+				Column:     1,
+				Priority:   3,
+			}
+
+			entryPoint := types.EntryPointInfo{
+				Name:       "if __name__ == '__main__'",
+				LineNumber: uint32(i + 1), // Line number is 1-based
+				Column:     1,
+				BodyStart:  insertionPoint,
+				BodyEnd: types.InsertionPoint{
+					LineNumber: uint32(len(lines)), // End of file
+					Column:     1,
+				},
+				HasOTELSetup: false, // Simple regex-based detection doesn't check for existing setup
+			}
+
+			analysis.EntryPoints = append(analysis.EntryPoints, entryPoint)
+			break // Only add one entry point
 		}
 	}
 }
@@ -312,6 +354,183 @@ func (h *PythonInjector) detectExistingOTELSetup(bodyNode *sitter.Node, content 
 		return true
 	}
 	return false
+}
+
+// GenerateFrameworkModifications generates framework-specific instrumentation modifications
+func (h *PythonInjector) GenerateFrameworkModifications(content []byte, operationsData *types.OperationsData) []types.CodeModification {
+	var modifications []types.CodeModification
+
+	// Check if Flask instrumentation is needed
+	if h.detectFlaskUsage(content) && h.hasFlaskInstrumentation(operationsData) {
+		// First, check if there are any existing Flask instrumentation issues to clean up
+		cleanupMods := h.generateFlaskCleanupModifications(content)
+		modifications = append(modifications, cleanupMods...)
+
+		// Find the best place to inject Flask instrumentation
+		insertionPoint := h.findFlaskInstrumentationPoint(content)
+		if insertionPoint.LineNumber > 0 {
+			modifications = append(modifications, types.CodeModification{
+				Type:        types.ModificationAddFramework,
+				Language:    "Python",
+				FilePath:    "", // Will be set by caller
+				LineNumber:  insertionPoint.LineNumber,
+				Column:      insertionPoint.Column,
+				InsertAfter: true,
+				Content:     h.config.FrameworkTemplates["flask"],
+				Framework:   "flask",
+			})
+		}
+	}
+
+	return modifications
+}
+
+// generateFlaskCleanupModifications generates modifications to clean up incorrectly placed Flask instrumentation
+func (h *PythonInjector) generateFlaskCleanupModifications(content []byte) []types.CodeModification {
+	var modifications []types.CodeModification
+	lines := strings.Split(string(content), "\n")
+
+	// Look for incorrectly placed Flask instrumentation code that needs to be removed
+	for i, line := range lines {
+		trimmed := strings.TrimSpace(line)
+
+		// Remove duplicate/incorrect imports - be aggressive about this
+		if strings.Contains(trimmed, "from opentelemetry.instrumentation import flask") {
+			modifications = append(modifications, types.CodeModification{
+				Type:        types.ModificationRemoveLine,
+				Language:    "Python",
+				FilePath:    "", // Will be set by caller
+				LineNumber:  uint32(i + 1),
+				Column:      1,
+				InsertAfter: false,
+				Content:     "", // Empty content for removal
+				Context:     trimmed,
+			})
+		}
+
+		// Remove incorrectly placed Flask instrumentation code - be aggressive about this
+		if strings.Contains(trimmed, "FlaskInstrumentor().instrument_app(app)") {
+			modifications = append(modifications, types.CodeModification{
+				Type:        types.ModificationRemoveLine,
+				Language:    "Python",
+				FilePath:    "", // Will be set by caller
+				LineNumber:  uint32(i + 1),
+				Column:      1,
+				InsertAfter: false,
+				Content:     "", // Empty content for removal
+				Context:     trimmed,
+			})
+		}
+
+		// Remove incorrectly placed Flask instrumentation imports - be aggressive about this
+		if strings.Contains(trimmed, "from opentelemetry.instrumentation.flask import FlaskInstrumentor") {
+			// Always remove this import - we'll add it back in the right place
+			modifications = append(modifications, types.CodeModification{
+				Type:        types.ModificationRemoveLine,
+				Language:    "Python",
+				FilePath:    "", // Will be set by caller
+				LineNumber:  uint32(i + 1),
+				Column:      1,
+				InsertAfter: false,
+				Content:     "", // Empty content for removal
+				Context:     trimmed,
+			})
+		}
+
+		// Also remove any comment lines that mention Flask instrumentation
+		if strings.Contains(trimmed, "# Instrument Flask application") {
+			modifications = append(modifications, types.CodeModification{
+				Type:        types.ModificationRemoveLine,
+				Language:    "Python",
+				FilePath:    "", // Will be set by caller
+				LineNumber:  uint32(i + 1),
+				Column:      1,
+				InsertAfter: false,
+				Content:     "", // Empty content for removal
+				Context:     trimmed,
+			})
+		}
+	}
+
+	return modifications
+}
+
+// isFlaskImportInRightPlace checks if a Flask instrumentation import is in the right location
+func (h *PythonInjector) isFlaskImportInRightPlace(lines []string, importLineIndex int) bool {
+	// Look for Flask app creation within a reasonable distance
+	start := max(0, importLineIndex-10)
+	end := min(len(lines), importLineIndex+10)
+
+	for i := start; i < end; i++ {
+		if strings.Contains(lines[i], "Flask(") && strings.Contains(lines[i], "__name__") && strings.Contains(lines[i], "=") {
+			return true
+		}
+	}
+	return false
+}
+
+// Helper function for max
+func max(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+// Helper function for min
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+// hasFlaskInstrumentation checks if Flask instrumentation is planned to be installed
+func (h *PythonInjector) hasFlaskInstrumentation(operationsData *types.OperationsData) bool {
+	for _, instrumentation := range operationsData.InstallInstrumentations {
+		if instrumentation == "flask" {
+			return true
+		}
+	}
+	return false
+}
+
+// findFlaskInstrumentationPoint finds the best place to inject Flask instrumentation
+func (h *PythonInjector) findFlaskInstrumentationPoint(content []byte) types.InsertionPoint {
+	lines := strings.Split(string(content), "\n")
+
+	// Look for Flask app creation: app = Flask(__name__)
+	for i, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if strings.Contains(trimmed, "Flask(") && strings.Contains(trimmed, "__name__") && strings.Contains(trimmed, "=") {
+			// Insert after the Flask app creation line
+			return types.InsertionPoint{
+				LineNumber: uint32(i + 2), // Next line after Flask app creation
+				Column:     1,
+				Priority:   5, // High priority for framework instrumentation
+			}
+		}
+	}
+
+	// Fallback: look for any Flask import or usage
+	for i, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if strings.Contains(trimmed, "from flask import") || strings.Contains(trimmed, "import flask") {
+			// Insert after the Flask import
+			return types.InsertionPoint{
+				LineNumber: uint32(i + 2),
+				Column:     1,
+				Priority:   4,
+			}
+		}
+	}
+
+	// Default: insert at the end of the file
+	return types.InsertionPoint{
+		LineNumber: uint32(len(lines) + 1),
+		Column:     1,
+		Priority:   1,
+	}
 }
 
 // FallbackAnalyzeImports for Python: no-op since tree-sitter captures are sufficient

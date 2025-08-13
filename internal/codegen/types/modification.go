@@ -9,6 +9,8 @@ const (
 	ModificationAddCleanup    ModificationType = "add_cleanup"
 	ModificationWrapFunction  ModificationType = "wrap_function"
 	ModificationAddMiddleware ModificationType = "add_middleware"
+	ModificationAddFramework  ModificationType = "add_framework"
+	ModificationRemoveLine    ModificationType = "remove_line"
 )
 
 // CodeModification represents a modification to be applied to source code
@@ -21,7 +23,8 @@ type CodeModification struct {
 	InsertBefore bool             `json:"insert_before"`
 	InsertAfter  bool             `json:"insert_after"`
 	Content      string           `json:"content"`
-	Context      string           `json:"context"` // Surrounding code context for validation
+	Context      string           `json:"context"`             // Surrounding code context for validation
+	Framework    string           `json:"framework,omitempty"` // Framework name for framework-specific modifications
 }
 
 // LanguageConfig defines how to modify code for a specific language
@@ -35,6 +38,7 @@ type LanguageConfig struct {
 	ImportTemplate         string            `json:"import_template"`         // How to format imports
 	InitializationTemplate string            `json:"initialization_template"` // How to format OTEL initialization
 	CleanupTemplate        string            `json:"cleanup_template"`        // How to format cleanup code
+	FrameworkTemplates     map[string]string `json:"framework_templates"`     // Framework name -> instrumentation template
 	// InitAtTop indicates the initialization snippet must be placed at the very top of the file
 	// before any other imports/requires. Useful for languages/runtimes that require early bootstrap.
 	InitAtTop bool `json:"init_at_top,omitempty"`

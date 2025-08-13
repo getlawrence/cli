@@ -55,15 +55,34 @@ func NewDotNetInjector() *DotNetInjector {
 func (h *DotNetInjector) GetLanguage() *sitter.Language    { return csharp.GetLanguage() }
 func (h *DotNetInjector) GetConfig() *types.LanguageConfig { return h.config }
 
+// GetRequiredImports returns the list of imports needed for OTEL in C#
 func (h *DotNetInjector) GetRequiredImports() []string {
 	return []string{
 		"OpenTelemetry",
-		"OpenTelemetry.Trace",
-		"OpenTelemetry.Resources",
-		"OpenTelemetry.Exporter",
-		"Microsoft.Extensions.DependencyInjection",
-		"System",
+		"OpenTelemetry.Exporter.OpenTelemetryProtocol",
+		"OpenTelemetry.Extensions.Hosting",
+		"OpenTelemetry.Instrumentation.AspNetCore",
+		"OpenTelemetry.Instrumentation.Http",
+		"OpenTelemetry.Instrumentation.Runtime",
 	}
+}
+
+// GetFrameworkImports returns framework-specific imports based on detected frameworks
+func (h *DotNetInjector) GetFrameworkImports(content []byte) []string {
+	// C# doesn't have framework-specific imports like Python
+	return []string{}
+}
+
+// FormatFrameworkImports formats framework-specific import statements for C#
+func (h *DotNetInjector) FormatFrameworkImports(imports []string) string {
+	// C# doesn't have framework-specific imports like Python
+	return ""
+}
+
+// GenerateFrameworkModifications generates framework-specific instrumentation modifications for C#
+func (h *DotNetInjector) GenerateFrameworkModifications(content []byte, operationsData *types.OperationsData) []types.CodeModification {
+	// C# doesn't have framework-specific modifications like Python
+	return []types.CodeModification{}
 }
 
 func (h *DotNetInjector) FormatImports(imports []string, hasExisting bool) string {

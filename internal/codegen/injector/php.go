@@ -41,7 +41,34 @@ func NewPHPInjector() *PHPInjector {
 func (h *PHPInjector) GetLanguage() *sitter.Language    { return php.GetLanguage() }
 func (h *PHPInjector) GetConfig() *types.LanguageConfig { return h.config }
 
-func (h *PHPInjector) GetRequiredImports() []string { return []string{"./otel.php"} }
+// GetRequiredImports returns the list of imports needed for OTEL in PHP
+func (h *PHPInjector) GetRequiredImports() []string {
+	return []string{
+		"OpenTelemetry\\API\\Trace\\TracerInterface",
+		"OpenTelemetry\\SDK\\Trace\\TracerProvider",
+		"OpenTelemetry\\SDK\\Trace\\ExporterFactory",
+		"OpenTelemetry\\SDK\\Trace\\SpanProcessor",
+		"OpenTelemetry\\SDK\\Trace\\BatchSpanProcessor",
+	}
+}
+
+// GetFrameworkImports returns framework-specific imports based on detected frameworks
+func (h *PHPInjector) GetFrameworkImports(content []byte) []string {
+	// PHP doesn't have framework-specific imports like Python
+	return []string{}
+}
+
+// FormatFrameworkImports formats framework-specific import statements for PHP
+func (h *PHPInjector) FormatFrameworkImports(imports []string) string {
+	// PHP doesn't have framework-specific imports like Python
+	return ""
+}
+
+// GenerateFrameworkModifications generates framework-specific instrumentation modifications for PHP
+func (h *PHPInjector) GenerateFrameworkModifications(content []byte, operationsData *types.OperationsData) []types.CodeModification {
+	// PHP doesn't have framework-specific modifications like Python
+	return []types.CodeModification{}
+}
 
 func (h *PHPInjector) FormatImports(imports []string, hasExisting bool) string {
 	if len(imports) == 0 {

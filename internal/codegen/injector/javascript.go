@@ -63,9 +63,29 @@ func (h *JavaScriptInjector) GetLanguage() *sitter.Language { return javascript.
 // GetConfig returns the language configuration
 func (h *JavaScriptInjector) GetConfig() *types.LanguageConfig { return h.config }
 
-// GetRequiredImports returns the list of imports needed for OTEL in JS
+// GetRequiredImports returns the list of imports needed for OTEL in JavaScript
 func (h *JavaScriptInjector) GetRequiredImports() []string {
+	// Rely on the generated otel.js bootstrap to handle OTEL imports.
+	// Avoid injecting imports into user files to prevent syntax issues.
 	return []string{}
+}
+
+// GetFrameworkImports returns framework-specific imports based on detected frameworks
+func (h *JavaScriptInjector) GetFrameworkImports(content []byte) []string {
+	// JavaScript doesn't have framework-specific imports like Python
+	return []string{}
+}
+
+// FormatFrameworkImports formats framework-specific import statements for JavaScript
+func (h *JavaScriptInjector) FormatFrameworkImports(imports []string) string {
+	// JavaScript doesn't have framework-specific imports like Python
+	return ""
+}
+
+// GenerateFrameworkModifications generates framework-specific instrumentation modifications for JavaScript
+func (h *JavaScriptInjector) GenerateFrameworkModifications(content []byte, operationsData *types.OperationsData) []types.CodeModification {
+	// JavaScript doesn't have framework-specific modifications like Python
+	return []types.CodeModification{}
 }
 
 // FormatImports formats JS import statements (ESM)
