@@ -175,7 +175,12 @@ func (s *TemplateGenerationStrategy) generateCodeWithLanguage(
 	}
 
 	// Determine output directory and filename
-	outputDir := s.determineOutputDirectory(req, directory)
+	var outputDir string
+	if language == "java" {
+		outputDir = s.determineJavaOutputDirectory(req, directory)
+	} else {
+		outputDir = s.determineOutputDirectory(req, directory)
+	}
 	filename := getOutputFilenameForLanguage(language)
 	outputPath := filepath.Join(outputDir, filename)
 
@@ -220,6 +225,20 @@ func (s *TemplateGenerationStrategy) determineOutputDirectory(req types.Generati
 	}
 
 	return filepath.Join(outputDir, directory)
+}
+
+// determineJavaOutputDirectory determines the output directory specifically for Java files
+func (s *TemplateGenerationStrategy) determineJavaOutputDirectory(req types.GenerationRequest, directory string) string {
+	baseDir := s.determineOutputDirectory(req, directory)
+
+	// For Java, look for src/main/java structure
+	javaSourceDir := filepath.Join(baseDir, "src", "main", "java")
+	if _, err := os.Stat(javaSourceDir); err == nil {
+		return javaSourceDir
+	}
+
+	// Fallback to base directory if src/main/java doesn't exist
+	return baseDir
 }
 
 func (s *TemplateGenerationStrategy) writeCodeToFile(filePath, content string) error {

@@ -21,7 +21,7 @@ var supportedLanguageExtensions = map[string]string{
 func getOutputFilenameForLanguage(language string) string {
 	switch language {
 	case "java":
-		return "Otel.java"
+		return "telemetry/Otel.java"
 	case "dotnet", "csharp":
 		return "Otel.cs"
 	default:

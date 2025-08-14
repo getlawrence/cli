@@ -55,7 +55,9 @@ func (s *OrchestratedTemplateStrategy) GenerateCode(ctx context.Context, opportu
 			// Dependencies
 			if ops.InstallOTEL || len(ops.InstallInstrumentations) > 0 || len(ops.InstallComponents) > 0 {
 				projectPath := req.CodebasePath
-				if dir != "root" {
+				// For most languages, dependencies are managed at the project root
+				// Only use subdirectory for languages that support nested dependency management
+				if dir != "root" && !isProjectRootDependencyLanguage(normalized) {
 					projectPath = filepath.Join(req.CodebasePath, dir)
 				}
 				if req.Config.DryRun {
@@ -129,6 +131,16 @@ func normalizeLanguage(language string) string {
 		return "dotnet"
 	default:
 		return strings.ToLower(language)
+	}
+}
+
+// isProjectRootDependencyLanguage returns true for languages where dependencies are managed at project root
+func isProjectRootDependencyLanguage(language string) bool {
+	switch language {
+	case "java", "csharp", "dotnet", "go", "php", "ruby":
+		return true
+	default:
+		return false
 	}
 }
 

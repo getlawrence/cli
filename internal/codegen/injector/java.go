@@ -45,9 +45,9 @@ func NewJavaInjector() *JavaInjector {
             `,
 			},
 			ImportTemplate: `import %s;`,
-			InitializationTemplate: `
+            InitializationTemplate: `
         // Initialize OpenTelemetry
-        io.opentelemetry.api.GlobalOpenTelemetry.get(); // ensure OTEL available
+        telemetry.Otel.start();
 `,
 			CleanupTemplate: `// no-op cleanup for basic setup`,
 		},
@@ -62,14 +62,19 @@ func (h *JavaInjector) GetConfig() *types.LanguageConfig { return h.config }
 
 // GetRequiredImports returns the list of imports needed for OTEL in Java
 func (h *JavaInjector) GetRequiredImports() []string {
+    // Only import our helper; it encapsulates all OTEL deps
+    return []string{
+        "telemetry.Otel",
+    }
+}
+
+// GetMavenDependencies returns the list of Maven dependencies needed for OTEL in Java
+func (h *JavaInjector) GetMavenDependencies() []string {
 	return []string{
-		"io.opentelemetry.api",
-		"io.opentelemetry.sdk",
-		"io.opentelemetry.trace",
-		"io.opentelemetry.exporters.otlp.trace.OtlpGrpcSpanExporter",
-		"io.opentelemetry.sdk.resources.Resource",
-		"io.opentelemetry.sdk.trace.SdkTracerProvider",
-		"io.opentelemetry.sdk.trace.export.BatchSpanProcessor",
+		"io.opentelemetry:opentelemetry-bom:1.42.1",
+		"io.opentelemetry:opentelemetry-api",
+		"io.opentelemetry:opentelemetry-sdk",
+		"io.opentelemetry:opentelemetry-exporter-otlp",
 	}
 }
 
@@ -194,8 +199,8 @@ func (h *JavaInjector) findBestInsertionPoint(bodyNode *sitter.Node, content []b
 }
 
 func (h *JavaInjector) detectExistingOTELSetup(node *sitter.Node, content []byte) bool {
-	body := node.Content(content)
-	return strings.Contains(body, "SdkTracerProvider") || strings.Contains(body, "GlobalOpenTelemetry")
+    body := node.Content(content)
+    return strings.Contains(body, "Otel.start()") || strings.Contains(body, "telemetry.Otel") || strings.Contains(body, "SdkTracerProvider") || strings.Contains(body, "GlobalOpenTelemetry")
 }
 
 // FallbackAnalyzeImports: no-op for Java
@@ -206,6 +211,19 @@ func (h *JavaInjector) FallbackAnalyzeEntryPoints(content []byte, analysis *type
 
 // GenerateImportModifications generates modifications to fix import statements
 func (h *JavaInjector) GenerateImportModifications(content []byte, analysis *types.FileAnalysis) []types.CodeModification {
-	// No special import handling needed for Java
-	return []types.CodeModification{}
+    // Remove any accidental broad OTEL package imports (we only need telemetry.Otel)
+    var mods []types.CodeModification
+    lines := strings.Split(string(content), "\n")
+    for i, line := range lines {
+        trimmed := strings.TrimSpace(line)
+        if strings.HasPrefix(trimmed, "import io.opentelemetry.") {
+            mods = append(mods, types.CodeModification{
+                Type:       types.ModificationRemoveLine,
+                Language:   analysis.Language,
+                FilePath:   analysis.FilePath,
+                LineNumber: uint32(i + 1),
+            })
+        }
+    }
+    return mods
 }

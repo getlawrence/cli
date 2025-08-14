@@ -216,11 +216,13 @@ func runCodegen(cmd *cobra.Command, args []string) error {
 		if sp != nil {
 			sp.Fail()
 		}
+		ui.Logf("Debug: Code generation failed: %v\n", err)
 		return err
 	}
 	if sp != nil {
 		sp.Stop()
 	}
+	ui.Log("Debug: Code generation completed successfully")
 	return nil
 }
 

@@ -109,6 +109,7 @@
     },
     "java": {
       "core": [
+        "io.opentelemetry:opentelemetry-bom:1.42.1",
         "io.opentelemetry:opentelemetry-api",
         "io.opentelemetry:opentelemetry-sdk",
         "io.opentelemetry:opentelemetry-exporter-otlp"
