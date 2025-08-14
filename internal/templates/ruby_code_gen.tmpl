@@ -36,12 +36,6 @@ OpenTelemetry::SDK.configure do |c|
     warn "failed to configure OTLP exporter: #{e.message}"
   end
 
-  # Propagators
-  propagators = ['tracecontext', 'baggage']
-  {{- if .Propagators }}
-  propagators |= {{ printf "%#v" .Propagators }}
-  {{- end }}
-  OpenTelemetry.propagation = OpenTelemetry::Context::Propagation.build(propagators)
 
   # Instrumentations
   {{range .Instrumentations}}
