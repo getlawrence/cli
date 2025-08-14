@@ -1,22 +1,35 @@
-FROM php:8.2-cli
+FROM ghcr.io/mlocati/php-extension-installer:2.7.34 AS installer
 
-WORKDIR /app
+FROM docker.io/library/composer:2.8.9 AS vendor
 
-COPY . /app
+WORKDIR /tmp/
 
-# Install system deps for composer (git/unzip), then composer, then install deps if composer.json exists
-RUN apt-get update \
- && apt-get install -y --no-install-recommends git unzip ca-certificates \
- && rm -rf /var/lib/apt/lists/* \
- && php -r "copy('https://getcomposer.org/installer', 'composer-setup.php');" \
- && php composer-setup.php --install-dir=/usr/local/bin --filename=composer \
- && rm composer-setup.php \
- && if [ -f composer.json ]; then composer install --no-interaction --prefer-dist --no-dev --no-progress; fi
+COPY ./composer.json composer.json
+COPY ./otel.php otel.php
+COPY ./index.php index.php
 
-# Expose service port
+RUN composer install \
+    --ignore-platform-reqs \
+    --no-interaction \
+    --no-plugins \
+    --no-scripts \
+    --no-dev \
+    --prefer-dist
+
+FROM docker.io/library/php:8.4-cli-alpine3.22
+
+COPY --from=installer /usr/bin/install-php-extensions /usr/local/bin/
+
+RUN install-php-extensions opcache pcntl protobuf
+
+WORKDIR /var/www
+
+USER www-data
+
+COPY --from=vendor /tmp/vendor/ vendor/
+
+COPY . .
+
 EXPOSE 8000
 
-# Run PHP built-in server to serve index.php
-CMD ["php", "-S", "0.0.0.0:8000", "-t", "/app"]
-
-
+CMD ["php", "-S", "0.0.0.0:8000", "-t", "/var/www"]

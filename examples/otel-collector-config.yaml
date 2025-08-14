@@ -19,6 +19,10 @@ exporters:
       max_backups: 1
   logging:
     loglevel: info
+  otlp/jaeger:
+    endpoint: jaeger:4317
+    tls:
+      insecure: true
 
 processors:
   batch: {}
@@ -29,5 +33,5 @@ service:
     traces:
       receivers: [otlp]
       processors: [batch]
-      exporters: [file, logging]
+      exporters: [file, logging, otlp/jaeger]
 

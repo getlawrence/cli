@@ -41,12 +41,7 @@ func NewRubyInjector() *RubyInjector {
 			},
 			ImportTemplate: `require "%s"`,
 			InitializationTemplate: `
-# Initialize OpenTelemetry
-begin
-  require_relative "./otel"
-rescue LoadError
-  # no-op if not present
-end
+require_relative "./otel"
 `,
 			CleanupTemplate: ``,
 			InitAtTop:       true,
@@ -62,13 +57,7 @@ func (h *RubyInjector) GetConfig() *types.LanguageConfig { return h.config }
 
 // GetRequiredImports returns the list of imports needed for OTEL in Ruby
 func (h *RubyInjector) GetRequiredImports() []string {
-	return []string{
-		"opentelemetry/api",
-		"opentelemetry/sdk",
-		"opentelemetry/exporter/otlp",
-		"opentelemetry/sdk/trace",
-		"opentelemetry/sdk/trace/export",
-	}
+	return []string{}
 }
 
 // GetFrameworkImports returns framework-specific imports based on detected frameworks
