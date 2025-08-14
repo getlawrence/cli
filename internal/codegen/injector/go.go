@@ -101,7 +101,9 @@ func (h *GoInjector) GetConfig() *types.LanguageConfig {
 
 // GetRequiredImports returns the list of imports needed for OTEL in Go
 func (h *GoInjector) GetRequiredImports() []string {
-	return []string{}
+	return []string{
+		"context",
+	}
 }
 
 // GetFrameworkImports returns framework-specific imports based on detected frameworks
