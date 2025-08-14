@@ -1,18 +1,41 @@
 #!/usr/bin/env ruby
 # OpenTelemetry instrumentation for {{.ServiceName}}
 
-require 'opentelemetry-api'
 require 'opentelemetry-sdk'
 require 'opentelemetry-exporter-otlp'
 {{range .Instrumentations}}
 require 'opentelemetry-instrumentation-{{.}}'
 {{end}}
+require 'bundler/setup'
+
+Bundler.require
+
+# Resolve exporter endpoints and ensure proper suffixes
+base = ENV.fetch('OTEL_EXPORTER_OTLP_ENDPOINT', '{{if .TraceEndpoint}}{{.TraceEndpoint}}{{else}}http://localhost:4318{{end}}')
+base = (base || '').sub(%r{/*$}, '')
+TRACES_ENDPOINT = (base.empty? ? 'http://localhost:4318' : base) + '/v1/traces'
+METRICS_ENDPOINT = (base.empty? ? 'http://localhost:4318' : base) + '/v1/metrics'
+
+# Ensure env is aligned for HTTP/protobuf OTLP
+ENV['OTEL_SERVICE_NAME'] ||= '{{.ServiceName}}'
+ENV['OTEL_TRACES_EXPORTER'] ||= 'otlp'
+ENV['OTEL_EXPORTER_OTLP_TRACES_PROTOCOL'] ||= 'http/protobuf'
+ENV['OTEL_EXPORTER_OTLP_TRACES_ENDPOINT'] ||= TRACES_ENDPOINT
 
 OpenTelemetry::SDK.configure do |c|
-  c.service_name = '{{.ServiceName}}'
+  c.service_name = ENV['OTEL_SERVICE_NAME'] || '{{.ServiceName}}'
+
   {{range .Instrumentations}}
   c.use 'OpenTelemetry::Instrumentation::{{.}}'
   {{end}}
+
+  c.add_span_processor(
+    OpenTelemetry::SDK::Trace::Export::BatchSpanProcessor.new(
+      OpenTelemetry::Exporter::OTLP::Exporter.new(
+        endpoint: TRACES_ENDPOINT
+      )
+    )
+  )
 end
 
 

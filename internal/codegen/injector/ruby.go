@@ -41,11 +41,10 @@ func NewRubyInjector() *RubyInjector {
 			},
 			ImportTemplate: `require "%s"`,
 			InitializationTemplate: `
-# Initialize OpenTelemetry
 require_relative "./otel"
-Lawrence::OTel.setup
 `,
 			CleanupTemplate: ``,
+			InitAtTop:       true,
 		},
 	}
 }
@@ -56,12 +55,27 @@ func (h *RubyInjector) GetLanguage() *sitter.Language { return rubylang.GetLangu
 // GetConfig returns the language configuration
 func (h *RubyInjector) GetConfig() *types.LanguageConfig { return h.config }
 
-// GetRequiredImports returns the list of requires needed for OTEL in Ruby
+// GetRequiredImports returns the list of imports needed for OTEL in Ruby
 func (h *RubyInjector) GetRequiredImports() []string {
-	return []string{
-		"opentelemetry-sdk",
-		"opentelemetry-exporter-otlp",
-	}
+	return []string{}
+}
+
+// GetFrameworkImports returns framework-specific imports based on detected frameworks
+func (h *RubyInjector) GetFrameworkImports(content []byte) []string {
+	// Ruby doesn't have framework-specific imports like Python
+	return []string{}
+}
+
+// FormatFrameworkImports formats framework-specific import statements for Ruby
+func (h *RubyInjector) FormatFrameworkImports(imports []string) string {
+	// Ruby doesn't have framework-specific imports like Python
+	return ""
+}
+
+// GenerateFrameworkModifications generates framework-specific instrumentation modifications for Ruby
+func (h *RubyInjector) GenerateFrameworkModifications(content []byte, operationsData *types.OperationsData) []types.CodeModification {
+	// Ruby doesn't have framework-specific modifications like Python
+	return []types.CodeModification{}
 }
 
 // FormatImports formats Ruby require statements
@@ -132,6 +146,12 @@ func (h *RubyInjector) FallbackAnalyzeImports(content []byte, analysis *types.Fi
 
 // FallbackAnalyzeEntryPoints: no-op; treat entire file as main
 func (h *RubyInjector) FallbackAnalyzeEntryPoints(content []byte, analysis *types.FileAnalysis) {}
+
+// GenerateImportModifications generates modifications to fix import statements
+func (h *RubyInjector) GenerateImportModifications(content []byte, analysis *types.FileAnalysis) []types.CodeModification {
+	// No special import handling needed for Ruby
+	return []types.CodeModification{}
+}
 
 func (h *RubyInjector) detectExistingOTELSetup(node *sitter.Node, content []byte) bool {
 	body := node.Content(content)

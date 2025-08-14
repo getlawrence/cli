@@ -1,13 +1,33 @@
-FROM php:8.2-cli
+FROM ghcr.io/mlocati/php-extension-installer:2.7.34 AS installer
 
-WORKDIR /app
+FROM docker.io/library/composer:2.8.9 AS vendor
 
-COPY . /app
+WORKDIR /tmp/
 
-# Expose service port
+COPY . .
+
+RUN composer install \
+    --ignore-platform-reqs \
+    --no-interaction \
+    --no-plugins \
+    --no-scripts \
+    --no-dev \
+    --prefer-dist
+
+FROM docker.io/library/php:8.4-cli-alpine3.22
+
+COPY --from=installer /usr/bin/install-php-extensions /usr/local/bin/
+
+RUN install-php-extensions opcache pcntl protobuf
+
+WORKDIR /var/www
+
+USER www-data
+
+COPY --from=vendor /tmp/vendor/ vendor/
+
+COPY . .
+
 EXPOSE 8000
 
-# Run PHP built-in server to serve index.php
-CMD ["php", "-S", "0.0.0.0:8000", "-t", "/app"]
-
-
+CMD ["php", "-S", "0.0.0.0:8000", "-t", "/var/www"]

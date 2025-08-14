@@ -16,10 +16,12 @@ import (
 
 type CodeInjector struct {
 	handlers map[string]LanguageInjector
+	logger   logger.Logger
 }
 
-func NewCodeInjector() *CodeInjector {
+func NewCodeInjector(logger logger.Logger) *CodeInjector {
 	return &CodeInjector{
+		logger: logger,
 		handlers: map[string]LanguageInjector{
 			"go":         NewGoInjector(),
 			"javascript": NewJavaScriptInjector(),
@@ -293,6 +295,12 @@ func (ci *CodeInjector) generateModifications(
 		modifications = append(modifications, importMods...)
 	}
 
+	// Generate framework-specific import modifications
+	if len(operationsData.InstallInstrumentations) > 0 {
+		frameworkImportMods := ci.generateFrameworkImportModifications(analysis, operationsData, handler)
+		modifications = append(modifications, frameworkImportMods...)
+	}
+
 	// Generate initialization modifications
 	// Ensure we only insert initialization once per file even if multiple entry points are detected
 	addedInit := false
@@ -304,6 +312,29 @@ func (ci *CodeInjector) generateModifications(
 			initMod := ci.generateInitializationModification(entryPoint, operationsData, config, req)
 			modifications = append(modifications, initMod)
 			addedInit = true
+		}
+	}
+
+	// Generate import-specific modifications (e.g., replacing 'import otel' with 'from otel import init_tracer')
+	content, err := os.ReadFile(analysis.FilePath)
+	if err == nil {
+		importMods := handler.GenerateImportModifications(content, analysis)
+		// Set the file path for import modifications
+		for i := range importMods {
+			importMods[i].FilePath = analysis.FilePath
+		}
+		modifications = append(modifications, importMods...)
+	}
+
+	// Generate framework-specific modifications
+	if len(operationsData.InstallInstrumentations) > 0 {
+		if err == nil {
+			frameworkMods := handler.GenerateFrameworkModifications(content, operationsData)
+			// Set the file path for framework modifications
+			for i := range frameworkMods {
+				frameworkMods[i].FilePath = analysis.FilePath
+			}
+			modifications = append(modifications, frameworkMods...)
 		}
 	}
 
@@ -368,6 +399,57 @@ func (ci *CodeInjector) generateImportModifications(
 	return modifications
 }
 
+// generateFrameworkImportModifications creates framework-specific import modifications
+func (ci *CodeInjector) generateFrameworkImportModifications(
+	analysis *types.FileAnalysis,
+	operationsData *types.OperationsData,
+	handler LanguageInjector,
+) []types.CodeModification {
+	var modifications []types.CodeModification
+
+	// Read file content to detect frameworks
+	content, err := os.ReadFile(analysis.FilePath)
+	if err != nil {
+		return modifications
+	}
+
+	// Collect framework-specific imports that need to be added
+	frameworkImports := handler.GetFrameworkImports(content)
+	newFrameworkImports := make([]string, 0)
+
+	// Collect imports that need to be added
+	for _, importPath := range frameworkImports {
+		if !analysis.ExistingImports[importPath] {
+			newFrameworkImports = append(newFrameworkImports, importPath)
+		}
+	}
+
+	if len(newFrameworkImports) == 0 {
+		return modifications
+	}
+
+	// For framework imports, always add them at the top of the file after the first line
+	// This ensures they come before any existing imports
+	insertionPoint := types.InsertionPoint{LineNumber: 2, Column: 1, Priority: 10}
+
+	// Generate framework import code using the handler
+	frameworkImportCode := handler.FormatFrameworkImports(newFrameworkImports)
+
+	if frameworkImportCode != "" {
+		modifications = append(modifications, types.CodeModification{
+			Type:        types.ModificationAddImport,
+			Language:    analysis.Language,
+			FilePath:    analysis.FilePath,
+			LineNumber:  insertionPoint.LineNumber,
+			Column:      insertionPoint.Column,
+			InsertAfter: true,
+			Content:     frameworkImportCode,
+		})
+	}
+
+	return modifications
+}
+
 // generateInitializationModification creates OTEL initialization modification
 func (ci *CodeInjector) generateInitializationModification(
 	entryPoint types.EntryPointInfo,
@@ -412,6 +494,13 @@ func (ci *CodeInjector) generateInitializationModification(
 func (ci *CodeInjector) generateFromTemplate(templateStr string, data map[string]interface{}) string {
 	// For now, return the template as-is. In a full implementation,
 	// you would use the text/template package to process the template
+
+	// Special handling for Python indentation
+	if strings.Contains(templateStr, "init_tracer()") {
+		// Add proper Python indentation (4 spaces)
+		return "    " + templateStr
+	}
+
 	return templateStr
 }
 
@@ -438,24 +527,37 @@ func (ci *CodeInjector) applyModifications(filePath string, modifications []type
 			continue // Skip invalid line numbers
 		}
 
-		// Insert the modification content
-		if mod.InsertAfter {
-			// Insert after the specified line
-			if int(mod.LineNumber) <= len(lines) {
-				newLines := make([]string, len(lines)+1)
-				copy(newLines[:mod.LineNumber], lines[:mod.LineNumber])
-				newLines[mod.LineNumber] = mod.Content
-				copy(newLines[mod.LineNumber+1:], lines[mod.LineNumber:])
+		// Handle different modification types
+		switch mod.Type {
+		case types.ModificationRemoveLine:
+			// Remove the specified line
+			if int(mod.LineNumber) > 0 && int(mod.LineNumber) <= len(lines) {
+				// Remove the line by creating a new slice without it
+				newLines := make([]string, 0, len(lines)-1)
+				newLines = append(newLines, lines[:mod.LineNumber-1]...)
+				newLines = append(newLines, lines[mod.LineNumber:]...)
 				lines = newLines
 			}
-		} else if mod.InsertBefore {
-			// Insert before the specified line
-			if int(mod.LineNumber) > 0 {
-				newLines := make([]string, len(lines)+1)
-				copy(newLines[:mod.LineNumber-1], lines[:mod.LineNumber-1])
-				newLines[mod.LineNumber-1] = mod.Content
-				copy(newLines[mod.LineNumber:], lines[mod.LineNumber-1:])
-				lines = newLines
+		case types.ModificationAddImport, types.ModificationAddInit, types.ModificationAddFramework:
+			// Insert the modification content
+			if mod.InsertAfter {
+				// Insert after the specified line
+				if int(mod.LineNumber) <= len(lines) {
+					newLines := make([]string, len(lines)+1)
+					copy(newLines[:mod.LineNumber], lines[:mod.LineNumber])
+					newLines[mod.LineNumber] = mod.Content
+					copy(newLines[mod.LineNumber+1:], lines[mod.LineNumber:])
+					lines = newLines
+				}
+			} else if mod.InsertBefore {
+				// Insert before the specified line
+				if int(mod.LineNumber) > 0 {
+					newLines := make([]string, len(lines)+1)
+					copy(newLines[:mod.LineNumber-1], lines[:mod.LineNumber-1])
+					newLines[mod.LineNumber-1] = mod.Content
+					copy(newLines[mod.LineNumber:], lines[mod.LineNumber-1:])
+					lines = newLines
+				}
 			}
 		}
 	}
@@ -463,10 +565,10 @@ func (ci *CodeInjector) applyModifications(filePath string, modifications []type
 	modifiedContent := strings.Join(lines, "\n")
 
 	if dryRun {
-		logger.Logf("Would modify file: %s\n", filePath)
-		logger.Logf("Modifications:\n")
+		ci.logger.Logf("Would modify file: %s\n", filePath)
+		ci.logger.Logf("Modifications:\n")
 		for _, mod := range modifications {
-			logger.Logf("  Line %d: %s\n", mod.LineNumber, strings.TrimSpace(mod.Content))
+			ci.logger.Logf("  Line %d: %s\n", mod.LineNumber, strings.TrimSpace(mod.Content))
 		}
 		return nil
 	}
@@ -474,7 +576,7 @@ func (ci *CodeInjector) applyModifications(filePath string, modifications []type
 	// Create backup
 	backupPath := filePath + ".backup"
 	if err := os.WriteFile(backupPath, content, 0644); err != nil {
-		logger.Logf("Warning: failed to create backup: %v\n", err)
+		ci.logger.Logf("Warning: failed to create backup: %v\n", err)
 	}
 
 	// Write modified content
@@ -482,6 +584,6 @@ func (ci *CodeInjector) applyModifications(filePath string, modifications []type
 		return fmt.Errorf("failed to write modified file: %w", err)
 	}
 
-	logger.Logf("Successfully modified: %s (backup: %s)\n", filePath, backupPath)
+	ci.logger.Logf("Successfully modified: %s (backup: %s)\n", filePath, backupPath)
 	return nil
 }

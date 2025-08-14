@@ -2,10 +2,12 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 
 	"github.com/getlawrence/cli/internal/codegen/generator"
 	"github.com/getlawrence/cli/internal/codegen/types"
+	cfg "github.com/getlawrence/cli/internal/config"
 	"github.com/getlawrence/cli/internal/detector"
 	"github.com/getlawrence/cli/internal/detector/issues"
 	"github.com/getlawrence/cli/internal/detector/languages"
@@ -48,6 +50,7 @@ var (
 	dryRun         bool
 	showPrompt     bool
 	savePrompt     string
+	configPath     string
 )
 
 func init() {
@@ -74,6 +77,8 @@ func init() {
 		"Print the generated agent prompt before execution (AI mode only)")
 	codegenCmd.Flags().StringVar(&savePrompt, "save-prompt", "",
 		"Save the generated agent prompt to the given file path (AI mode only)")
+	// Advanced config
+	codegenCmd.Flags().StringVarP(&configPath, "config", "c", "", "Path to advanced OpenTelemetry config YAML")
 }
 
 func runCodegen(cmd *cobra.Command, args []string) error {
@@ -90,6 +95,8 @@ func runCodegen(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to resolve path: %w", err)
 	}
 
+	ui := logger.NewUILogger()
+
 	// Create analysis engine
 	codebaseAnalyzer := detector.NewCodebaseAnalyzer([]detector.IssueDetector{
 		issues.NewMissingOTelDetector(),
@@ -101,25 +108,25 @@ func runCodegen(cmd *cobra.Command, args []string) error {
 		"csharp":     languages.NewDotNetDetector(),
 		"ruby":       languages.NewRubyDetector(),
 		"php":        languages.NewPHPDetector(),
-	})
+	}, ui)
 
 	// Initialize generator with existing detector system
-	codeGenerator, err := generator.NewGenerator(codebaseAnalyzer)
+	codeGenerator, err := generator.NewGenerator(codebaseAnalyzer, ui)
 	if err != nil {
 		return fmt.Errorf("failed to initialize generator: %w", err)
 	}
 
 	// Handle list commands
 	if listAgents {
-		return listAvailableAgents(codeGenerator)
+		return listAvailableAgents(codeGenerator, ui)
 	}
 
 	if listTemplates {
-		return listAvailableTemplates(codeGenerator)
+		return listAvailableTemplates(codeGenerator, ui)
 	}
 
 	if listStrategies {
-		return listAvailableStrategies(codeGenerator)
+		return listAvailableStrategies(codeGenerator, ui)
 	}
 
 	mode := types.GenerationMode(generationMode)
@@ -137,6 +144,53 @@ func runCodegen(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("agent type is required for agent mode. Use --list-agents to see available options")
 	}
 
+	// Optionally load advanced OTEL config from YAML
+	var otelCfg *types.OTELConfig
+	if configPath != "" {
+		content, err := os.ReadFile(configPath)
+		if err != nil {
+			return fmt.Errorf("failed to read config file: %w", err)
+		}
+		parsed, err := cfg.LoadOTELConfig(content)
+		if err != nil {
+			return err
+		}
+		if err := parsed.Validate(); err != nil {
+			return err
+		}
+		// Map to types.OTELConfig for now (keeps request stable)
+		converted := &types.OTELConfig{
+			ServiceName:      parsed.ServiceName,
+			ServiceVersion:   parsed.ServiceVersion,
+			Environment:      parsed.Environment,
+			ResourceAttrs:    parsed.ResourceAttrs,
+			Instrumentations: parsed.Instrumentations,
+			Propagators:      parsed.Propagators,
+			SpanProcessors:   parsed.SpanProcessors,
+			SDK:              parsed.SDK,
+		}
+		converted.Sampler.Type = parsed.Sampler.Type
+		converted.Sampler.Ratio = parsed.Sampler.Ratio
+		converted.Sampler.Parent = parsed.Sampler.Parent
+		converted.Sampler.Rules = parsed.Sampler.Rules
+		// exporters
+		converted.Exporters.Traces.Type = parsed.Exporters.Traces.Type
+		converted.Exporters.Traces.Protocol = parsed.Exporters.Traces.Protocol
+		converted.Exporters.Traces.Endpoint = parsed.Exporters.Traces.Endpoint
+		converted.Exporters.Traces.Headers = parsed.Exporters.Traces.Headers
+		converted.Exporters.Traces.Insecure = parsed.Exporters.Traces.Insecure
+		converted.Exporters.Traces.TimeoutMs = parsed.Exporters.Traces.TimeoutMs
+		converted.Exporters.Metrics.Type = parsed.Exporters.Metrics.Type
+		converted.Exporters.Metrics.Protocol = parsed.Exporters.Metrics.Protocol
+		converted.Exporters.Metrics.Endpoint = parsed.Exporters.Metrics.Endpoint
+		converted.Exporters.Metrics.Insecure = parsed.Exporters.Metrics.Insecure
+		converted.Exporters.Logs.Type = parsed.Exporters.Logs.Type
+		converted.Exporters.Logs.Protocol = parsed.Exporters.Logs.Protocol
+		converted.Exporters.Logs.Endpoint = parsed.Exporters.Logs.Endpoint
+		converted.Exporters.Logs.Insecure = parsed.Exporters.Logs.Insecure
+		otelCfg = converted
+	}
+
 	req := types.GenerationRequest{
 		CodebasePath: absPath,
 		Language:     language,
@@ -149,13 +203,28 @@ func runCodegen(cmd *cobra.Command, args []string) error {
 			ShowPrompt:      showPrompt,
 			SavePrompt:      savePrompt,
 		},
+		OTEL: otelCfg,
 	}
 
-	// Always show spinner for generation
-	return codeGenerator.Generate(ctx, req)
+	// Show spinner only in interactive terminals to keep test/CI output stable
+	var sp logger.Spinner
+	if logger.IsInteractive() {
+		sp = ui.StartSpinner("Analyzing and generating code...")
+	}
+	err = codeGenerator.Generate(ctx, req)
+	if err != nil {
+		if sp != nil {
+			sp.Fail()
+		}
+		return err
+	}
+	if sp != nil {
+		sp.Stop()
+	}
+	return nil
 }
 
-func listAvailableAgents(generator *generator.Generator) error {
+func listAvailableAgents(generator *generator.Generator, logger logger.Logger) error {
 	agents := generator.ListAvailableAgents()
 
 	if len(agents) == 0 {
@@ -176,7 +245,7 @@ func listAvailableAgents(generator *generator.Generator) error {
 	return nil
 }
 
-func listAvailableTemplates(generator *generator.Generator) error {
+func listAvailableTemplates(generator *generator.Generator, logger logger.Logger) error {
 	templates := generator.ListAvailableTemplates()
 
 	logger.Log("Available templates:")
@@ -187,7 +256,7 @@ func listAvailableTemplates(generator *generator.Generator) error {
 	return nil
 }
 
-func listAvailableStrategies(generator *generator.Generator) error {
+func listAvailableStrategies(generator *generator.Generator, logger logger.Logger) error {
 	strategies := generator.ListAvailableStrategies()
 
 	logger.Log("Available generation strategies:")
@@ -202,13 +271,4 @@ func listAvailableStrategies(generator *generator.Generator) error {
 	logger.Logf("\nDefault strategy: %s\n", generator.GetDefaultStrategy())
 
 	return nil
-}
-
-func contains(slice []string, item string) bool {
-	for _, s := range slice {
-		if s == item {
-			return true
-		}
-	}
-	return false
 }

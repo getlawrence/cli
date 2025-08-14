@@ -1,9 +1,10 @@
 package e2e
 
 import (
-	"bufio"
 	"context"
-	"os"
+	"encoding/json"
+	"fmt"
+	"net/http"
 	"os/exec"
 	"path/filepath"
 	"runtime"
@@ -51,10 +52,6 @@ func TestExamplesStackCodegenAndOTEL(t *testing.T) {
 
 	// docker compose build and up
 	composeFile := filepath.Join(examplesDir, "docker-compose.yml")
-	// Ensure host traces directory exists for bind mount
-	if err := os.MkdirAll(filepath.Join(examplesDir, ".otel-data"), 0o755); err != nil {
-		t.Fatalf("failed to create traces output directory: %v", err)
-	}
 	{
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 		defer cancel()
@@ -78,8 +75,6 @@ func TestExamplesStackCodegenAndOTEL(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		defer cancel()
 		_ = exec.CommandContext(ctx, "docker", "compose", "-f", composeFile, "down", "-v").Run()
-		// Remove collector data dir inside temp examples (temp dir will be removed automatically)
-		_ = os.RemoveAll(filepath.Join(examplesDir, ".otel-data"))
 	}()
 
 	// Give services a moment
@@ -94,6 +89,7 @@ func TestExamplesStackCodegenAndOTEL(t *testing.T) {
 		{"http://localhost:8000/"}, // php-service
 		{"http://localhost:4567/"}, // ruby-service
 		{"http://localhost:8083/"}, // csharp-service
+		{"http://localhost:8082/"}, // java-service
 	}
 	for _, h := range hits {
 		// First ensure service is up
@@ -136,34 +132,90 @@ func TestExamplesStackCodegenAndOTEL(t *testing.T) {
 		}
 	}
 
-	// Wait for collector to flush and file to be created
-	tracesPath := filepath.Join(examplesDir, ".otel-data", "traces.jsonl")
-	t.Logf("Waiting for OTEL traces file at: %s", tracesPath)
-	f, err := waitForFileExists(tracesPath, 30*time.Second)
-	if err != nil {
-		// dump collector logs for debugging
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		cmd := exec.CommandContext(ctx, "docker", "compose", "-f", composeFile, "logs", "otel-collector")
-		cmd.Dir = examplesDir
-		out, _ := cmd.CombinedOutput()
-		t.Logf("otel-collector logs:\n%s", string(out))
-		t.Fatalf("failed to open traces file after waiting: %v", err)
+	// Wait for traces to appear in Jaeger
+	t.Logf("Waiting for traces to appear in Jaeger...")
+	expectedServices := map[string]bool{
+		"examples-go":     false,
+		"examples-js":     false,
+		"examples-python": false,
+		"examples-php":    false,
+		"examples-ruby":   false,
+		"examples-csharp": false,
+		"examples-java":   false,
 	}
-	t.Logf("Traces file opened successfully")
-	defer f.Close()
-	scanner := bufio.NewScanner(f)
-	found := false
-	// scan a few lines only
-	for i := 0; i < 100 && scanner.Scan(); i++ {
-		line := scanner.Text()
-		if strings.Contains(line, "resourceSpans") || strings.Contains(line, "scopeSpans") || strings.Contains(line, "spanId") {
-			found = true
+
+	deadline := time.Now().Add(60 * time.Second)
+	for time.Now().Before(deadline) {
+		// Query Jaeger for services
+		response, err := queryJaegerServices()
+		if err != nil {
+			t.Logf("Failed to query Jaeger: %v, retrying...", err)
+			time.Sleep(1 * time.Second)
+			continue
+		}
+
+		// Check if we have the expected services in the response
+		for _, serviceName := range response.Data {
+			if expected, exists := expectedServices[serviceName]; exists && !expected {
+				expectedServices[serviceName] = true
+				t.Logf("Found service: %s", serviceName)
+			}
+		}
+
+		// Check if all services have been observed
+		allFound := true
+		for _, found := range expectedServices {
+			if !found {
+				allFound = false
+				break
+			}
+		}
+		if allFound {
 			break
 		}
+		time.Sleep(1 * time.Second)
 	}
-	if !found {
-		t.Fatalf("no OTEL trace signals detected in %s", tracesPath)
+
+	// Report any missing services
+	missing := make([]string, 0)
+	for svc, found := range expectedServices {
+		if !found {
+			missing = append(missing, svc)
+		}
 	}
-	t.Logf("Detected OTEL trace signals in %s", tracesPath)
+	if len(missing) > 0 {
+		t.Fatalf("did not observe spans for services: %v", strings.Join(missing, ", "))
+	}
+	t.Logf("Observed spans for all expected services")
+}
+
+func queryJaegerServices() (*JaegerServicesResponse, error) {
+	url := "http://localhost:16686/api/services"
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Get(url)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query Jaeger API: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("Jaeger API returned status: %s", resp.Status)
+	}
+
+	var response JaegerServicesResponse
+	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
+		return nil, fmt.Errorf("failed to decode Jaeger response: %v", err)
+	}
+
+	return &response, nil
+}
+
+// JaegerServicesResponse represents the response from Jaeger services API
+type JaegerServicesResponse struct {
+	Data   []string `json:"data"`
+	Total  int      `json:"total"`
+	Limit  int      `json:"limit"`
+	Offset int      `json:"offset"`
+	Errors []string `json:"errors"`
 }

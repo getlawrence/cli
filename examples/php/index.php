@@ -1,13 +1,26 @@
 <?php
 declare(strict_types=1);
 
-// Minimal PHP example app
-// This file will be modified by the injector to include otel.php when running codegen
+use Slim\Factory\AppFactory;
+use Psr\Http\Message\ResponseInterface as Response;
+use Psr\Http\Message\ServerRequestInterface as Request;
 
-function main(): void {
-    echo "Hello, PHP!\n";
-}
+// Create Slim app
+$app = AppFactory::create();
 
-main();
+// Add error middleware
+$app->addErrorMiddleware(true, true, true);
 
+// Define routes
+$app->get('/', function (Request $request, Response $response) {
+    $response->getBody()->write('Hello, PHP!');
+    return $response;
+});
 
+$app->get('/health', function (Request $request, Response $response) {
+    $response->getBody()->write('OK');
+    return $response;
+});
+
+// Run the app
+$app->run();

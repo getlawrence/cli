@@ -8,18 +8,53 @@ declare(strict_types=1);
 function setup_otel(): void {
     // You may need to install packages via Composer:
     // composer require open-telemetry/opentelemetry
-    // composer require open-telemetry/exporter-otlp
 
-    // Example basic initialization (adjust as needed):
-    // Note: Keep minimal to avoid strict coupling; users can expand.
-    // use OpenTelemetry\API\Globals;
-    // use OpenTelemetry\SDK\Trace\TracerProvider;
-    // use OpenTelemetry\SDK\Trace\SpanProcessor\SimpleSpanProcessor;
-    // use OpenTelemetry\Contrib\Otlp\SpanExporter as OtlpExporter;
+    // Minimal OTLP tracing setup using TracerProviderFactory
+    try {
+        // Configure OTLP/HTTP endpoint via env
+        $base = getenv('OTEL_EXPORTER_OTLP_ENDPOINT');
+        if (!$base) {
+            $base = '{{if .TraceEndpoint}}{{.TraceEndpoint}}{{else}}http://localhost:4318{{end}}';
+            putenv('OTEL_EXPORTER_OTLP_ENDPOINT=' . $base);
+        }
+        if (!getenv('OTEL_TRACES_EXPORTER')) {
+            putenv('OTEL_TRACES_EXPORTER=otlp');
+        }
+        // Prefer signal-specific settings to avoid ambiguity
+        if (!getenv('OTEL_EXPORTER_OTLP_TRACES_PROTOCOL')) {
+            putenv('OTEL_EXPORTER_OTLP_TRACES_PROTOCOL=http/protobuf');
+        }
+        if (!getenv('OTEL_EXPORTER_OTLP_TRACES_ENDPOINT')) {
+            $base = rtrim($base, '/');
+            putenv('OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=' . $base . '/v1/traces');
+        }
 
-    // $exporter = new OtlpExporter();
-    // $tracerProvider = new TracerProvider(new SimpleSpanProcessor($exporter));
-    // Globals::setTracerProvider($tracerProvider);
+        // Ensure service.name is set for resource detection and test verification
+        $svc = getenv('OTEL_SERVICE_NAME');
+        if (!$svc) {
+            $svc = '{{.ServiceName}}';
+            putenv('OTEL_SERVICE_NAME=' . $svc);
+        }
+        if (!getenv('OTEL_RESOURCE_ATTRIBUTES')) {
+            putenv('OTEL_RESOURCE_ATTRIBUTES=service.name=' . $svc);
+        }
+
+        $tracerProvider = (new \OpenTelemetry\SDK\Trace\TracerProviderFactory())->create();
+        \OpenTelemetry\SDK\Common\Util\ShutdownHandler::register([$tracerProvider, 'shutdown']);
+        \OpenTelemetry\API\Globals::setTracerProvider($tracerProvider);
+
+        // Emit a bootstrap span
+        $tracer = \OpenTelemetry\API\Globals::tracerProvider()->getTracer('bootstrap');
+        // Create a span and delay shutdown slightly to ensure export before process exit
+        $span = $tracer->spanBuilder('startup')->startSpan();
+        $span->end();
+        // Force flush if available
+        if (method_exists($tracerProvider, 'forceFlush')) {
+            try { $tracerProvider->forceFlush(); } catch (\Throwable $e) {}
+        }
+    } catch (\Throwable $e) {
+        error_log('Failed to initialize OpenTelemetry: ' . $e->getMessage());
+    }
 }
 
 

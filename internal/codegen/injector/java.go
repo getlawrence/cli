@@ -63,12 +63,32 @@ func (h *JavaInjector) GetConfig() *types.LanguageConfig { return h.config }
 // GetRequiredImports returns the list of imports needed for OTEL in Java
 func (h *JavaInjector) GetRequiredImports() []string {
 	return []string{
-		"io.opentelemetry.api.GlobalOpenTelemetry",
-		"io.opentelemetry.api.trace.Tracer",
+		"io.opentelemetry.api",
+		"io.opentelemetry.sdk",
+		"io.opentelemetry.trace",
+		"io.opentelemetry.exporters.otlp.trace.OtlpGrpcSpanExporter",
+		"io.opentelemetry.sdk.resources.Resource",
 		"io.opentelemetry.sdk.trace.SdkTracerProvider",
-		"io.opentelemetry.exporter.otlp.trace.OtlpGrpcSpanExporter",
 		"io.opentelemetry.sdk.trace.export.BatchSpanProcessor",
 	}
+}
+
+// GetFrameworkImports returns framework-specific imports based on detected frameworks
+func (h *JavaInjector) GetFrameworkImports(content []byte) []string {
+	// Java doesn't have framework-specific imports like Python
+	return []string{}
+}
+
+// FormatFrameworkImports formats framework-specific import statements for Java
+func (h *JavaInjector) FormatFrameworkImports(imports []string) string {
+	// Java doesn't have framework-specific imports like Python
+	return ""
+}
+
+// GenerateFrameworkModifications generates framework-specific instrumentation modifications for Java
+func (h *JavaInjector) GenerateFrameworkModifications(content []byte, operationsData *types.OperationsData) []types.CodeModification {
+	// Java doesn't have framework-specific modifications like Python
+	return []types.CodeModification{}
 }
 
 // FormatImports formats Java import statements
@@ -183,3 +203,9 @@ func (h *JavaInjector) FallbackAnalyzeImports(content []byte, analysis *types.Fi
 
 // FallbackAnalyzeEntryPoints: no-op for Java; main method capture should be sufficient
 func (h *JavaInjector) FallbackAnalyzeEntryPoints(content []byte, analysis *types.FileAnalysis) {}
+
+// GenerateImportModifications generates modifications to fix import statements
+func (h *JavaInjector) GenerateImportModifications(content []byte, analysis *types.FileAnalysis) []types.CodeModification {
+	// No special import handling needed for Java
+	return []types.CodeModification{}
+}

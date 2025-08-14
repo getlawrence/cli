@@ -44,14 +44,8 @@ func NewDotNetInjector() *DotNetInjector {
 			},
 			ImportTemplate: `using %s;`,
 			InitializationTemplate: `
-    // Initialize OpenTelemetry (basic tracing)
-    builder.Services.AddOpenTelemetry()
-        .WithTracing(tracing => tracing
-            .AddAspNetCoreInstrumentation()
-            .AddGrpcClientInstrumentation()
-            .AddHttpClientInstrumentation()
-            .AddRedisInstrumentation()
-            .AddOtlpExporter());
+    // Initialize OpenTelemetry via generated bootstrap
+    Otel.Configure(builder.Services);
 `,
 			CleanupTemplate: `// no-op`,
 		},
@@ -61,14 +55,34 @@ func NewDotNetInjector() *DotNetInjector {
 func (h *DotNetInjector) GetLanguage() *sitter.Language    { return csharp.GetLanguage() }
 func (h *DotNetInjector) GetConfig() *types.LanguageConfig { return h.config }
 
+// GetRequiredImports returns the list of imports needed for OTEL in C#
 func (h *DotNetInjector) GetRequiredImports() []string {
 	return []string{
 		"OpenTelemetry",
-		"OpenTelemetry.Trace",
-		"OpenTelemetry.Resources",
-		"OpenTelemetry.Exporter",
-		"Microsoft.Extensions.DependencyInjection",
+		"OpenTelemetry.Exporter.OpenTelemetryProtocol",
+		"OpenTelemetry.Extensions.Hosting",
+		"OpenTelemetry.Instrumentation.AspNetCore",
+		"OpenTelemetry.Instrumentation.Http",
+		"OpenTelemetry.Instrumentation.Runtime",
 	}
+}
+
+// GetFrameworkImports returns framework-specific imports based on detected frameworks
+func (h *DotNetInjector) GetFrameworkImports(content []byte) []string {
+	// C# doesn't have framework-specific imports like Python
+	return []string{}
+}
+
+// FormatFrameworkImports formats framework-specific import statements for C#
+func (h *DotNetInjector) FormatFrameworkImports(imports []string) string {
+	// C# doesn't have framework-specific imports like Python
+	return ""
+}
+
+// GenerateFrameworkModifications generates framework-specific instrumentation modifications for C#
+func (h *DotNetInjector) GenerateFrameworkModifications(content []byte, operationsData *types.OperationsData) []types.CodeModification {
+	// C# doesn't have framework-specific modifications like Python
+	return []types.CodeModification{}
 }
 
 func (h *DotNetInjector) FormatImports(imports []string, hasExisting bool) string {
@@ -137,6 +151,16 @@ func (h *DotNetInjector) GetInsertionPointPriority(captureName string) int {
 }
 
 func (h *DotNetInjector) findBestInsertionPoint(node *sitter.Node, content []byte, config *types.LanguageConfig) types.InsertionPoint {
+	// Try to locate a line containing WebApplication.CreateBuilder to insert after builder is defined
+	body := node.Content(content)
+	lines := strings.Split(body, "\n")
+	for i, ln := range lines {
+		if strings.Contains(ln, "WebApplication.CreateBuilder") {
+			// Insert on the next line after the builder is created
+			baseLine := int(node.StartPoint().Row) + 1
+			return types.InsertionPoint{LineNumber: uint32(baseLine + i + 1), Column: 1, Priority: 10}
+		}
+	}
 	defaultPoint := types.InsertionPoint{LineNumber: node.StartPoint().Row + 1, Column: node.StartPoint().Column + 1, Priority: 1}
 	if insertQuery, ok := config.InsertionQueries["optimal_insertion"]; ok {
 		q, err := sitter.NewQuery([]byte(insertQuery), h.GetLanguage())
@@ -174,3 +198,9 @@ func (h *DotNetInjector) detectExistingOTELSetup(node *sitter.Node, content []by
 
 func (h *DotNetInjector) FallbackAnalyzeImports(content []byte, analysis *types.FileAnalysis)     {}
 func (h *DotNetInjector) FallbackAnalyzeEntryPoints(content []byte, analysis *types.FileAnalysis) {}
+
+// GenerateImportModifications generates modifications to fix import statements
+func (h *DotNetInjector) GenerateImportModifications(content []byte, analysis *types.FileAnalysis) []types.CodeModification {
+	// No special import handling needed for C#
+	return []types.CodeModification{}
+}

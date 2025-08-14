@@ -8,7 +8,14 @@ services:
       - ./.otel-data:/data
     ports:
       - "4318:4318"  # OTLP HTTP receiver
+      - "4317:4317"  # OTLP gRPC receiver
 
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    ports:
+      - "16686:16686"    # Jaeger UI
+      - "5317:4317"      # OTLP gRPC
+      - "5318:4318"      # OTLP HTTP
   go-service:
     build:
       context: ./go
@@ -58,6 +65,7 @@ services:
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
       - OTEL_SERVICE_NAME=examples-php
       - OTEL_LOG_LEVEL=debug
+      - OTEL_PHP_LOG_DESTINATION=stderr
     depends_on:
       - otel-collector
     ports:
@@ -77,7 +85,6 @@ services:
       - "4567:4567"
 
   java-service:
-    profiles: ["extended"]
     build:
       context: ./java
       dockerfile: Dockerfile

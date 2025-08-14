@@ -101,12 +101,27 @@ func (h *GoInjector) GetConfig() *types.LanguageConfig {
 
 // GetRequiredImports returns the list of imports needed for OTEL in Go
 func (h *GoInjector) GetRequiredImports() []string {
-	// Only import what the injected initialization snippet directly uses.
-	// The generated OTEL helper lives in the same package, so no OTEL imports are needed here.
 	return []string{
 		"context",
-		"log",
 	}
+}
+
+// GetFrameworkImports returns framework-specific imports based on detected frameworks
+func (h *GoInjector) GetFrameworkImports(content []byte) []string {
+	// Go doesn't have framework-specific imports like Python
+	return []string{}
+}
+
+// FormatFrameworkImports formats framework-specific import statements for Go
+func (h *GoInjector) FormatFrameworkImports(imports []string) string {
+	// Go doesn't have framework-specific imports like Python
+	return ""
+}
+
+// GenerateFrameworkModifications generates framework-specific instrumentation modifications for Go
+func (h *GoInjector) GenerateFrameworkModifications(content []byte, operationsData *types.OperationsData) []types.CodeModification {
+	// Go doesn't have framework-specific modifications like Python
+	return []types.CodeModification{}
 }
 
 // FormatImports formats Go import statements
@@ -387,3 +402,9 @@ func (h *GoInjector) FallbackAnalyzeImports(content []byte, analysis *types.File
 
 // FallbackAnalyzeEntryPoints: no-op for Go since tree-sitter captures main/init reliably
 func (h *GoInjector) FallbackAnalyzeEntryPoints(content []byte, analysis *types.FileAnalysis) {}
+
+// GenerateImportModifications generates modifications to fix import statements
+func (h *GoInjector) GenerateImportModifications(content []byte, analysis *types.FileAnalysis) []types.CodeModification {
+	// No special import handling needed for Go
+	return []types.CodeModification{}
+}

@@ -120,6 +120,35 @@ Flags:
       --mode string           Generation mode (ai, template)
   -o, --output string         Output directory (template mode)
       --dry-run               Show what would be generated without writing files
+  -c, --config string         Path to advanced OpenTelemetry config YAML
+```
+
+#### Advanced configuration (YAML)
+
+You can pass a config file with advanced OpenTelemetry settings (instrumentations, propagators, sampler, exporters):
+
+```yaml
+# otel.yaml
+service_name: my-service
+service_version: 1.2.3
+environment: production
+instrumentations: [http, express]
+propagators: [tracecontext, baggage, b3]
+sampler:
+  type: traceidratio
+  ratio: 0.2
+exporters:
+  traces:
+    type: otlp
+    protocol: http
+    endpoint: https://otel-collector.example.com/v1/traces
+    insecure: false
+```
+
+Use it with:
+
+```bash
+lawrence codegen --mode template --config ./otel.yaml
 ```
 
 ## Supported Languages

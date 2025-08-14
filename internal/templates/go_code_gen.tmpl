@@ -5,10 +5,18 @@ import (
 	"log"
 	"os"
 	"time"
+    "strings"
+    "net/url"
 
 	"go.opentelemetry.io/otel"
 	attribute "go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
+    {{- if or (eq .TraceExporterType "otlp") (eq .TraceExporterType "") }}
+    {{- if or (eq .TraceProtocol "http") (eq .TraceProtocol "http/protobuf") (eq .TraceProtocol "") }}
+    "go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
+    {{- else }}
+    "go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
+    {{- end }}
+    {{- end }}
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/resource"
     "go.opentelemetry.io/otel/sdk/trace"
@@ -28,8 +36,8 @@ type OTELConfig struct {
 	ServiceName     string
 	ServiceVersion  string
 	Environment     string
-	ExporterURL     string
-	SamplingRatio   float64
+    ExporterURL     string
+    SamplingRatio   float64
 }
 
 // NewOTELConfig creates a new OTEL configuration with defaults
@@ -59,33 +67,108 @@ func InitializeOTEL(config *OTELConfig) (*trace.TracerProvider, error) {
 		return nil, err
 	}
 
-	// Create OTLP HTTP exporter
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+    // Create OTLP exporter
+    ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	exporter, err := otlptracehttp.New(ctx,
-		otlptracehttp.WithEndpoint(config.ExporterURL),
-		otlptracehttp.WithInsecure(), // Use secure connection in production
-	)
+    var exporter trace.SpanExporter
+    {{- if or (eq .TraceExporterType "otlp") (eq .TraceExporterType "") }}
+    {{- if or (eq .TraceProtocol "http") (eq .TraceProtocol "http/protobuf") (eq .TraceProtocol "") }}
+    // Normalize endpoint for HTTP exporter: accept either full URL or host:port and ensure /v1/traces
+    endpoint := strings.TrimSpace(config.ExporterURL)
+    if endpoint == "" {
+        endpoint = "http://localhost:4318"
+    }
+    // Build a full URL with /v1/traces
+    var fullURL string
+    if strings.HasPrefix(endpoint, "http://") || strings.HasPrefix(endpoint, "https://") {
+        u, perr := url.Parse(endpoint)
+        if perr != nil {
+            return nil, perr
+        }
+        if u.Path == "" || u.Path == "/" {
+            u.Path = "/v1/traces"
+        } else if !strings.HasSuffix(u.Path, "/v1/traces") {
+            if strings.HasSuffix(u.Path, "/") {
+                u.Path = u.Path + "v1/traces"
+            } else {
+                u.Path = u.Path + "/v1/traces"
+            }
+        }
+        fullURL = u.String()
+    } else {
+        // Treat as host:port; construct full URL
+        if strings.HasSuffix(endpoint, "/") {
+            endpoint = strings.TrimRight(endpoint, "/")
+        }
+        fullURL = "http://" + endpoint + "/v1/traces"
+    }
+
+    exporter, err = otlptracehttp.New(ctx,
+        otlptracehttp.WithEndpointURL(fullURL),
+        otlptracehttp.WithInsecure(),
+    )
+    {{- else }}
+    exporter, err = otlptracegrpc.New(ctx,
+        otlptracegrpc.WithEndpoint(config.ExporterURL),
+        otlptracegrpc.WithInsecure(),
+    )
+    {{- end }}
+    {{- else }}
+    // TODO: support other exporters like Jaeger, Console as needed
+    exporter = nil
+    {{- end }}
 	if err != nil {
 		return nil, err
 	}
 
-	// Create tracer provider
-	tp := trace.NewTracerProvider(
-		trace.WithBatcher(exporter),
-		trace.WithResource(res),
-		trace.WithSampler(trace.TraceIDRatioBased(config.SamplingRatio)),
-	)
+    // Sampler selection
+    sampler := trace.AlwaysSample()
+    {{- if .SamplerType }}
+    {{- if eq .SamplerType "traceidratio" }}
+    sampler = trace.TraceIDRatioBased({{if gt .SamplerRatio 0.0}}{{.SamplerRatio}}{{else}}1.0{{end}})
+    {{- else if eq .SamplerType "always_on" }}
+    sampler = trace.AlwaysSample()
+    {{- else if eq .SamplerType "always_off" }}
+    sampler = trace.NeverSample()
+    {{- end }}
+    {{- end }}
+
+    // Create tracer provider
+    tp := trace.NewTracerProvider(
+        trace.WithBatcher(exporter),
+        trace.WithResource(res),
+        trace.WithSampler(sampler),
+    )
 
 	// Set global tracer provider
 	otel.SetTracerProvider(tp)
 
-	// Set global text map propagator
-	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
-		propagation.TraceContext{},
-		propagation.Baggage{},
-	))
+    // Set global text map propagator
+    {{- if .Propagators }}
+    var propagators []propagation.TextMapPropagator
+    {{- range .Propagators }}
+    {{- if or (eq . "tracecontext") (eq . "w3c") }}
+    propagators = append(propagators, propagation.TraceContext{})
+    {{- else if eq . "baggage" }}
+    propagators = append(propagators, propagation.Baggage{})
+    {{- end }}
+    {{- end }}
+    if len(propagators) == 0 {
+        propagators = []propagation.TextMapPropagator{propagation.TraceContext{}, propagation.Baggage{}}
+    }
+    otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagators...))
+    {{- else }}
+    otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
+        propagation.TraceContext{},
+        propagation.Baggage{},
+    ))
+    {{- end }}
+
+    // Emit a bootstrap span to verify pipeline
+    tracer := otel.Tracer("bootstrap")
+    _, span := tracer.Start(context.Background(), "startup")
+    span.End()
 
 	return tp, nil
 }

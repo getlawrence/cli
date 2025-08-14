@@ -10,7 +10,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
-	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -109,22 +108,7 @@ func hitURL(url string, timeout time.Duration) error {
 	return nil
 }
 
-// waitForFileExists waits up to maxWait for a file to exist, returning an open handle.
-func waitForFileExists(path string, maxWait time.Duration) (*os.File, error) {
-	deadline := time.Now().Add(maxWait)
-	for time.Now().Before(deadline) {
-		f, err := os.Open(path)
-		if err == nil {
-			return f, nil
-		}
-		if !os.IsNotExist(err) && !strings.Contains(err.Error(), "no such file or directory") {
-			// Unexpected error
-			return nil, err
-		}
-		time.Sleep(1 * time.Second)
-	}
-	return nil, os.ErrNotExist
-}
+
 
 // runAndStreamOutput executes a command and streams its stdout/stderr to the test logs.
 func runAndStreamOutput(t *testing.T, ctx context.Context, dir string, name string, args ...string) error {

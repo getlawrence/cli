@@ -1,7 +1,14 @@
-FROM maven:3.9.6-eclipse-temurin-17 as build
+FROM maven:3.9.6-eclipse-temurin-17 AS build
 WORKDIR /workspace
+
+# Copy pom.xml first to leverage Docker layer caching for dependencies
 COPY pom.xml .
+# Download dependencies (this layer will be cached if pom.xml doesn't change)
+RUN mvn dependency:go-offline -B
+
+# Copy source code
 COPY src ./src
+# Build the application
 RUN mvn -q -e -DskipTests package
 
 FROM eclipse-temurin:17

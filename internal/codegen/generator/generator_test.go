@@ -7,6 +7,7 @@ import (
 	"github.com/getlawrence/cli/internal/codegen/types"
 	det "github.com/getlawrence/cli/internal/detector"
 	"github.com/getlawrence/cli/internal/domain"
+	"github.com/getlawrence/cli/internal/logger"
 )
 
 // fakeLanguage implements detector.Language with static responses
@@ -22,8 +23,8 @@ func (f *fakeLanguage) GetAllPackages(ctx context.Context, rootPath string) ([]d
 func (f *fakeLanguage) GetFilePatterns() []string { return []string{"**/*.go"} }
 
 func TestNewGenerator_DefaultsAndListings(t *testing.T) {
-	ca := det.NewCodebaseAnalyzer(nil, map[string]det.Language{})
-	g, err := NewGenerator(ca)
+	ca := det.NewCodebaseAnalyzer(nil, map[string]det.Language{}, &logger.StdoutLogger{})
+	g, err := NewGenerator(ca, &logger.StdoutLogger{})
 	if err != nil {
 		t.Fatalf("NewGenerator error: %v", err)
 	}
@@ -47,8 +48,8 @@ func TestNewGenerator_DefaultsAndListings(t *testing.T) {
 }
 
 func TestGenerator_ConvertIssuesToOpportunities(t *testing.T) {
-	ca := det.NewCodebaseAnalyzer(nil, nil)
-	g, err := NewGenerator(ca)
+	ca := det.NewCodebaseAnalyzer(nil, nil, &logger.StdoutLogger{})
+	g, err := NewGenerator(ca, &logger.StdoutLogger{})
 	if err != nil {
 		t.Fatalf("NewGenerator error: %v", err)
 	}
