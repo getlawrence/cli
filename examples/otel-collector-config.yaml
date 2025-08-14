@@ -11,12 +11,6 @@ receivers:
         endpoint: 0.0.0.0:4317
 
 exporters:
-  file:
-    path: /data/traces.jsonl
-    rotation:
-      max_megabytes: 5
-      max_days: 1
-      max_backups: 1
   logging:
     loglevel: info
   otlp/jaeger:
@@ -33,5 +27,5 @@ service:
     traces:
       receivers: [otlp]
       processors: [batch]
-      exporters: [file, logging, otlp/jaeger]
+      exporters: [logging, otlp/jaeger]
 
