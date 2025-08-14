@@ -16,7 +16,7 @@
   </properties>
 
   <dependencies>
-    <!-- Intentionally no OpenTelemetry deps to test detection/injection -->
+    <!-- OpenTelemetry dependencies will be added back once basic container works -->
   </dependencies>
 
   <build>

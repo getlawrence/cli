@@ -4,9 +4,7 @@ FROM docker.io/library/composer:2.8.9 AS vendor
 
 WORKDIR /tmp/
 
-COPY ./composer.json composer.json
-COPY ./otel.php otel.php
-COPY ./index.php index.php
+COPY . .
 
 RUN composer install \
     --ignore-platform-reqs \
