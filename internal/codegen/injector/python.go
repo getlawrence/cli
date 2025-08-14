@@ -56,19 +56,15 @@ func NewPythonInjector() *PythonInjector {
 			},
 			ImportTemplate: `from opentelemetry import %s`,
 			InitializationTemplate: `
-    # Initialize OpenTelemetry
-    try:
         from otel import init_tracer
         init_tracer()
-    except Exception:
-        pass
 `,
 			CleanupTemplate: `tp.shutdown()`,
 			FrameworkTemplates: map[string]string{
 				"flask": `
-    # Instrument Flask application
-    from opentelemetry.instrumentation.flask import FlaskInstrumentor
-    FlaskInstrumentor().instrument_app(app)
+# Instrument Flask application
+from opentelemetry.instrumentation.flask import FlaskInstrumentor
+FlaskInstrumentor().instrument_app(app)
 `,
 			},
 		},

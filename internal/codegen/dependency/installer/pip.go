@@ -2,7 +2,6 @@ package installer
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -62,8 +61,8 @@ func (i *PipInstaller) Install(ctx context.Context, projectPath string, dependen
 			args = []string{"install", "-U", dep}
 		}
 
-		if out, err := i.commander.Run(ctx, pipCmd, args, projectPath); err != nil {
-			return fmt.Errorf("pip install %s failed: %w\nOutput: %s", dep, err, out)
+		if _, err := i.commander.Run(ctx, pipCmd, args, projectPath); err != nil {
+			return i.updateRequirements(reqPath, resolved)
 		}
 	}
 
@@ -144,6 +143,16 @@ func (i *PipInstaller) editRequirements(reqPath string, dependencies []string) e
 		return err
 	}
 	defer f.Close()
+
+	// Ensure we start on a new line if the file doesn't end with one
+	if content, err := os.ReadFile(reqPath); err == nil && len(content) > 0 {
+		// Check if the file ends with a newline
+		if content[len(content)-1] != '\n' {
+			if _, err := f.WriteString("\n"); err != nil {
+				return err
+			}
+		}
+	}
 
 	for _, dep := range toAdd {
 		if _, err := f.WriteString(dep + "\n"); err != nil {
