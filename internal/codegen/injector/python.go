@@ -56,14 +56,12 @@ func NewPythonInjector() *PythonInjector {
 			},
 			ImportTemplate: `from opentelemetry import %s`,
 			InitializationTemplate: `
-        from otel import init_tracer
         init_tracer()
 `,
 			CleanupTemplate: `tp.shutdown()`,
 			FrameworkTemplates: map[string]string{
 				"flask": `
 # Instrument Flask application
-from opentelemetry.instrumentation.flask import FlaskInstrumentor
 FlaskInstrumentor().instrument_app(app)
 `,
 			},
@@ -83,9 +81,8 @@ func (h *PythonInjector) GetConfig() *types.LanguageConfig {
 
 // GetRequiredImports returns the list of imports needed for OTEL in Python
 func (h *PythonInjector) GetRequiredImports() []string {
-	// Rely on the generated otel.py bootstrap to handle OTEL imports.
-	// Avoid injecting imports into user files to prevent syntax issues.
-	return []string{}
+	// Add the otel import for the generated bootstrap file
+	return []string{"otel"}
 }
 
 // GetFrameworkImports returns framework-specific imports based on detected frameworks
@@ -123,6 +120,11 @@ func (h *PythonInjector) FormatImports(imports []string, hasExistingImports bool
 
 // FormatSingleImport formats a single Python import statement
 func (h *PythonInjector) FormatSingleImport(importPath string) string {
+	// Special handling for Flask instrumentation
+	if importPath == "opentelemetry.instrumentation.flask" {
+		return "from opentelemetry.instrumentation.flask import FlaskInstrumentor\n"
+	}
+
 	if strings.Contains(importPath, ".") {
 		parts := strings.Split(importPath, ".")
 		return fmt.Sprintf("from %s import %s\n", strings.Join(parts[:len(parts)-1], "."), parts[len(parts)-1])
@@ -392,6 +394,7 @@ func (h *PythonInjector) generateFlaskCleanupModifications(content []byte) []typ
 
 		// Remove duplicate/incorrect imports - be aggressive about this
 		if strings.Contains(trimmed, "from opentelemetry.instrumentation import flask") {
+			// Remove the incorrect import - we'll add the correct one back
 			modifications = append(modifications, types.CodeModification{
 				Type:        types.ModificationRemoveLine,
 				Language:    "Python",
@@ -402,35 +405,40 @@ func (h *PythonInjector) generateFlaskCleanupModifications(content []byte) []typ
 				Content:     "", // Empty content for removal
 				Context:     trimmed,
 			})
+		}
+
+		// Remove the old incorrect import pattern that was being generated
+		if strings.Contains(trimmed, "from opentelemetry.instrumentation.flask import FlaskInstrumentor") {
+			// Only remove this if it's in the wrong location (not near Flask app creation)
+			if !h.isFlaskImportInRightPlace(lines, i) {
+				modifications = append(modifications, types.CodeModification{
+					Type:        types.ModificationRemoveLine,
+					Language:    "Python",
+					FilePath:    "", // Will be set by caller
+					LineNumber:  uint32(i + 1),
+					Column:      1,
+					InsertAfter: false,
+					Content:     "", // Empty content for removal
+					Context:     trimmed,
+				})
+			}
 		}
 
 		// Remove incorrectly placed Flask instrumentation code - be aggressive about this
 		if strings.Contains(trimmed, "FlaskInstrumentor().instrument_app(app)") {
-			modifications = append(modifications, types.CodeModification{
-				Type:        types.ModificationRemoveLine,
-				Language:    "Python",
-				FilePath:    "", // Will be set by caller
-				LineNumber:  uint32(i + 1),
-				Column:      1,
-				InsertAfter: false,
-				Content:     "", // Empty content for removal
-				Context:     trimmed,
-			})
-		}
-
-		// Remove incorrectly placed Flask instrumentation imports - be aggressive about this
-		if strings.Contains(trimmed, "from opentelemetry.instrumentation.flask import FlaskInstrumentor") {
-			// Always remove this import - we'll add it back in the right place
-			modifications = append(modifications, types.CodeModification{
-				Type:        types.ModificationRemoveLine,
-				Language:    "Python",
-				FilePath:    "", // Will be set by caller
-				LineNumber:  uint32(i + 1),
-				Column:      1,
-				InsertAfter: false,
-				Content:     "", // Empty content for removal
-				Context:     trimmed,
-			})
+			// Only remove this if it's not near Flask app creation
+			if !h.isFlaskInstrumentationInRightPlace(lines, i) {
+				modifications = append(modifications, types.CodeModification{
+					Type:        types.ModificationRemoveLine,
+					Language:    "Python",
+					FilePath:    "", // Will be set by caller
+					LineNumber:  uint32(i + 1),
+					Column:      1,
+					InsertAfter: false,
+					Content:     "", // Empty content for removal
+					Context:     trimmed,
+				})
+			}
 		}
 
 		// Also remove any comment lines that mention Flask instrumentation
@@ -456,6 +464,20 @@ func (h *PythonInjector) isFlaskImportInRightPlace(lines []string, importLineInd
 	// Look for Flask app creation within a reasonable distance
 	start := max(0, importLineIndex-10)
 	end := min(len(lines), importLineIndex+10)
+
+	for i := start; i < end; i++ {
+		if strings.Contains(lines[i], "Flask(") && strings.Contains(lines[i], "__name__") && strings.Contains(lines[i], "=") {
+			return true
+		}
+	}
+	return false
+}
+
+// isFlaskInstrumentationInRightPlace checks if Flask instrumentation code is in the right location
+func (h *PythonInjector) isFlaskInstrumentationInRightPlace(lines []string, lineIndex int) bool {
+	// Look for Flask app creation within a reasonable distance
+	start := max(0, lineIndex-10)
+	end := min(len(lines), lineIndex+10)
 
 	for i := start; i < end; i++ {
 		if strings.Contains(lines[i], "Flask(") && strings.Contains(lines[i], "__name__") && strings.Contains(lines[i], "=") {

@@ -147,7 +147,109 @@ func TestPythonInjector_FormatFrameworkImports(t *testing.T) {
 	imports := []string{"opentelemetry.instrumentation.flask"}
 	formatted := injector.FormatFrameworkImports(imports)
 
-	expected := "from opentelemetry.instrumentation import flask\n"
+	expected := "from opentelemetry.instrumentation.flask import FlaskInstrumentor\n"
+	if formatted != expected {
+		t.Errorf("Expected '%s', got '%s'", expected, formatted)
+	}
+}
+
+func TestPythonInjector_CompleteFlaskInstrumentation(t *testing.T) {
+	injector := NewPythonInjector()
+
+	// Test the complete flow: input Python file -> expected output
+	inputContent := `from flask import Flask
+
+app = Flask(__name__)
+
+@app.route('/')
+def hello():
+    return 'Hello, World!'
+
+if __name__ == '__main__':
+    app.run()
+`
+
+	operationsData := &types.OperationsData{
+		InstallOTEL:             true,
+		InstallInstrumentations: []string{"flask"},
+		InstallComponents:       make(map[string][]string),
+	}
+
+	// Generate modifications
+	modifications := injector.GenerateFrameworkModifications([]byte(inputContent), operationsData)
+
+	// Should have exactly 1 modification (the Flask instrumentation)
+	if len(modifications) != 1 {
+		t.Fatalf("Expected 1 modification, got %d", len(modifications))
+	}
+
+	mod := modifications[0]
+	if mod.Type != types.ModificationAddFramework {
+		t.Errorf("Expected ModificationAddFramework, got %s", mod.Type)
+	}
+
+	if mod.Framework != "flask" {
+		t.Errorf("Expected framework 'flask', got %s", mod.Framework)
+	}
+
+	// Verify the content contains the correct Flask instrumentation
+	expectedInstrumentation := "from opentelemetry.instrumentation.flask import FlaskInstrumentor"
+	if !contains(mod.Content, expectedInstrumentation) {
+		t.Errorf("Expected content to contain '%s', got: %s", expectedInstrumentation, mod.Content)
+	}
+
+	expectedInstrumentationCall := "FlaskInstrumentor().instrument_app(app)"
+	if !contains(mod.Content, expectedInstrumentationCall) {
+		t.Errorf("Expected content to contain '%s', got: %s", expectedInstrumentationCall, mod.Content)
+	}
+
+	// Verify insertion point is correct (after Flask app creation)
+	if mod.LineNumber != 4 { // After app = Flask(__name__) at line 3
+		t.Errorf("Expected insertion at line 4, got %d", mod.LineNumber)
+	}
+}
+
+func TestPythonInjector_RequiredImports(t *testing.T) {
+	injector := NewPythonInjector()
+
+	requiredImports := injector.GetRequiredImports()
+
+	// Should include the otel import for the generated bootstrap file
+	expectedImports := []string{"otel"}
+	if len(requiredImports) != len(expectedImports) {
+		t.Errorf("Expected %d required imports, got %d", len(expectedImports), len(requiredImports))
+	}
+
+	for i, expected := range expectedImports {
+		if requiredImports[i] != expected {
+			t.Errorf("Expected import '%s' at position %d, got '%s'", expected, i, requiredImports[i])
+		}
+	}
+}
+
+func TestPythonInjector_FormatSingleImport(t *testing.T) {
+	injector := NewPythonInjector()
+
+	// Test Flask instrumentation import
+	flaskImport := "opentelemetry.instrumentation.flask"
+	formatted := injector.FormatSingleImport(flaskImport)
+	expected := "from opentelemetry.instrumentation.flask import FlaskInstrumentor\n"
+	if formatted != expected {
+		t.Errorf("Expected '%s', got '%s'", expected, formatted)
+	}
+
+	// Test regular import
+	regularImport := "requests"
+	formatted = injector.FormatSingleImport(regularImport)
+	expected = "import requests\n"
+	if formatted != expected {
+		t.Errorf("Expected '%s', got '%s'", expected, formatted)
+	}
+
+	// Test dotted import
+	dottedImport := "opentelemetry.trace"
+	formatted = injector.FormatSingleImport(dottedImport)
+	expected = "from opentelemetry import trace\n"
 	if formatted != expected {
 		t.Errorf("Expected '%s', got '%s'", expected, formatted)
 	}
@@ -179,7 +281,7 @@ def hello():
 `)
 
 	modifications := injector.GenerateFrameworkModifications(problematicContent, operationsData)
-	
+
 	// Should generate cleanup modifications
 	cleanupCount := 0
 	for _, mod := range modifications {
@@ -187,11 +289,11 @@ def hello():
 			cleanupCount++
 		}
 	}
-	
+
 	if cleanupCount == 0 {
 		t.Error("Expected cleanup modifications for problematic Flask code")
 	}
-	
+
 	// Verify that we have both cleanup and injection modifications
 	hasCleanup := false
 	hasInjection := false
@@ -203,11 +305,11 @@ def hello():
 			hasInjection = true
 		}
 	}
-	
+
 	if !hasCleanup {
 		t.Error("Expected cleanup modifications")
 	}
-	
+
 	if !hasInjection {
 		t.Error("Expected injection modifications")
 	}
