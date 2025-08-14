@@ -116,12 +116,12 @@ func (i *MavenInstaller) addDependenciesToPom(pomPath string, dependencies []str
 		return err
 	}
 
-	// Find the dependencies section
-	depsPattern := regexp.MustCompile(`(<dependencies>)(.*?)(</dependencies>)`)
+	// Find the dependencies section - use a more robust pattern that handles whitespace
+	depsPattern := regexp.MustCompile(`(?s)(<dependencies>)(.*?)(</dependencies>)`)
 	matches := depsPattern.FindSubmatch(content)
 
 	if len(matches) == 0 {
-		// No dependencies section found, create one after </project>
+		// No dependencies section found, create one before </project>
 		projectEndPattern := regexp.MustCompile(`(</project>)`)
 		if !projectEndPattern.Match(content) {
 			return fmt.Errorf("could not find </project> tag in pom.xml")
@@ -155,6 +155,7 @@ func (i *MavenInstaller) addDependenciesToPom(pomPath string, dependencies []str
 	depsEnd := matches[3]
 
 	// Check if dependencies already exist to avoid duplicates
+	var newDepsToAdd []string
 	for _, dep := range dependencies {
 		parts := strings.Split(dep, ":")
 		if len(parts) >= 2 {
@@ -162,22 +163,33 @@ func (i *MavenInstaller) addDependenciesToPom(pomPath string, dependencies []str
 			depPattern := regexp.MustCompile(fmt.Sprintf(`<groupId>%s</groupId>\s*<artifactId>%s</artifactId>`,
 				regexp.QuoteMeta(parts[0]), regexp.QuoteMeta(parts[1])))
 			if !depPattern.Match(depsContent) {
-				// Add new dependency
+				// Prepare new dependency XML
 				newDep := fmt.Sprintf("    <dependency>\n      <groupId>%s</groupId>\n      <artifactId>%s</artifactId>\n",
 					parts[0], parts[1])
 				if len(parts) >= 3 && parts[2] != "LATEST" {
 					newDep += fmt.Sprintf("      <version>%s</version>\n", parts[2])
 				}
 				newDep += "    </dependency>\n"
-
-				// Insert before </dependencies>
-				depsContent = append(depsContent, []byte(newDep)...)
+				newDepsToAdd = append(newDepsToAdd, newDep)
 			}
 		}
 	}
 
-	// Reconstruct the file
-	newContent := bytes.Replace(content, matches[0], append(append(depsStart, depsContent...), depsEnd...), 1)
+	// If no new dependencies to add, return early
+	if len(newDepsToAdd) == 0 {
+		return nil
+	}
+
+	// Add new dependencies to the existing content
+	for _, newDep := range newDepsToAdd {
+		depsContent = append(depsContent, []byte(newDep)...)
+	}
+
+	// Reconstruct the file by replacing the entire dependencies section
+	oldDepsSection := matches[0]
+	newDepsSection := append(append(depsStart, depsContent...), depsEnd...)
+	newContent := bytes.Replace(content, oldDepsSection, newDepsSection, 1)
+
 	return os.WriteFile(pomPath, newContent, 0644)
 }
 
