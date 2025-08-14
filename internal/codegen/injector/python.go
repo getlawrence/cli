@@ -55,9 +55,7 @@ func NewPythonInjector() *PythonInjector {
 			`,
 			},
 			ImportTemplate: `from opentelemetry import %s`,
-			InitializationTemplate: `
-        init_tracer()
-`,
+			InitializationTemplate: `init_tracer()`,
 			CleanupTemplate: `tp.shutdown()`,
 			FrameworkTemplates: map[string]string{
 				"flask": `
@@ -125,6 +123,11 @@ func (h *PythonInjector) FormatSingleImport(importPath string) string {
 		return "from opentelemetry.instrumentation.flask import FlaskInstrumentor\n"
 	}
 
+	// Special handling for otel import - should import init_tracer function
+	if importPath == "otel" {
+		return "from otel import init_tracer\n"
+	}
+
 	if strings.Contains(importPath, ".") {
 		parts := strings.Split(importPath, ".")
 		return fmt.Sprintf("from %s import %s\n", strings.Join(parts[:len(parts)-1], "."), parts[len(parts)-1])
@@ -155,6 +158,13 @@ func (h *PythonInjector) AnalyzeImportCapture(captureName string, node *sitter.N
 		// Check if it's an OTEL import
 		if strings.Contains(importPath, "opentelemetry") {
 			analysis.HasOTELImports = true
+		}
+
+		// Special handling for 'otel' import - we need to replace this with 'from otel import init_tracer'
+		if importPath == "otel" {
+			analysis.HasOTELImports = true
+			// Mark this as needing replacement
+			analysis.ExistingImports["otel"] = false // Mark as invalid import
 		}
 
 	case "import_location":
@@ -347,16 +357,94 @@ func (h *PythonInjector) detectExistingOTELSetup(bodyNode *sitter.Node, content 
 	}
 	// Detect bootstrap usage inserted by our template
 	if strings.Contains(bodyContent, "from otel import init_tracer") ||
-		strings.Contains(bodyContent, "import otel") ||
 		strings.Contains(bodyContent, "init_tracer(") {
 		return true
 	}
 	return false
 }
 
+// GenerateImportModifications generates modifications to fix import statements
+func (h *PythonInjector) GenerateImportModifications(content []byte, analysis *types.FileAnalysis) []types.CodeModification {
+	var modifications []types.CodeModification
+
+	// Always check if we need to add the correct import
+	contentStr := string(content)
+	hasCorrectImport := strings.Contains(contentStr, "from otel import init_tracer")
+	hasIncorrectImport := strings.Contains(contentStr, "import otel")
+
+	if !hasCorrectImport {
+		// Find the best place to add the import
+		lines := strings.Split(contentStr, "\n")
+		insertLine := 2 // Default to after the first import
+
+		// Look for existing imports to place after them
+		for i, line := range lines {
+			trimmed := strings.TrimSpace(line)
+			if strings.HasPrefix(trimmed, "from ") || strings.HasPrefix(trimmed, "import ") {
+				insertLine = i + 2 // Next line after this import
+			}
+		}
+
+		// Add the correct import
+		modifications = append(modifications, types.CodeModification{
+			Type:        types.ModificationAddImport,
+			Language:    "Python",
+			FilePath:    "", // Will be set by caller
+			LineNumber:  uint32(insertLine),
+			Column:      1,
+			InsertAfter: false,
+			Content:     "from otel import init_tracer",
+			Context:     "",
+		})
+	}
+
+	// If there's an incorrect import, remove it
+	if hasIncorrectImport {
+		lines := strings.Split(contentStr, "\n")
+		for i, line := range lines {
+			trimmed := strings.TrimSpace(line)
+			if trimmed == "import otel" {
+				modifications = append(modifications, types.CodeModification{
+					Type:        types.ModificationRemoveLine,
+					Language:    "Python",
+					FilePath:    "", // Will be set by caller
+					LineNumber:  uint32(i + 1),
+					Column:      1,
+					InsertAfter: false,
+					Content:     "", // Empty content for removal
+					Context:     line,
+				})
+				break
+			}
+		}
+	}
+
+	return modifications
+}
+
 // GenerateFrameworkModifications generates framework-specific instrumentation modifications
 func (h *PythonInjector) GenerateFrameworkModifications(content []byte, operationsData *types.OperationsData) []types.CodeModification {
 	var modifications []types.CodeModification
+
+	// First, handle any import modifications that are needed
+	// This will handle replacing 'import otel' with 'from otel import init_tracer'
+	// We need to analyze the content to detect existing imports
+	analysis := &types.FileAnalysis{
+		ExistingImports: make(map[string]bool),
+	}
+	
+	// Check if there's an 'import otel' statement that needs replacement
+	lines := strings.Split(string(content), "\n")
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "import otel" {
+			analysis.ExistingImports["otel"] = false // Mark as needing replacement
+			break
+		}
+	}
+	
+	importMods := h.GenerateImportModifications(content, analysis)
+	modifications = append(modifications, importMods...)
 
 	// Check if Flask instrumentation is needed
 	if h.detectFlaskUsage(content) && h.hasFlaskInstrumentation(operationsData) {

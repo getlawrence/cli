@@ -158,6 +158,12 @@ func (h *RubyInjector) FallbackAnalyzeImports(content []byte, analysis *types.Fi
 // FallbackAnalyzeEntryPoints: no-op; treat entire file as main
 func (h *RubyInjector) FallbackAnalyzeEntryPoints(content []byte, analysis *types.FileAnalysis) {}
 
+// GenerateImportModifications generates modifications to fix import statements
+func (h *RubyInjector) GenerateImportModifications(content []byte, analysis *types.FileAnalysis) []types.CodeModification {
+	// No special import handling needed for Ruby
+	return []types.CodeModification{}
+}
+
 func (h *RubyInjector) detectExistingOTELSetup(node *sitter.Node, content []byte) bool {
 	body := node.Content(content)
 	return strings.Contains(body, "OpenTelemetry") || strings.Contains(body, "opentelemetry")

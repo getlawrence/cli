@@ -203,3 +203,9 @@ func (h *JavaInjector) FallbackAnalyzeImports(content []byte, analysis *types.Fi
 
 // FallbackAnalyzeEntryPoints: no-op for Java; main method capture should be sufficient
 func (h *JavaInjector) FallbackAnalyzeEntryPoints(content []byte, analysis *types.FileAnalysis) {}
+
+// GenerateImportModifications generates modifications to fix import statements
+func (h *JavaInjector) GenerateImportModifications(content []byte, analysis *types.FileAnalysis) []types.CodeModification {
+	// No special import handling needed for Java
+	return []types.CodeModification{}
+}

@@ -198,3 +198,9 @@ func (h *DotNetInjector) detectExistingOTELSetup(node *sitter.Node, content []by
 
 func (h *DotNetInjector) FallbackAnalyzeImports(content []byte, analysis *types.FileAnalysis)     {}
 func (h *DotNetInjector) FallbackAnalyzeEntryPoints(content []byte, analysis *types.FileAnalysis) {}
+
+// GenerateImportModifications generates modifications to fix import statements
+func (h *DotNetInjector) GenerateImportModifications(content []byte, analysis *types.FileAnalysis) []types.CodeModification {
+	// No special import handling needed for C#
+	return []types.CodeModification{}
+}

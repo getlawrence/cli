@@ -402,3 +402,9 @@ func (h *GoInjector) FallbackAnalyzeImports(content []byte, analysis *types.File
 
 // FallbackAnalyzeEntryPoints: no-op for Go since tree-sitter captures main/init reliably
 func (h *GoInjector) FallbackAnalyzeEntryPoints(content []byte, analysis *types.FileAnalysis) {}
+
+// GenerateImportModifications generates modifications to fix import statements
+func (h *GoInjector) GenerateImportModifications(content []byte, analysis *types.FileAnalysis) []types.CodeModification {
+	// No special import handling needed for Go
+	return []types.CodeModification{}
+}

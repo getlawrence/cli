@@ -45,4 +45,7 @@ type LanguageInjector interface {
 
 	// FallbackAnalyzeEntryPoints allows language-specific entrypoint discovery if tree-sitter didn't find any
 	FallbackAnalyzeEntryPoints(content []byte, analysis *types.FileAnalysis)
+
+	// GenerateImportModifications generates modifications to fix import statements
+	GenerateImportModifications(content []byte, analysis *types.FileAnalysis) []types.CodeModification
 }

@@ -208,3 +208,9 @@ func (h *JavaScriptInjector) FallbackAnalyzeImports(content []byte, analysis *ty
 // FallbackAnalyzeEntryPoints: no-op for JavaScript; default program node is already considered
 func (h *JavaScriptInjector) FallbackAnalyzeEntryPoints(content []byte, analysis *types.FileAnalysis) {
 }
+
+// GenerateImportModifications generates modifications to fix import statements
+func (h *JavaScriptInjector) GenerateImportModifications(content []byte, analysis *types.FileAnalysis) []types.CodeModification {
+	// No special import handling needed for JavaScript
+	return []types.CodeModification{}
+}

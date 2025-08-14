@@ -315,9 +315,19 @@ func (ci *CodeInjector) generateModifications(
 		}
 	}
 
+	// Generate import-specific modifications (e.g., replacing 'import otel' with 'from otel import init_tracer')
+	content, err := os.ReadFile(analysis.FilePath)
+	if err == nil {
+		importMods := handler.GenerateImportModifications(content, analysis)
+		// Set the file path for import modifications
+		for i := range importMods {
+			importMods[i].FilePath = analysis.FilePath
+		}
+		modifications = append(modifications, importMods...)
+	}
+
 	// Generate framework-specific modifications
 	if len(operationsData.InstallInstrumentations) > 0 {
-		content, err := os.ReadFile(analysis.FilePath)
 		if err == nil {
 			frameworkMods := handler.GenerateFrameworkModifications(content, operationsData)
 			// Set the file path for framework modifications
@@ -484,6 +494,13 @@ func (ci *CodeInjector) generateInitializationModification(
 func (ci *CodeInjector) generateFromTemplate(templateStr string, data map[string]interface{}) string {
 	// For now, return the template as-is. In a full implementation,
 	// you would use the text/template package to process the template
+
+	// Special handling for Python indentation
+	if strings.Contains(templateStr, "init_tracer()") {
+		// Add proper Python indentation (4 spaces)
+		return "    " + templateStr
+	}
+
 	return templateStr
 }
 

@@ -137,6 +137,12 @@ func (h *PHPInjector) FallbackAnalyzeEntryPoints(content []byte, analysis *types
 	})
 }
 
+// GenerateImportModifications generates modifications to fix import statements
+func (h *PHPInjector) GenerateImportModifications(content []byte, analysis *types.FileAnalysis) []types.CodeModification {
+	// No special import handling needed for PHP
+	return []types.CodeModification{}
+}
+
 // determinePHPTopInsertionLine returns the line number right after opening tag and any declare(strict_types)
 // to safely insert requires and initialization without violating PHP strict_types placement rules.
 func determinePHPTopInsertionLine(text string) int {
