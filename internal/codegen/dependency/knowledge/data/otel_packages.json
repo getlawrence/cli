@@ -1,0 +1,197 @@
+{
+  "languages": {
+    "go": {
+      "core": [
+        "go.opentelemetry.io/otel",
+        "go.opentelemetry.io/otel/sdk",
+        "go.opentelemetry.io/otel/trace",
+        "go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp",
+        "go.opentelemetry.io/otel/sdk/resource",
+        "go.opentelemetry.io/otel/propagation",
+        "go.opentelemetry.io/otel/semconv/v1.34.0"
+      ],
+      "instrumentations": {
+        "otelhttp": "go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp",
+        "otelgin": "go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin",
+        "otelmux": "go.opentelemetry.io/contrib/instrumentation/github.com/gorilla/mux/otelmux",
+        "otelsql": "go.opentelemetry.io/contrib/instrumentation/database/sql/otelsql",
+        "otelgrpc": "go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc",
+        "otelecho": "go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho",
+        "otelfiber": "go.opentelemetry.io/contrib/instrumentation/github.com/gofiber/fiber/otelfiber"
+      },
+      "components": {
+        "exporter": {
+          "jaeger": "go.opentelemetry.io/otel/exporters/jaeger",
+          "zipkin": "go.opentelemetry.io/otel/exporters/zipkin",
+          "prometheus": "go.opentelemetry.io/otel/exporters/prometheus"
+        },
+        "sampler": {
+          "probabilistic": "go.opentelemetry.io/otel/sdk/trace"
+        }
+      },
+      "prerequisites": []
+    },
+    "javascript": {
+      "core": [
+        "@opentelemetry/api",
+        "@opentelemetry/sdk-node",
+        "@opentelemetry/exporter-trace-otlp-http"
+      ],
+      "instrumentations": {
+        "auto": "@opentelemetry/auto-instrumentations-node",
+        "http": "@opentelemetry/instrumentation-http",
+        "express": "@opentelemetry/instrumentation-express",
+        "fastify": "@opentelemetry/instrumentation-fastify",
+        "hapi": "@opentelemetry/instrumentation-hapi",
+        "restify": "@opentelemetry/instrumentation-restify",
+        "nestjs-core": "@opentelemetry/instrumentation-nestjs-core",
+        "next": "@opentelemetry/instrumentation-next",
+        "socket.io": "@opentelemetry/instrumentation-socket.io",
+        "koa": "@opentelemetry/instrumentation-koa",
+        "mysql": "@opentelemetry/instrumentation-mysql",
+        "mysql2": "@opentelemetry/instrumentation-mysql2",
+        "pg": "@opentelemetry/instrumentation-pg",
+        "mongodb": "@opentelemetry/instrumentation-mongodb",
+        "redis": "@opentelemetry/instrumentation-redis"
+      },
+      "components": {
+        "propagator": {
+          "b3": "@opentelemetry/propagator-b3",
+          "b3multi": "@opentelemetry/propagator-b3"
+        },
+        "exporter": {
+          "otlphttp": "@opentelemetry/exporter-trace-otlp-http",
+          "otlp": "@opentelemetry/exporter-trace-otlp-http",
+          "otlpgrpc": "@opentelemetry/exporter-trace-otlp-grpc"
+        }
+      },
+      "prerequisites": [
+        {
+          "if": ["express", "koa", "fastify", "hapi", "restify", "nestjs-core", "next", "socket.io"],
+          "requires": ["http"],
+          "unless": ["auto"]
+        }
+      ]
+    },
+    "csharp": {
+      "core": [
+        "OpenTelemetry",
+        "OpenTelemetry.Exporter.OpenTelemetryProtocol",
+        "OpenTelemetry.Extensions.Hosting",
+        "OpenTelemetry.Instrumentation.AspNetCore",
+        "OpenTelemetry.Instrumentation.Http",
+        "OpenTelemetry.Instrumentation.Runtime"
+      ],
+      "instrumentations": {
+        "aspnetcore": "OpenTelemetry.Instrumentation.AspNetCore",
+        "httpclient": "OpenTelemetry.Instrumentation.Http",
+        "runtime": "OpenTelemetry.Instrumentation.Runtime"
+      },
+      "components": {},
+      "prerequisites": []
+    },
+    "dotnet": {
+      "core": [
+        "OpenTelemetry",
+        "OpenTelemetry.Exporter.OpenTelemetryProtocol",
+        "OpenTelemetry.Extensions.Hosting",
+        "OpenTelemetry.Instrumentation.AspNetCore",
+        "OpenTelemetry.Instrumentation.Http",
+        "OpenTelemetry.Instrumentation.Runtime"
+      ],
+      "instrumentations": {
+        "aspnetcore": "OpenTelemetry.Instrumentation.AspNetCore",
+        "httpclient": "OpenTelemetry.Instrumentation.Http",
+        "runtime": "OpenTelemetry.Instrumentation.Runtime"
+      },
+      "components": {},
+      "prerequisites": []
+    },
+    "java": {
+      "core": [
+        "io.opentelemetry:opentelemetry-bom:1.42.1",
+        "io.opentelemetry:opentelemetry-api",
+        "io.opentelemetry:opentelemetry-sdk",
+        "io.opentelemetry:opentelemetry-exporter-otlp"
+      ],
+      "instrumentations": {
+        "http": "io.opentelemetry.instrumentation:opentelemetry-instrumentation-servlet",
+        "spring": "io.opentelemetry.instrumentation:opentelemetry-spring-boot-starter",
+        "grpc": "io.opentelemetry.instrumentation:opentelemetry-grpc-1.6",
+        "jdbc": "io.opentelemetry.instrumentation:opentelemetry-jdbc"
+      },
+      "components": {
+        "exporter": {
+          "jaeger": "io.opentelemetry:opentelemetry-exporter-jaeger",
+          "zipkin": "io.opentelemetry:opentelemetry-exporter-zipkin"
+        },
+        "propagator": {
+          "b3": "io.opentelemetry:opentelemetry-extension-trace-propagators"
+        }
+      },
+      "prerequisites": []
+    },
+    "python": {
+      "core": [
+        "opentelemetry-api",
+        "opentelemetry-sdk",
+        "opentelemetry-exporter-otlp"
+      ],
+      "instrumentations": {
+        "flask": "opentelemetry-instrumentation-flask",
+        "django": "opentelemetry-instrumentation-django",
+        "fastapi": "opentelemetry-instrumentation-fastapi",
+        "requests": "opentelemetry-instrumentation-requests",
+        "urllib3": "opentelemetry-instrumentation-urllib3",
+        "psycopg2": "opentelemetry-instrumentation-psycopg2",
+        "pymongo": "opentelemetry-instrumentation-pymongo",
+        "redis": "opentelemetry-instrumentation-redis",
+        "sqlalchemy": "opentelemetry-instrumentation-sqlalchemy",
+        "grpc": "opentelemetry-instrumentation-grpc"
+      },
+      "components": {
+        "exporter": {
+          "jaeger": "opentelemetry-exporter-jaeger",
+          "zipkin": "opentelemetry-exporter-zipkin"
+        }
+      },
+      "prerequisites": []
+    },
+    "ruby": {
+      "core": [
+        "opentelemetry-api",
+        "opentelemetry-sdk",
+        "opentelemetry-exporter-otlp"
+      ],
+      "instrumentations": {
+        "rack": "opentelemetry-instrumentation-rack",
+        "sinatra": "opentelemetry-instrumentation-sinatra",
+        "rails": "opentelemetry-instrumentation-rails",
+        "http": "opentelemetry-instrumentation-http",
+        "net_http": "opentelemetry-instrumentation-net_http",
+        "faraday": "opentelemetry-instrumentation-faraday",
+        "redis": "opentelemetry-instrumentation-redis",
+        "pg": "opentelemetry-instrumentation-pg",
+        "mysql2": "opentelemetry-instrumentation-mysql2"
+      },
+      "components": {},
+      "prerequisites": []
+    },
+    "php": {
+      "core": [
+        "open-telemetry/api",
+        "open-telemetry/sdk",
+        "open-telemetry/exporter-otlp"
+      ],
+      "instrumentations": {
+        "slim": "open-telemetry/opentelemetry-auto-slim",
+        "symfony": "open-telemetry/opentelemetry-auto-symfony",
+        "laravel": "open-telemetry/opentelemetry-auto-laravel",
+        "psr18": "open-telemetry/opentelemetry-auto-psr18",
+        "pdo": "open-telemetry/opentelemetry-auto-pdo"
+      },
+      "components": {},
+      "prerequisites": []
+    }
+  }
+}

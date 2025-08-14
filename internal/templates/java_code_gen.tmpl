@@ -1,0 +1,49 @@
+// OpenTelemetry bootstrap for {{.ServiceName}} (Java)
+// Create a helper class and invoke from your main application's startup
+
+package telemetry;
+
+import io.opentelemetry.api.GlobalOpenTelemetry;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.Tracer;
+import io.opentelemetry.api.common.AttributeKey;
+import io.opentelemetry.sdk.OpenTelemetrySdk;
+import io.opentelemetry.sdk.resources.Resource;
+import io.opentelemetry.sdk.trace.SdkTracerProvider;
+import io.opentelemetry.sdk.trace.export.BatchSpanProcessor;
+import io.opentelemetry.exporter.otlp.trace.OtlpGrpcSpanExporter;
+
+public final class Otel {
+  private Otel() {}
+
+  public static OpenTelemetrySdk start() {
+    // Configure OTLP exporter (will use environment variables if set)
+    OtlpGrpcSpanExporter spanExporter = OtlpGrpcSpanExporter.builder()
+        .setEndpoint(System.getenv().getOrDefault("OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4317"))
+        .build();
+
+    // Build tracer provider with OTLP exporter
+    SdkTracerProvider tracerProvider = SdkTracerProvider.builder()
+        .setResource(Resource.getDefault().toBuilder()
+            .put(AttributeKey.stringKey("service.name"), 
+                 System.getenv().getOrDefault("OTEL_SERVICE_NAME", "{{.ServiceName}}"))
+            .build())
+        .addSpanProcessor(BatchSpanProcessor.builder(spanExporter).build())
+        .build();
+
+    // Build the OpenTelemetry SDK
+    OpenTelemetrySdk sdk = OpenTelemetrySdk.builder()
+        .setTracerProvider(tracerProvider)
+        .buildAndRegisterGlobal();
+
+    // Emit a bootstrap span to verify pipeline
+    Tracer tracer = GlobalOpenTelemetry.getTracer("{{.ServiceName}}");
+    Span span = tracer.spanBuilder("bootstrap").startSpan();
+    span.setAttribute("service.name", System.getenv().getOrDefault("OTEL_SERVICE_NAME", "{{.ServiceName}}"));
+    span.end();
+
+    return sdk;
+  }
+}
+
+

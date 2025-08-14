@@ -1,0 +1,154 @@
+package detector
+
+import (
+	"context"
+	"fmt"
+	"io"
+	"net/http"
+	"strings"
+	"time"
+
+	"github.com/getlawrence/cli/internal/domain"
+	"gopkg.in/yaml.v3"
+)
+
+// InstrumentationRegistryService handles communication with the OpenTelemetry instrumentation registry
+type InstrumentationRegistryService struct {
+	baseURL string
+	client  *http.Client
+}
+
+// NewInstrumentationRegistryService creates a new instrumentation registry service
+func NewInstrumentationRegistryService() *InstrumentationRegistryService {
+	return &InstrumentationRegistryService{
+		baseURL: "https://raw.githubusercontent.com/open-telemetry/opentelemetry.io/main/data/registry",
+		client: &http.Client{
+			Timeout: 30 * time.Second,
+		},
+	}
+}
+
+// RegistryEntry represents the YAML structure from the OpenTelemetry registry
+type RegistryEntry struct {
+	Title        string   `yaml:"title"`
+	RegistryType string   `yaml:"registryType"`
+	Language     string   `yaml:"language"`
+	Tags         []string `yaml:"tags"`
+	Description  string   `yaml:"description"`
+	License      string   `yaml:"license"`
+	Authors      []struct {
+		Name string `yaml:"name"`
+	} `yaml:"authors"`
+	URLs struct {
+		Repo string `yaml:"repo"`
+	} `yaml:"urls"`
+	CreatedAt    string `yaml:"createdAt"`
+	IsFirstParty bool   `yaml:"isFirstParty"`
+}
+
+// GetInstrumentation checks if instrumentation exists for a given package
+func (s *InstrumentationRegistryService) GetInstrumentation(ctx context.Context, pkg domain.Package) (*domain.InstrumentationInfo, error) {
+	// Convert package name to registry format
+	packageName := s.PackageName(pkg.Name)
+
+	// Construct URL for instrumentation file
+	url := fmt.Sprintf("%s/instrumentation-%s-%s.yml", s.baseURL, s.RegistryLanguage(pkg.Language), packageName)
+
+	// Create HTTP request with context
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	// Execute request
+	resp, err := s.client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch instrumentation data: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Check if instrumentation exists
+	if resp.StatusCode == 404 {
+		return nil, nil // No instrumentation available
+	}
+
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+	}
+
+	// Read and parse YAML
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	var entry RegistryEntry
+	if err := yaml.Unmarshal(body, &entry); err != nil {
+		return nil, fmt.Errorf("failed to parse YAML: %w", err)
+	}
+
+	// Convert to domain.InstrumentationInfo
+	info := &domain.InstrumentationInfo{
+		Package:      pkg,
+		Title:        entry.Title,
+		Description:  entry.Description,
+		RegistryType: entry.RegistryType,
+		Language:     s.CanonicalLanguage(entry.Language),
+		Tags:         entry.Tags,
+		License:      entry.License,
+		CreatedAt:    entry.CreatedAt,
+		IsFirstParty: entry.IsFirstParty,
+		IsAvailable:  true,
+		RegistryURL:  url,
+	}
+
+	// Convert authors
+	for _, author := range entry.Authors {
+		info.Authors = append(info.Authors, domain.Author{Name: author.Name})
+	}
+
+	// Set URLs
+	info.URLs = domain.URLs{Repo: entry.URLs.Repo}
+
+	return info, nil
+}
+
+// normalizedomain.PackageName converts package names to the format used in the registry
+func (s *InstrumentationRegistryService) PackageName(packageName string) string {
+	// Handle common package name formats
+	name := strings.ToLower(packageName)
+
+	// Remove common prefixes/suffixes
+	name = strings.TrimPrefix(name, "github.com/")
+	name = strings.TrimPrefix(name, "go.opentelemetry.io/")
+	name = strings.TrimSuffix(name, ".git")
+
+	// Replace slashes and dots with hyphens (common in registry naming)
+	name = strings.ReplaceAll(name, "/", "-")
+	name = strings.ReplaceAll(name, ".", "-")
+	name = strings.ReplaceAll(name, "_", "-")
+
+	return name
+}
+
+// RegistryLanguage normalizes language names to the ones used by the registry filenames
+func (s *InstrumentationRegistryService) RegistryLanguage(language string) string {
+	lang := strings.ToLower(language)
+	switch lang {
+	case "javascript", "typescript":
+		return "js"
+	default:
+		return lang
+	}
+}
+
+// CanonicalLanguage normalizes registry language identifiers to our internal ones
+func (s *InstrumentationRegistryService) CanonicalLanguage(language string) string {
+	lang := strings.ToLower(language)
+	switch lang {
+	case "js", "node", "nodejs":
+		return "javascript"
+	default:
+		return lang
+	}
+}

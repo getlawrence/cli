@@ -1,0 +1,60 @@
+# GoReleaser v2 configuration
+version: 2
+
+project_name: lawrence
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: lawrence
+    main: .
+    binary: lawrence
+    env:
+      - CGO_ENABLED=1
+    goos: [linux]
+    goarch: [amd64]
+    ldflags:
+      - -s -w
+      - -X github.com/getlawrence/cli/cmd.Version={{.Version}}
+      - -X github.com/getlawrence/cli/cmd.GitCommit={{.Commit}}
+      - -X github.com/getlawrence/cli/cmd.BuildDate={{ time "2006-01-02T15:04:05Z07:00" }}
+
+archives:
+  - id: default
+    builds: [lawrence]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    format: tar.gz
+    files:
+      - LICENSE
+      - README.md
+
+checksum:
+  name_template: "checksums.txt"
+
+release:
+  prerelease: auto
+  draft: false
+  make_latest: false
+
+changelog:
+  use: git
+  sort: asc
+
+# Homebrew disabled temporarily due to CGO cross-compilation issues
+# brews:
+#   - name: lawrence
+#     ids: [lawrence]
+#     repository:
+#       owner: getlawrence
+#       name: homebrew-tap
+#     commit_author:
+#       name: goreleaser
+#       email: noreply@getlawrence.dev
+#     homepage: https://github.com/getlawrence/cli
+#     description: CLI tool to analyze codebases and instrument them with OpenTelemetry
+#     license: MIT
+#     test: |
+#       assert_match "OpenTelemetry codebase analyzer", shell_output("#{bin}/lawrence --help")
+#     commit_msg_template: "chore(brew): update {{ .ProjectName }} to {{ .Tag }}"

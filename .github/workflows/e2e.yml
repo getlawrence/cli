@@ -1,0 +1,67 @@
+name: e2e-examples
+
+on:
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+concurrency:
+  group: e2e-examples-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  e2e:
+    name: Run E2E examples test
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.x'
+          check-latest: true
+          cache: true
+
+      - name: Show Docker versions
+        run: |
+          docker version
+          docker compose version
+
+      - name: Pre-pull base images (best-effort)
+        run: |
+          set -euxo pipefail
+          docker pull otel/opentelemetry-collector-contrib:0.98.0
+          docker pull golang:1.23-alpine
+          docker pull gcr.io/distroless/base-debian12 || true
+          docker pull node:20-alpine
+          docker pull python:3.12-slim
+          docker pull php:8.2-cli
+          docker pull ruby:3.3
+          docker pull maven:3.9.6-eclipse-temurin-17
+          docker pull eclipse-temurin:17
+          docker pull mcr.microsoft.com/dotnet/sdk:8.0
+          docker pull mcr.microsoft.com/dotnet/aspnet:8.0
+
+      - name: Download Go modules
+        run: go mod download
+
+      - name: Run E2E examples test
+        env:
+          DOCKER_BUILDKIT: 1
+        run: |
+          set -euxo pipefail
+          go test -v -run TestExamplesStackCodegenAndOTEL ./e2e
+
+      - name: Diagnostics on failure
+        if: failure()
+        run: |
+          set +e
+          docker ps -a || true
+          docker images || true
+          # Compose logs are already emitted by the test on failure for key services
+
