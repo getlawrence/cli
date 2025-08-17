@@ -153,6 +153,12 @@ func (p *Pipeline) extractPackageName(componentName, packageManagerType string) 
 		if strings.Contains(componentName, "opentelemetry") {
 			return componentName
 		}
+	case "go":
+		// Handle Go module paths
+		if componentName != "" {
+			// Go module paths are used directly as package names
+			return componentName
+		}
 	}
 
 	return ""
@@ -165,7 +171,7 @@ func (p *Pipeline) convertToComponents(enriched []EnrichedComponent, language ty
 	for _, ec := range enriched {
 		component := types.Component{
 			Name:                   ec.Name,
-			Type:                   p.mapComponentType(ec.Type),
+			Type:                   p.mapComponentType(ec.Type, ec.Name),
 			Category:               p.determineComponentCategory(ec),
 			Status:                 p.determineComponentStatus(ec),
 			SupportLevel:           p.determineSupportLevel(ec),
@@ -350,8 +356,9 @@ func (p *Pipeline) extractMigrationGuideURL(ec EnrichedComponent) string {
 	return ""
 }
 
-// mapComponentType maps registry component type to knowledge base type
-func (p *Pipeline) mapComponentType(registryType string) types.ComponentType {
+// mapComponentType maps registry component type to knowledge base type with smart name-based fallback
+func (p *Pipeline) mapComponentType(registryType string, componentName string) types.ComponentType {
+	// First, try to map based on the registry type
 	switch strings.ToLower(registryType) {
 	case "api":
 		return types.ComponentTypeAPI
@@ -371,9 +378,63 @@ func (p *Pipeline) mapComponentType(registryType string) types.ComponentType {
 		return types.ComponentTypeResource
 	case "resourcedetector":
 		return types.ComponentTypeResourceDetector
-	default:
-		return types.ComponentTypeInstrumentation // Default fallback
 	}
+
+	// If registry type doesn't match, use smart name-based detection
+	return p.detectComponentTypeFromName(componentName)
+}
+
+// detectComponentTypeFromName detects component type based on the component name
+func (p *Pipeline) detectComponentTypeFromName(componentName string) types.ComponentType {
+	name := strings.ToLower(componentName)
+
+	// API detection patterns
+	if strings.Contains(name, "/api") || strings.HasSuffix(name, "-api") ||
+		strings.HasSuffix(name, ".api") || name == "api" ||
+		strings.Contains(name, "opentelemetry-api") {
+		return types.ComponentTypeAPI
+	}
+
+	// SDK detection patterns
+	if strings.Contains(name, "/sdk") || strings.HasSuffix(name, "-sdk") ||
+		strings.HasSuffix(name, ".sdk") || name == "sdk" ||
+		strings.Contains(name, "opentelemetry-sdk") ||
+		strings.Contains(name, "sdk-") {
+		return types.ComponentTypeSDK
+	}
+
+	// Exporter detection patterns
+	if strings.Contains(name, "exporter") || strings.Contains(name, "-exporter-") {
+		return types.ComponentTypeExporter
+	}
+
+	// Propagator detection patterns
+	if strings.Contains(name, "propagator") || strings.Contains(name, "-propagator-") {
+		return types.ComponentTypePropagator
+	}
+
+	// Sampler detection patterns
+	if strings.Contains(name, "sampler") || strings.Contains(name, "-sampler-") {
+		return types.ComponentTypeSampler
+	}
+
+	// Processor detection patterns
+	if strings.Contains(name, "processor") || strings.Contains(name, "-processor-") {
+		return types.ComponentTypeProcessor
+	}
+
+	// Resource detection patterns
+	if strings.Contains(name, "resource") && !strings.Contains(name, "detector") {
+		return types.ComponentTypeResource
+	}
+
+	// Resource detector detection patterns
+	if strings.Contains(name, "resource") && strings.Contains(name, "detector") {
+		return types.ComponentTypeResourceDetector
+	}
+
+	// Default fallback to instrumentation for everything else
+	return types.ComponentTypeInstrumentation
 }
 
 // extractVersions extracts version information from enriched component data

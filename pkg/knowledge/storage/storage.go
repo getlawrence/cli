@@ -19,6 +19,11 @@ type Storage struct {
 
 // NewStorage creates a new storage instance with SQLite database
 func NewStorage(dbPath string) (*Storage, error) {
+	// Handle empty path by creating an in-memory database
+	if dbPath == "" {
+		dbPath = ":memory:"
+	}
+
 	db, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
@@ -184,6 +189,8 @@ func (s *Storage) saveKnowledgeBaseParallel(tx *sql.Tx, kb *types.KnowledgeBase)
 		wg.Wait()
 		versionWg.Wait()
 		return fmt.Errorf("parallel processing error: %w", err)
+	default:
+		// No errors, continue with processing
 	}
 
 	// Wait for all processing to complete
@@ -409,8 +416,8 @@ func migrateDatabaseIfNeeded(db *sql.DB) error {
 	// Check if components table exists
 	var tableExists bool
 	err := db.QueryRow(`
-		SELECT COUNT(*) > 0 
-		FROM sqlite_master 
+		SELECT COUNT(*) > 0
+		FROM sqlite_master
 		WHERE type='table' AND name='components'
 	`).Scan(&tableExists)
 
@@ -427,8 +434,8 @@ func migrateDatabaseIfNeeded(db *sql.DB) error {
 	// Check if the old UNIQUE constraint on name exists
 	var constraintExists bool
 	err = db.QueryRow(`
-		SELECT COUNT(*) > 0 
-		FROM sqlite_master 
+		SELECT COUNT(*) > 0
+		FROM sqlite_master
 		WHERE type='index' AND name='idx_components_name'
 	`).Scan(&constraintExists)
 
@@ -480,7 +487,7 @@ func migrateDatabaseIfNeeded(db *sql.DB) error {
 
 	// Copy data from old table to new table
 	if _, err := tx.Exec(`
-		INSERT INTO components_new 
+		INSERT INTO components_new
 		SELECT * FROM components
 	`); err != nil {
 		return fmt.Errorf("failed to copy data to temporary table: %w", err)
@@ -564,7 +571,7 @@ func (s *Storage) insertComponent(tx *sql.Tx, component *types.Component) (int64
 	// query for the component ID
 	var componentID int64
 	err = tx.QueryRow(`
-		SELECT id FROM components 
+		SELECT id FROM components
 		WHERE name = ? AND language = ?
 	`, component.Name, string(component.Language)).Scan(&componentID)
 

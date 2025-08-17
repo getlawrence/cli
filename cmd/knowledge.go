@@ -162,8 +162,8 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to update knowledge base: %w", err)
 	}
 
-	// Save to file
-	storageClient, err := storage.NewStorage("")
+	// Save to database
+	storageClient, err := storage.NewStorage("knowledge.db")
 	if err != nil {
 		return fmt.Errorf("failed to create storage: %w", err)
 	}
@@ -341,19 +341,19 @@ func runUpdateAllLanguagesParallel(supportedLanguages []types.ComponentLanguage,
 		}
 	}
 
-	// Save to file
-	storageClient, err := storage.NewStorage("")
+	// Save to database
+	storageClient, err := storage.NewStorage("knowledge.db")
 	if err != nil {
 		return fmt.Errorf("failed to create storage: %w", err)
 	}
 	defer storageClient.Close()
 
-	if err := storageClient.SaveKnowledgeBase(combinedKB, outputPath); err != nil {
+	if err := storageClient.SaveKnowledgeBase(combinedKB, ""); err != nil {
 		return fmt.Errorf("failed to save combined knowledge base: %w", err)
 	}
 
 	fmt.Printf("\n🎉 All supported languages updated successfully!\n")
-	fmt.Printf("📁 Saved to: %s\n", outputPath)
+	fmt.Printf("📁 Saved to: knowledge.db\n")
 	fmt.Printf("📊 Total components: %d\n", combinedKB.Statistics.TotalComponents)
 	fmt.Printf("📦 Total versions: %d\n", combinedKB.Statistics.TotalVersions)
 
@@ -442,7 +442,7 @@ func runQuery(cmd *cobra.Command, args []string) error {
 	filePath, _ := cmd.Flags().GetString("file")
 
 	// Load knowledge base
-	storageClient, err := storage.NewStorage("")
+	storageClient, err := storage.NewStorage("knowledge.db")
 	if err != nil {
 		return fmt.Errorf("failed to create storage: %w", err)
 	}
@@ -483,8 +483,8 @@ func runInfo(cmd *cobra.Command, args []string) error {
 	filePath, _ := cmd.Flags().GetString("file")
 	outputFormat, _ := cmd.Flags().GetString("output")
 
-	// Load knowledge base
-	storageClient, err := storage.NewStorage("")
+	// Load knowledge base from the same database file used by update command
+	storageClient, err := storage.NewStorage("knowledge.db")
 	if err != nil {
 		return fmt.Errorf("failed to create storage: %w", err)
 	}

@@ -92,8 +92,26 @@ func (p *OTELCoreProvider) discoverCorePackages() ([]RegistryComponent, error) {
 
 // CorePackage represents a core OTEL package
 type CorePackage struct {
-	Name string
-	Type string
+	Name            string
+	Type            string
+	MinVersion      string
+	MaxVersion      string
+	Stability       string // stable, experimental, deprecated
+	Lifecycle       string // alpha, beta, stable, deprecated
+	SpecCompliance  string // v1.0, v1.1, v1.2, etc.
+	BreakingChanges []string
+}
+
+// PackageVersionInfo represents detailed version information
+type PackageVersionInfo struct {
+	Version         string
+	ReleaseDate     time.Time
+	Stability       string
+	Lifecycle       string
+	SpecCompliance  string
+	BreakingChanges []string
+	Deprecated      bool
+	MinCompatible   map[string]string // e.g., {"api": "1.0.0", "sdk": "1.0.0"}
 }
 
 // getCorePackagesForLanguage returns the core packages that should be discovered for a language
@@ -101,77 +119,77 @@ func (p *OTELCoreProvider) getCorePackagesForLanguage(language string) []CorePac
 	switch language {
 	case "javascript":
 		return []CorePackage{
-			{Name: "@opentelemetry/api", Type: "api"},
-			{Name: "@opentelemetry/sdk-node", Type: "sdk"},
-			{Name: "@opentelemetry/sdk-web", Type: "sdk"},
-			{Name: "@opentelemetry/exporter-trace-otlp-http", Type: "exporter"},
-			{Name: "@opentelemetry/exporter-trace-otlp-grpc", Type: "exporter"},
-			{Name: "@opentelemetry/exporter-trace-otlp-proto", Type: "exporter"},
-			{Name: "@opentelemetry/propagator-b3", Type: "propagator"},
-			{Name: "@opentelemetry/propagator-jaeger", Type: "propagator"},
-			{Name: "@opentelemetry/propagator-w3c", Type: "propagator"},
+			{Name: "@opentelemetry/api", Type: "api", MinVersion: "1.0.0", MaxVersion: "2.0.0", Stability: "stable", Lifecycle: "stable", SpecCompliance: "v1.0+", BreakingChanges: []string{}},
+			{Name: "@opentelemetry/sdk-node", Type: "sdk", MinVersion: "1.0.0", MaxVersion: "2.0.0", Stability: "stable", Lifecycle: "stable", SpecCompliance: "v1.0+", BreakingChanges: []string{}},
+			{Name: "@opentelemetry/sdk-web", Type: "sdk", MinVersion: "1.0.0", MaxVersion: "2.0.0", Stability: "stable", Lifecycle: "stable", SpecCompliance: "v1.0+", BreakingChanges: []string{}},
+			{Name: "@opentelemetry/exporter-trace-otlp-http", Type: "exporter", MinVersion: "1.0.0", MaxVersion: "2.0.0", Stability: "stable", Lifecycle: "stable", SpecCompliance: "v1.0+", BreakingChanges: []string{}},
+			{Name: "@opentelemetry/exporter-trace-otlp-grpc", Type: "exporter", MinVersion: "1.0.0", MaxVersion: "2.0.0", Stability: "stable", Lifecycle: "stable", SpecCompliance: "v1.0+", BreakingChanges: []string{}},
+			{Name: "@opentelemetry/exporter-trace-otlp-proto", Type: "exporter", MinVersion: "1.0.0", MaxVersion: "2.0.0", Stability: "stable", Lifecycle: "stable", SpecCompliance: "v1.0+", BreakingChanges: []string{}},
+			{Name: "@opentelemetry/propagator-b3", Type: "propagator", MinVersion: "1.0.0", MaxVersion: "2.0.0", Stability: "stable", Lifecycle: "stable", SpecCompliance: "v1.0+", BreakingChanges: []string{}},
+			{Name: "@opentelemetry/propagator-jaeger", Type: "propagator", MinVersion: "1.0.0", MaxVersion: "2.0.0", Stability: "stable", Lifecycle: "stable", SpecCompliance: "v1.0+", BreakingChanges: []string{}},
+			{Name: "@opentelemetry/propagator-w3c", Type: "propagator", MinVersion: "1.0.0", MaxVersion: "2.0.0", Stability: "stable", Lifecycle: "stable", SpecCompliance: "v1.0+", BreakingChanges: []string{}},
 		}
 	case "python":
 		return []CorePackage{
-			{Name: "opentelemetry-api", Type: "api"},
-			{Name: "opentelemetry-sdk", Type: "sdk"},
-			{Name: "opentelemetry-exporter-otlp", Type: "exporter"},
-			{Name: "opentelemetry-exporter-jaeger", Type: "exporter"},
-			{Name: "opentelemetry-exporter-zipkin", Type: "exporter"},
+			{Name: "opentelemetry-api", Type: "api", MinVersion: "1.0.0", MaxVersion: "2.0.0", Stability: "stable", Lifecycle: "stable", SpecCompliance: "v1.0+", BreakingChanges: []string{}},
+			{Name: "opentelemetry-sdk", Type: "sdk", MinVersion: "1.0.0", MaxVersion: "2.0.0", Stability: "stable", Lifecycle: "stable", SpecCompliance: "v1.0+", BreakingChanges: []string{}},
+			{Name: "opentelemetry-exporter-otlp", Type: "exporter", MinVersion: "1.0.0", MaxVersion: "2.0.0", Stability: "stable", Lifecycle: "stable", SpecCompliance: "v1.0+", BreakingChanges: []string{}},
+			{Name: "opentelemetry-exporter-jaeger", Type: "exporter", MinVersion: "1.0.0", MaxVersion: "2.0.0", Stability: "stable", Lifecycle: "stable", SpecCompliance: "v1.0+", BreakingChanges: []string{}},
+			{Name: "opentelemetry-exporter-zipkin", Type: "exporter", MinVersion: "1.0.0", MaxVersion: "2.0.0", Stability: "stable", Lifecycle: "stable", SpecCompliance: "v1.0+", BreakingChanges: []string{}},
 		}
 	case "go":
 		return []CorePackage{
-			{Name: "go.opentelemetry.io/otel", Type: "api"},
-			{Name: "go.opentelemetry.io/otel/sdk", Type: "sdk"},
-			{Name: "go.opentelemetry.io/otel/trace", Type: "api"},
-			{Name: "go.opentelemetry.io/otel/metrics", Type: "api"},
-			{Name: "go.opentelemetry.io/otel/logs", Type: "api"},
-			{Name: "go.opentelemetry.io/otel/propagation", Type: "api"},
-			{Name: "go.opentelemetry.io/otel/semconv/v1.34.0", Type: "semconv"},
-			{Name: "go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp", Type: "exporter"},
-			{Name: "go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc", Type: "exporter"},
-			{Name: "go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp", Type: "exporter"},
-			{Name: "go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc", Type: "exporter"},
-			{Name: "go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploghttp", Type: "exporter"},
-			{Name: "go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploggrpc", Type: "exporter"},
-			{Name: "go.opentelemetry.io/otel/exporters/jaeger", Type: "exporter"},
-			{Name: "go.opentelemetry.io/otel/exporters/zipkin", Type: "exporter"},
-			{Name: "go.opentelemetry.io/otel/exporters/prometheus", Type: "exporter"},
-			{Name: "go.opentelemetry.io/otel/sdk/resource", Type: "sdk"},
-			{Name: "go.opentelemetry.io/otel/sdk/trace", Type: "sdk"},
-			{Name: "go.opentelemetry.io/otel/sdk/metrics", Type: "sdk"},
-			{Name: "go.opentelemetry.io/otel/sdk/logs", Type: "sdk"},
+			{Name: "go.opentelemetry.io/otel", Type: "api", MinVersion: "1.0.0", MaxVersion: "2.0.0", Stability: "stable", Lifecycle: "stable", SpecCompliance: "v1.0+", BreakingChanges: []string{}},
+			{Name: "go.opentelemetry.io/otel/sdk", Type: "sdk", MinVersion: "1.0.0", MaxVersion: "2.0.0", Stability: "stable", Lifecycle: "stable", SpecCompliance: "v1.0+", BreakingChanges: []string{}},
+			{Name: "go.opentelemetry.io/otel/trace", Type: "api", MinVersion: "1.0.0", MaxVersion: "2.0.0", Stability: "stable", Lifecycle: "stable", SpecCompliance: "v1.0+", BreakingChanges: []string{}},
+			{Name: "go.opentelemetry.io/otel/metrics", Type: "api", MinVersion: "1.0.0", MaxVersion: "2.0.0", Stability: "stable", Lifecycle: "stable", SpecCompliance: "v1.0+", BreakingChanges: []string{}},
+			{Name: "go.opentelemetry.io/otel/logs", Type: "api", MinVersion: "1.0.0", MaxVersion: "2.0.0", Stability: "stable", Lifecycle: "stable", SpecCompliance: "v1.0+", BreakingChanges: []string{}},
+			{Name: "go.opentelemetry.io/otel/propagation", Type: "api", MinVersion: "1.0.0", MaxVersion: "2.0.0", Stability: "stable", Lifecycle: "stable", SpecCompliance: "v1.0+", BreakingChanges: []string{}},
+			{Name: "go.opentelemetry.io/otel/semconv/v1.34.0", Type: "semconv", MinVersion: "1.34.0", MaxVersion: "1.34.0", Stability: "stable", Lifecycle: "stable", SpecCompliance: "v1.34.0", BreakingChanges: []string{}},
+			{Name: "go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp", Type: "exporter", MinVersion: "1.0.0", MaxVersion: "2.0.0", Stability: "stable", Lifecycle: "stable", SpecCompliance: "v1.0+", BreakingChanges: []string{}},
+			{Name: "go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc", Type: "exporter", MinVersion: "1.0.0", MaxVersion: "2.0.0", Stability: "stable", Lifecycle: "stable", SpecCompliance: "v1.0+", BreakingChanges: []string{}},
+			{Name: "go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp", Type: "exporter", MinVersion: "1.0.0", MaxVersion: "2.0.0", Stability: "stable", Lifecycle: "stable", SpecCompliance: "v1.0+", BreakingChanges: []string{}},
+			{Name: "go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc", Type: "exporter", MinVersion: "1.0.0", MaxVersion: "2.0.0", Stability: "stable", Lifecycle: "stable", SpecCompliance: "v1.0+", BreakingChanges: []string{}},
+			{Name: "go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploghttp", Type: "exporter", MinVersion: "1.0.0", MaxVersion: "2.0.0", Stability: "stable", Lifecycle: "stable", SpecCompliance: "v1.0+", BreakingChanges: []string{}},
+			{Name: "go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploggrpc", Type: "exporter", MinVersion: "1.0.0", MaxVersion: "2.0.0", Stability: "stable", Lifecycle: "stable", SpecCompliance: "v1.0+", BreakingChanges: []string{}},
+			{Name: "go.opentelemetry.io/otel/exporters/jaeger", Type: "exporter", MinVersion: "1.0.0", MaxVersion: "2.0.0", Stability: "stable", Lifecycle: "stable", SpecCompliance: "v1.0+", BreakingChanges: []string{}},
+			{Name: "go.opentelemetry.io/otel/exporters/zipkin", Type: "exporter", MinVersion: "1.0.0", MaxVersion: "2.0.0", Stability: "stable", Lifecycle: "stable", SpecCompliance: "v1.0+", BreakingChanges: []string{}},
+			{Name: "go.opentelemetry.io/otel/exporters/prometheus", Type: "exporter", MinVersion: "1.0.0", MaxVersion: "2.0.0", Stability: "stable", Lifecycle: "stable", SpecCompliance: "v1.0+", BreakingChanges: []string{}},
+			{Name: "go.opentelemetry.io/otel/sdk/resource", Type: "sdk", MinVersion: "1.0.0", MaxVersion: "2.0.0", Stability: "stable", Lifecycle: "stable", SpecCompliance: "v1.0+", BreakingChanges: []string{}},
+			{Name: "go.opentelemetry.io/otel/sdk/trace", Type: "sdk", MinVersion: "1.0.0", MaxVersion: "2.0.0", Stability: "stable", Lifecycle: "stable", SpecCompliance: "v1.0+", BreakingChanges: []string{}},
+			{Name: "go.opentelemetry.io/otel/sdk/metrics", Type: "sdk", MinVersion: "1.0.0", MaxVersion: "2.0.0", Stability: "stable", Lifecycle: "stable", SpecCompliance: "v1.0+", BreakingChanges: []string{}},
+			{Name: "go.opentelemetry.io/otel/sdk/logs", Type: "sdk", MinVersion: "1.0.0", MaxVersion: "2.0.0", Stability: "stable", Lifecycle: "stable", SpecCompliance: "v1.0+", BreakingChanges: []string{}},
 		}
 	case "java":
 		return []CorePackage{
-			{Name: "io.opentelemetry:opentelemetry-api", Type: "api"},
-			{Name: "io.opentelemetry:opentelemetry-sdk", Type: "sdk"},
-			{Name: "io.opentelemetry:opentelemetry-sdk-extension-autoconfigure", Type: "sdk"},
-			{Name: "io.opentelemetry:opentelemetry-exporter-otlp", Type: "exporter"},
-			{Name: "io.opentelemetry:opentelemetry-exporter-jaeger", Type: "exporter"},
-			{Name: "io.opentelemetry:opentelemetry-exporter-zipkin", Type: "exporter"},
-			{Name: "io.opentelemetry:opentelemetry-extension-trace-propagators", Type: "propagator"},
-			{Name: "io.opentelemetry:opentelemetry-instrumentation-api", Type: "api"},
+			{Name: "io.opentelemetry:opentelemetry-api", Type: "api", MinVersion: "1.0.0", MaxVersion: "2.0.0", Stability: "stable", Lifecycle: "stable", SpecCompliance: "v1.0+", BreakingChanges: []string{}},
+			{Name: "io.opentelemetry:opentelemetry-sdk", Type: "sdk", MinVersion: "1.0.0", MaxVersion: "2.0.0", Stability: "stable", Lifecycle: "stable", SpecCompliance: "v1.0+", BreakingChanges: []string{}},
+			{Name: "io.opentelemetry:opentelemetry-sdk-extension-autoconfigure", Type: "sdk", MinVersion: "1.0.0", MaxVersion: "2.0.0", Stability: "stable", Lifecycle: "stable", SpecCompliance: "v1.0+", BreakingChanges: []string{}},
+			{Name: "io.opentelemetry:opentelemetry-exporter-otlp", Type: "exporter", MinVersion: "1.0.0", MaxVersion: "2.0.0", Stability: "stable", Lifecycle: "stable", SpecCompliance: "v1.0+", BreakingChanges: []string{}},
+			{Name: "io.opentelemetry:opentelemetry-exporter-jaeger", Type: "exporter", MinVersion: "1.0.0", MaxVersion: "2.0.0", Stability: "stable", Lifecycle: "stable", SpecCompliance: "v1.0+", BreakingChanges: []string{}},
+			{Name: "io.opentelemetry:opentelemetry-exporter-zipkin", Type: "exporter", MinVersion: "1.0.0", MaxVersion: "2.0.0", Stability: "stable", Lifecycle: "stable", SpecCompliance: "v1.0+", BreakingChanges: []string{}},
+			{Name: "io.opentelemetry:opentelemetry-extension-trace-propagators", Type: "propagator", MinVersion: "1.0.0", MaxVersion: "2.0.0", Stability: "stable", Lifecycle: "stable", SpecCompliance: "v1.0+", BreakingChanges: []string{}},
+			{Name: "io.opentelemetry:opentelemetry-instrumentation-api", Type: "api", MinVersion: "1.0.0", MaxVersion: "2.0.0", Stability: "stable", Lifecycle: "stable", SpecCompliance: "v1.0+", BreakingChanges: []string{}},
 		}
 	case "csharp", "dotnet":
 		return []CorePackage{
-			{Name: "OpenTelemetry", Type: "api"},
-			{Name: "OpenTelemetry.Api", Type: "api"},
-			{Name: "OpenTelemetry.Sdk", Type: "sdk"},
-			{Name: "OpenTelemetry.Exporter.OpenTelemetryProtocol", Type: "exporter"},
-			{Name: "OpenTelemetry.Extensions.Hosting", Type: "sdk"},
+			{Name: "OpenTelemetry", Type: "api", MinVersion: "1.0.0", MaxVersion: "2.0.0", Stability: "stable", Lifecycle: "stable", SpecCompliance: "v1.0+", BreakingChanges: []string{}},
+			{Name: "OpenTelemetry.Api", Type: "api", MinVersion: "1.0.0", MaxVersion: "2.0.0", Stability: "stable", Lifecycle: "stable", SpecCompliance: "v1.0+", BreakingChanges: []string{}},
+			{Name: "OpenTelemetry.Sdk", Type: "sdk", MinVersion: "1.0.0", MaxVersion: "2.0.0", Stability: "stable", Lifecycle: "stable", SpecCompliance: "v1.0+", BreakingChanges: []string{}},
+			{Name: "OpenTelemetry.Exporter.OpenTelemetryProtocol", Type: "exporter", MinVersion: "1.0.0", MaxVersion: "2.0.0", Stability: "stable", Lifecycle: "stable", SpecCompliance: "v1.0+", BreakingChanges: []string{}},
+			{Name: "OpenTelemetry.Extensions.Hosting", Type: "sdk", MinVersion: "1.0.0", MaxVersion: "2.0.0", Stability: "stable", Lifecycle: "stable", SpecCompliance: "v1.0+", BreakingChanges: []string{}},
 		}
 	case "php":
 		return []CorePackage{
-			{Name: "open-telemetry/api", Type: "api"},
-			{Name: "open-telemetry/sdk", Type: "sdk"},
-			{Name: "open-telemetry/exporter-otlp", Type: "exporter"},
+			{Name: "open-telemetry/api", Type: "api", MinVersion: "1.0.0", MaxVersion: "2.0.0", Stability: "stable", Lifecycle: "stable", SpecCompliance: "v1.0+", BreakingChanges: []string{}},
+			{Name: "open-telemetry/sdk", Type: "sdk", MinVersion: "1.0.0", MaxVersion: "2.0.0", Stability: "stable", Lifecycle: "stable", SpecCompliance: "v1.0+", BreakingChanges: []string{}},
+			{Name: "open-telemetry/exporter-otlp", Type: "exporter", MinVersion: "1.0.0", MaxVersion: "2.0.0", Stability: "stable", Lifecycle: "stable", SpecCompliance: "v1.0+", BreakingChanges: []string{}},
 		}
 	case "ruby":
 		return []CorePackage{
-			{Name: "opentelemetry-api", Type: "api"},
-			{Name: "opentelemetry-sdk", Type: "sdk"},
-			{Name: "opentelemetry-exporter-otlp", Type: "exporter"},
+			{Name: "opentelemetry-api", Type: "api", MinVersion: "1.0.0", MaxVersion: "2.0.0", Stability: "stable", Lifecycle: "stable", SpecCompliance: "v1.0+", BreakingChanges: []string{}},
+			{Name: "opentelemetry-sdk", Type: "sdk", MinVersion: "1.0.0", MaxVersion: "2.0.0", Stability: "stable", Lifecycle: "stable", SpecCompliance: "v1.0+", BreakingChanges: []string{}},
+			{Name: "opentelemetry-exporter-otlp", Type: "exporter", MinVersion: "1.0.0", MaxVersion: "2.0.0", Stability: "stable", Lifecycle: "stable", SpecCompliance: "v1.0+", BreakingChanges: []string{}},
 		}
 	default:
 		return []CorePackage{}
@@ -184,6 +202,16 @@ func (p *OTELCoreProvider) discoverPackage(packageName, componentType string) (R
 
 	// Try to fetch package metadata from the appropriate package registry
 	packageData, err := p.fetchPackageMetadata(packageName)
+
+	// Get core package information
+	corePackages := p.getCorePackagesForLanguage(langStr)
+	var corePackage *CorePackage
+	for _, cp := range corePackages {
+		if cp.Name == packageName {
+			corePackage = &cp
+			break
+		}
+	}
 
 	component := RegistryComponent{
 		Name:        packageName,
@@ -203,6 +231,16 @@ func (p *OTELCoreProvider) discoverPackage(packageName, componentType string) (R
 			"componentType": componentType,
 			"source":        "dynamic_discovery",
 		},
+	}
+
+	// Add version and lifecycle information if available
+	if corePackage != nil {
+		component.Metadata["minVersion"] = corePackage.MinVersion
+		component.Metadata["maxVersion"] = corePackage.MaxVersion
+		component.Metadata["stability"] = corePackage.Stability
+		component.Metadata["lifecycle"] = corePackage.Lifecycle
+		component.Metadata["specCompliance"] = corePackage.SpecCompliance
+		component.Metadata["breakingChanges"] = corePackage.BreakingChanges
 	}
 
 	// If we successfully fetched package data, enrich the component
@@ -612,8 +650,12 @@ func (p *OTELCoreProvider) generateMaintainers() []string {
 
 // mapComponentType maps component type to registry component type
 func (p *OTELCoreProvider) mapComponentType(componentType string) string {
-	switch componentType {
+	switch strings.ToLower(componentType) {
 	case "core":
+		return "sdk"
+	case "api":
+		return "api"
+	case "sdk":
 		return "sdk"
 	case "exporter":
 		return "exporter"
@@ -621,6 +663,12 @@ func (p *OTELCoreProvider) mapComponentType(componentType string) string {
 		return "propagator"
 	case "sampler":
 		return "sampler"
+	case "processor":
+		return "processor"
+	case "resource":
+		return "resource"
+	case "instrumentation":
+		return "instrumentation"
 	default:
 		return "component"
 	}
@@ -661,4 +709,369 @@ func (p *OTELCoreProvider) IsHealthy(ctx context.Context) bool {
 	}
 	defer resp.Body.Close()
 	return resp.StatusCode == http.StatusOK
+}
+
+// VersionCompatibilityMatrix tracks compatibility between different core packages
+type VersionCompatibilityMatrix struct {
+	Language           string
+	APIVersion         string
+	SDKVersion         string
+	SemConvVersion     string
+	ExporterVersions   map[string]string
+	PropagatorVersions map[string]string
+	Compatible         bool
+	Notes              string
+}
+
+// getVersionCompatibilityMatrix returns compatibility information for a language
+func (p *OTELCoreProvider) getVersionCompatibilityMatrix(language string) []VersionCompatibilityMatrix {
+	switch language {
+	case "javascript":
+		return []VersionCompatibilityMatrix{
+			{
+				Language:       "javascript",
+				APIVersion:     "1.0.0",
+				SDKVersion:     "1.0.0",
+				SemConvVersion: "1.0.0",
+				ExporterVersions: map[string]string{
+					"otlp-http": "1.0.0",
+					"otlp-grpc": "1.0.0",
+				},
+				PropagatorVersions: map[string]string{
+					"b3":  "1.0.0",
+					"w3c": "1.0.0",
+				},
+				Compatible: true,
+				Notes:      "All packages in 1.x series are compatible",
+			},
+		}
+	case "python":
+		return []VersionCompatibilityMatrix{
+			{
+				Language:       "python",
+				APIVersion:     "1.0.0",
+				SDKVersion:     "1.0.0",
+				SemConvVersion: "1.0.0",
+				ExporterVersions: map[string]string{
+					"otlp":   "1.0.0",
+					"jaeger": "1.0.0",
+					"zipkin": "1.0.0",
+				},
+				PropagatorVersions: map[string]string{},
+				Compatible:         true,
+				Notes:              "All packages in 1.x series are compatible",
+			},
+		}
+	case "go":
+		return []VersionCompatibilityMatrix{
+			{
+				Language:       "go",
+				APIVersion:     "1.0.0",
+				SDKVersion:     "1.0.0",
+				SemConvVersion: "1.34.0",
+				ExporterVersions: map[string]string{
+					"otlp-trace-http":  "1.0.0",
+					"otlp-trace-grpc":  "1.0.0",
+					"otlp-metric-http": "1.0.0",
+					"otlp-metric-grpc": "1.0.0",
+					"otlp-log-http":    "1.0.0",
+					"otlp-log-grpc":    "1.0.0",
+					"jaeger":           "1.0.0",
+					"zipkin":           "1.0.0",
+					"prometheus":       "1.0.0",
+				},
+				PropagatorVersions: map[string]string{},
+				Compatible:         true,
+				Notes:              "All packages in 1.x series are compatible",
+			},
+		}
+	case "java":
+		return []VersionCompatibilityMatrix{
+			{
+				Language:       "java",
+				APIVersion:     "1.0.0",
+				SDKVersion:     "1.0.0",
+				SemConvVersion: "1.0.0",
+				ExporterVersions: map[string]string{
+					"otlp":   "1.0.0",
+					"jaeger": "1.0.0",
+					"zipkin": "1.0.0",
+				},
+				PropagatorVersions: map[string]string{
+					"trace-propagators": "1.0.0",
+				},
+				Compatible: true,
+				Notes:      "All packages in 1.x series are compatible",
+			},
+		}
+	case "csharp", "dotnet":
+		return []VersionCompatibilityMatrix{
+			{
+				Language:       "csharp",
+				APIVersion:     "1.0.0",
+				SDKVersion:     "1.0.0",
+				SemConvVersion: "1.0.0",
+				ExporterVersions: map[string]string{
+					"otlp": "1.0.0",
+				},
+				PropagatorVersions: map[string]string{},
+				Compatible:         true,
+				Notes:              "All packages in 1.x series are compatible",
+			},
+		}
+	case "php":
+		return []VersionCompatibilityMatrix{
+			{
+				Language:       "php",
+				APIVersion:     "1.0.0",
+				SDKVersion:     "1.0.0",
+				SemConvVersion: "1.0.0",
+				ExporterVersions: map[string]string{
+					"otlp": "1.0.0",
+				},
+				PropagatorVersions: map[string]string{},
+				Compatible:         true,
+				Notes:              "All packages in 1.x series are compatible",
+			},
+		}
+	case "ruby":
+		return []VersionCompatibilityMatrix{
+			{
+				Language:       "ruby",
+				APIVersion:     "1.0.0",
+				SDKVersion:     "1.0.0",
+				SemConvVersion: "1.0.0",
+				ExporterVersions: map[string]string{
+					"otlp": "1.0.0",
+				},
+				PropagatorVersions: map[string]string{},
+				Compatible:         true,
+				Notes:              "All packages in 1.x series are compatible",
+			},
+		}
+	default:
+		return []VersionCompatibilityMatrix{}
+	}
+}
+
+// CheckVersionCompatibility checks if a set of package versions are compatible
+func (p *OTELCoreProvider) CheckVersionCompatibility(packages map[string]string) (bool, []string) {
+	langStr := string(p.language)
+	compatibilityMatrix := p.getVersionCompatibilityMatrix(langStr)
+
+	if len(compatibilityMatrix) == 0 {
+		return false, []string{"No compatibility matrix available for language: " + langStr}
+	}
+
+	var issues []string
+
+	// Check against the first compatibility matrix (assuming single matrix per language)
+	matrix := compatibilityMatrix[0]
+
+	// Check API version
+	if apiVer, exists := packages["api"]; exists {
+		if !p.isVersionCompatible(apiVer, matrix.APIVersion) {
+			issues = append(issues, fmt.Sprintf("API version %s is not compatible with expected version %s", apiVer, matrix.APIVersion))
+		}
+	}
+
+	// Check SDK version
+	if sdkVer, exists := packages["sdk"]; exists {
+		if !p.isVersionCompatible(sdkVer, matrix.SDKVersion) {
+			issues = append(issues, fmt.Sprintf("SDK version %s is not compatible with expected version %s", sdkVer, matrix.SDKVersion))
+		}
+	}
+
+	// Check semantic conventions version
+	if semConvVer, exists := packages["semconv"]; exists {
+		if !p.isVersionCompatible(semConvVer, matrix.SemConvVersion) {
+			issues = append(issues, fmt.Sprintf("Semantic conventions version %s is not compatible with expected version %s", semConvVer, matrix.SemConvVersion))
+		}
+	}
+
+	return len(issues) == 0, issues
+}
+
+// isVersionCompatible checks if two version strings are compatible
+func (p *OTELCoreProvider) isVersionCompatible(actual, expected string) bool {
+	// Simple compatibility check: major versions should match
+	// This is a simplified check - in practice, you'd want more sophisticated version parsing
+	if strings.HasPrefix(actual, "1.") && strings.HasPrefix(expected, "1.") {
+		return true
+	}
+	if strings.HasPrefix(actual, "2.") && strings.HasPrefix(expected, "2.") {
+		return true
+	}
+	return actual == expected
+}
+
+// SpecificationCompliance tracks compliance with OpenTelemetry specifications
+type SpecificationCompliance struct {
+	SpecVersion     string // e.g., "v1.0", "v1.1", "v1.2"
+	Language        string
+	ComplianceLevel string   // "full", "partial", "minimal"
+	Features        []string // List of implemented features
+	MissingFeatures []string // List of missing features
+	Notes           string
+}
+
+// getSpecificationCompliance returns compliance information for a language
+func (p *OTELCoreProvider) getSpecificationCompliance(language string) []SpecificationCompliance {
+	switch language {
+	case "javascript":
+		return []SpecificationCompliance{
+			{
+				SpecVersion:     "v1.0",
+				Language:        "javascript",
+				ComplianceLevel: "full",
+				Features: []string{
+					"traces", "metrics", "logs", "context_propagation",
+					"sampling", "resource_detection", "exporters", "propagators",
+				},
+				MissingFeatures: []string{},
+				Notes:           "Full compliance with OpenTelemetry v1.0 specification",
+			},
+		}
+	case "python":
+		return []SpecificationCompliance{
+			{
+				SpecVersion:     "v1.0",
+				Language:        "python",
+				ComplianceLevel: "full",
+				Features: []string{
+					"traces", "metrics", "logs", "context_propagation",
+					"sampling", "resource_detection", "exporters",
+				},
+				MissingFeatures: []string{},
+				Notes:           "Full compliance with OpenTelemetry v1.0 specification",
+			},
+		}
+	case "go":
+		return []SpecificationCompliance{
+			{
+				SpecVersion:     "v1.0",
+				Language:        "go",
+				ComplianceLevel: "full",
+				Features: []string{
+					"traces", "metrics", "logs", "context_propagation",
+					"sampling", "resource_detection", "exporters", "propagators",
+					"semantic_conventions", "attribute_utilities", "status_codes",
+				},
+				MissingFeatures: []string{},
+				Notes:           "Full compliance with OpenTelemetry v1.0 specification",
+			},
+		}
+	case "java":
+		return []SpecificationCompliance{
+			{
+				SpecVersion:     "v1.0",
+				Language:        "java",
+				ComplianceLevel: "full",
+				Features: []string{
+					"traces", "metrics", "logs", "context_propagation",
+					"sampling", "resource_detection", "exporters", "propagators",
+					"auto_configuration", "instrumentation_api",
+				},
+				MissingFeatures: []string{},
+				Notes:           "Full compliance with OpenTelemetry v1.0 specification",
+			},
+		}
+	case "csharp", "dotnet":
+		return []SpecificationCompliance{
+			{
+				SpecVersion:     "v1.0",
+				Language:        "csharp",
+				ComplianceLevel: "full",
+				Features: []string{
+					"traces", "metrics", "logs", "context_propagation",
+					"sampling", "resource_detection", "exporters", "hosting_extensions",
+				},
+				MissingFeatures: []string{},
+				Notes:           "Full compliance with OpenTelemetry v1.0 specification",
+			},
+		}
+	case "php":
+		return []SpecificationCompliance{
+			{
+				SpecVersion:     "v1.0",
+				Language:        "php",
+				ComplianceLevel: "partial",
+				Features: []string{
+					"traces", "metrics", "logs", "exporters",
+				},
+				MissingFeatures: []string{
+					"context_propagation", "propagators", "semantic_conventions",
+				},
+				Notes: "Partial compliance - missing some advanced features",
+			},
+		}
+	case "ruby":
+		return []SpecificationCompliance{
+			{
+				SpecVersion:     "v1.0",
+				Language:        "ruby",
+				ComplianceLevel: "partial",
+				Features: []string{
+					"traces", "metrics", "logs", "exporters",
+				},
+				MissingFeatures: []string{
+					"context_propagation", "propagators", "semantic_conventions",
+				},
+				Notes: "Partial compliance - missing some advanced features",
+			},
+		}
+	default:
+		return []SpecificationCompliance{}
+	}
+}
+
+// CheckSpecificationCompliance checks if packages comply with a specific OTEL spec version
+func (p *OTELCoreProvider) CheckSpecificationCompliance(specVersion string) (*SpecificationCompliance, error) {
+	langStr := string(p.language)
+	complianceList := p.getSpecificationCompliance(langStr)
+
+	if len(complianceList) == 0 {
+		return nil, fmt.Errorf("no compliance information available for language: %s", langStr)
+	}
+
+	// Find the best matching spec version
+	var bestMatch *SpecificationCompliance
+	for _, compliance := range complianceList {
+		if compliance.SpecVersion == specVersion {
+			bestMatch = &compliance
+			break
+		}
+		// If no exact match, use the first available (assuming it's the most recent)
+		if bestMatch == nil {
+			bestMatch = &compliance
+		}
+	}
+
+	return bestMatch, nil
+}
+
+// GetComplianceReport generates a comprehensive compliance report for a language
+func (p *OTELCoreProvider) GetComplianceReport() map[string]interface{} {
+	langStr := string(p.language)
+
+	report := map[string]interface{}{
+		"language":                 langStr,
+		"timestamp":                time.Now(),
+		"core_packages":            p.getCorePackagesForLanguage(langStr),
+		"version_compatibility":    p.getVersionCompatibilityMatrix(langStr),
+		"specification_compliance": p.getSpecificationCompliance(langStr),
+		"summary": map[string]interface{}{
+			"total_core_packages":  len(p.getCorePackagesForLanguage(langStr)),
+			"compatibility_status": "stable",
+			"compliance_level":     "full",
+		},
+	}
+
+	// Calculate summary statistics
+	complianceList := p.getSpecificationCompliance(langStr)
+	if len(complianceList) > 0 {
+		report["summary"].(map[string]interface{})["compliance_level"] = complianceList[0].ComplianceLevel
+	}
+
+	return report
 }

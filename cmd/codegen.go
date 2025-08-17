@@ -100,6 +100,13 @@ func runCodegen(cmd *cobra.Command, args []string) error {
 	// Create analysis engine
 	codebaseAnalyzer := detector.NewCodebaseAnalyzer([]detector.IssueDetector{
 		issues.NewMissingOTelDetector(),
+		// Add knowledge-based detector if available
+		func() detector.IssueDetector {
+			if detector, err := issues.NewKnowledgeBasedDetector(); err == nil {
+				return detector
+			}
+			return nil
+		}(),
 	}, map[string]detector.Language{
 		"go":         languages.NewGoDetector(),
 		"javascript": languages.NewJavaScriptDetector(),
@@ -116,6 +123,96 @@ func runCodegen(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to initialize generator: %w", err)
 	}
 
+	// Try to create knowledge-enhanced generator if available
+	enhancedGenerator, err := generator.NewKnowledgeEnhancedGenerator(codeGenerator)
+	if err == nil {
+		defer enhancedGenerator.Close()
+		// Use enhanced generator for better recommendations
+		ui.Logf("Using knowledge-enhanced generator for better recommendations\n")
+
+		// Use the enhanced generator's GenerateWithKnowledge method
+		mode := types.GenerationMode(generationMode)
+		if mode == "" {
+			mode = codeGenerator.GetDefaultStrategy()
+		}
+
+		// Validate mode
+		if mode != types.AgentMode && mode != types.TemplateMode {
+			return fmt.Errorf("invalid generation mode %s. Valid options: agent, template", mode)
+		}
+
+		// Validate mode-specific requirements
+		if mode == types.AgentMode && agentType == "" {
+			return fmt.Errorf("agent type is required for agent mode. Use --list-agents to see available options")
+		}
+
+		// Optionally load advanced OTEL config from YAML
+		var otelCfg *types.OTELConfig
+		if configPath != "" {
+			content, err := os.ReadFile(configPath)
+			if err != nil {
+				return fmt.Errorf("failed to read config file: %w", err)
+			}
+			parsed, err := cfg.LoadOTELConfig(content)
+			if err != nil {
+				return err
+			}
+			if err := parsed.Validate(); err != nil {
+				return err
+			}
+			// Map to types.OTELConfig for now (keeps request stable)
+			converted := &types.OTELConfig{
+				ServiceName:      parsed.ServiceName,
+				ServiceVersion:   parsed.ServiceVersion,
+				Environment:      parsed.Environment,
+				ResourceAttrs:    parsed.ResourceAttrs,
+				Instrumentations: parsed.Instrumentations,
+				Propagators:      parsed.Propagators,
+				SpanProcessors:   parsed.SpanProcessors,
+				SDK:              parsed.SDK,
+			}
+			converted.Sampler.Type = parsed.Sampler.Type
+			converted.Sampler.Ratio = parsed.Sampler.Ratio
+			converted.Sampler.Parent = parsed.Sampler.Parent
+			converted.Sampler.Rules = parsed.Sampler.Rules
+			// exporters
+			converted.Exporters.Traces.Type = parsed.Exporters.Traces.Type
+			converted.Exporters.Traces.Protocol = parsed.Exporters.Traces.Protocol
+			converted.Exporters.Traces.Endpoint = parsed.Exporters.Traces.Endpoint
+			converted.Exporters.Traces.Headers = parsed.Exporters.Traces.Headers
+			converted.Exporters.Traces.Insecure = parsed.Exporters.Traces.Insecure
+			converted.Exporters.Traces.TimeoutMs = parsed.Exporters.Traces.TimeoutMs
+			converted.Exporters.Metrics.Type = parsed.Exporters.Metrics.Type
+			converted.Exporters.Metrics.Protocol = parsed.Exporters.Metrics.Protocol
+			converted.Exporters.Metrics.Endpoint = parsed.Exporters.Metrics.Endpoint
+			converted.Exporters.Metrics.Insecure = parsed.Exporters.Metrics.Insecure
+			converted.Exporters.Logs.Type = parsed.Exporters.Logs.Type
+			converted.Exporters.Logs.Protocol = parsed.Exporters.Logs.Protocol
+			converted.Exporters.Logs.Endpoint = parsed.Exporters.Logs.Endpoint
+			converted.Exporters.Logs.Insecure = parsed.Exporters.Logs.Insecure
+			otelCfg = converted
+		}
+
+		req := types.GenerationRequest{
+			CodebasePath: absPath,
+			Language:     language,
+			AgentType:    agentType,
+			Config: types.StrategyConfig{
+				Mode:            mode,
+				AgentType:       agentType,
+				OutputDirectory: outputDir,
+				DryRun:          dryRun,
+				ShowPrompt:      showPrompt,
+				SavePrompt:      savePrompt,
+			},
+			OTEL: otelCfg,
+		}
+
+		return enhancedGenerator.GenerateWithKnowledge(ctx, req)
+	} else {
+		ui.Logf("Knowledge base not available, using standard generator\n")
+	}
+
 	// Handle list commands
 	if listAgents {
 		return listAvailableAgents(codeGenerator, ui)
@@ -129,6 +226,7 @@ func runCodegen(cmd *cobra.Command, args []string) error {
 		return listAvailableStrategies(codeGenerator, ui)
 	}
 
+	// If we're using the standard generator, continue with the original logic
 	mode := types.GenerationMode(generationMode)
 	if mode == "" {
 		mode = codeGenerator.GetDefaultStrategy()
