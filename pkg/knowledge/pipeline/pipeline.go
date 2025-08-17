@@ -3,10 +3,10 @@ package pipeline
 import (
 	"context"
 	"fmt"
-	"log"
 	"strings"
 	"time"
 
+	"github.com/getlawrence/cli/internal/logger"
 	"github.com/getlawrence/cli/pkg/knowledge/providers"
 	"github.com/getlawrence/cli/pkg/knowledge/types"
 )
@@ -15,6 +15,7 @@ import (
 type Pipeline struct {
 	providerFactory providers.ProviderFactory
 	rateLimiter     *RateLimiter
+	logger          logger.Logger
 }
 
 // NewPipeline creates a new pipeline instance
@@ -22,6 +23,7 @@ func NewPipeline() *Pipeline {
 	return &Pipeline{
 		providerFactory: providers.NewProviderFactory(),
 		rateLimiter:     NewRateLimiter(100, time.Second), // 100 requests per second
+		logger:          &logger.StdoutLogger{},           // Default logger
 	}
 }
 
@@ -30,12 +32,22 @@ func NewPipelineWithProviderFactory(providerFactory providers.ProviderFactory) *
 	return &Pipeline{
 		providerFactory: providerFactory,
 		rateLimiter:     NewRateLimiter(100, time.Second),
+		logger:          &logger.StdoutLogger{}, // Default logger
+	}
+}
+
+// NewPipelineWithLogger creates a new pipeline with a custom logger
+func NewPipelineWithLogger(l logger.Logger) *Pipeline {
+	return &Pipeline{
+		providerFactory: providers.NewProviderFactory(),
+		rateLimiter:     NewRateLimiter(100, time.Second),
+		logger:          l,
 	}
 }
 
 // UpdateKnowledgeBase updates the knowledge base with fresh data for the specified language
 func (p *Pipeline) UpdateKnowledgeBase(language types.ComponentLanguage) (*types.KnowledgeBase, error) {
-	log.Printf("Starting knowledge base update for language: %s", language)
+	p.logger.Logf("Starting knowledge base update for language: %s\n", language)
 
 	// Get the provider for the specified language (for future use)
 	_, err := p.providerFactory.GetProvider(language)
@@ -55,26 +67,26 @@ func (p *Pipeline) UpdateKnowledgeBase(language types.ComponentLanguage) (*types
 	}
 
 	// Step 1: Fetch components from registry
-	log.Printf("Fetching components from %s registry...", registryProvider.GetName())
+	p.logger.Logf("Fetching components from %s registry...\n", registryProvider.GetName())
 	registryComponents, err := registryProvider.DiscoverComponents(context.Background(), string(language))
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch registry components: %w", err)
 	}
-	log.Printf("Found %d components in registry", len(registryComponents))
+	p.logger.Logf("Found %d components in registry\n", len(registryComponents))
 
 	// Step 2: Enrich with package manager data
-	log.Printf("Enriching components with %s metadata...", packageManagerProvider.GetName())
+	p.logger.Logf("Enriching components with %s metadata...\n", packageManagerProvider.GetName())
 	enrichedComponents, err := p.enrichComponentsWithPackageManager(registryComponents, packageManagerProvider)
 	if err != nil {
 		return nil, fmt.Errorf("failed to enrich components: %w", err)
 	}
 
 	// Step 3: Convert to knowledge base format
-	log.Printf("Converting to knowledge base format...")
+	p.logger.Log("Converting to knowledge base format...")
 	components := p.convertToComponents(enrichedComponents, language)
 
 	// Step 4: Generate statistics
-	log.Printf("Generating statistics...")
+	p.logger.Log("Generating statistics...")
 	statistics := p.generateStatistics(components, language)
 
 	// Step 5: Create knowledge base
@@ -92,7 +104,7 @@ func (p *Pipeline) UpdateKnowledgeBase(language types.ComponentLanguage) (*types
 		},
 	}
 
-	log.Printf("Knowledge base update completed successfully")
+	p.logger.Log("Knowledge base update completed successfully")
 	return kb, nil
 }
 
@@ -101,7 +113,7 @@ func (p *Pipeline) enrichComponentsWithPackageManager(registryComponents []provi
 	var enriched []EnrichedComponent
 
 	for i, rc := range registryComponents {
-		log.Printf("Processing component %d/%d: %s", i+1, len(registryComponents), rc.Name)
+		p.logger.Logf("Processing component %d/%d: %s\n", i+1, len(registryComponents), rc.Name)
 
 		enrichedComponent := EnrichedComponent{
 			RegistryComponent: rc,
@@ -111,7 +123,7 @@ func (p *Pipeline) enrichComponentsWithPackageManager(registryComponents []provi
 		if packageData, err := p.fetchPackageManagerData(rc.Name, packageManagerProvider); err == nil {
 			enrichedComponent.PackageData = packageData
 		} else {
-			log.Printf("Warning: Failed to fetch package manager data for %s: %v", rc.Name, err)
+			p.logger.Logf("Warning: Failed to fetch package manager data for %s: %v\n", rc.Name, err)
 		}
 
 		enriched = append(enriched, enrichedComponent)

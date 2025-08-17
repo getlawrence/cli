@@ -62,24 +62,9 @@ func (g *KnowledgeEnhancedGenerator) enhanceWithKnowledge(ctx context.Context, r
 
 	// Generate enhanced recommendations
 	recommendations := g.generateEnhancedRecommendations(ctx, analysis, req)
-	g.logger.Logf("Debug: Generated %d enhanced recommendations\n", len(recommendations))
 	if len(recommendations) > 0 {
 		g.outputEnhancedRecommendations(recommendations)
-	} else {
-		g.logger.Logf("Debug: No enhanced recommendations generated - checking packages...\n")
-		for _, dirAnalysis := range analysis.DirectoryAnalyses {
-			g.logger.Logf("Debug: Directory %s has %d packages\n", dirAnalysis.Directory, len(dirAnalysis.Packages))
-			for _, pkg := range dirAnalysis.Packages {
-				component, err := g.knowledgeClient.GetComponentByName(pkg.Name)
-				if err != nil || component == nil {
-					g.logger.Logf("Debug: Package %s not found in knowledge base\n", pkg.Name)
-				} else {
-					g.logger.Logf("Debug: Package %s found in knowledge base: %s\n", pkg.Name, component.Type)
-				}
-			}
-		}
 	}
-
 	return nil
 }
 
@@ -122,18 +107,10 @@ func (g *KnowledgeEnhancedGenerator) generateEnhancedRecommendations(ctx context
 func (g *KnowledgeEnhancedGenerator) generatePackageRecommendations(component *kbtypes.Component, pkg domain.Package, req types.GenerationRequest) []EnhancedRecommendation {
 	var recommendations []EnhancedRecommendation
 
-	g.logger.Logf("Debug: Generating recommendations for package %s (version: %s)\n", pkg.Name, pkg.Version)
-	g.logger.Logf("Debug: Component type: %s, status: %s\n", component.Type, component.Status)
-
 	// Check if this is an OpenTelemetry component
 	if g.isOTelComponent(component) {
-		g.logger.Logf("Debug: %s is an OpenTelemetry component\n", pkg.Name)
 		// Recommend latest stable version if outdated
 		latestVersion := g.getLatestStableVersion(component)
-		g.logger.Logf("Debug: Latest version for %s: %v\n", pkg.Name, latestVersion)
-		if latestVersion != nil {
-			g.logger.Logf("Debug: Comparing versions - current: %s, latest: %s\n", pkg.Version, latestVersion.Name)
-		}
 		if latestVersion != nil && latestVersion.Name != pkg.Version {
 			recommendations = append(recommendations, EnhancedRecommendation{
 				Type:        "version_update",
@@ -208,9 +185,7 @@ func (g *KnowledgeEnhancedGenerator) isOTelComponent(component *kbtypes.Componen
 
 // getLatestStableVersion returns the latest stable version of a component
 func (g *KnowledgeEnhancedGenerator) getLatestStableVersion(component *kbtypes.Component) *kbtypes.Version {
-	g.logger.Logf("Debug: Component %s has %d versions\n", component.Name, len(component.Versions))
-	for i, version := range component.Versions {
-		g.logger.Logf("Debug: Version %d: %s (status: %s, deprecated: %v)\n", i, version.Name, version.Status, version.Deprecated)
+	for _, version := range component.Versions {
 		if version.Status == kbtypes.VersionStatusLatest && !version.Deprecated {
 			return &version
 		}
@@ -218,7 +193,6 @@ func (g *KnowledgeEnhancedGenerator) getLatestStableVersion(component *kbtypes.C
 	// If no "latest" version found, return the first non-deprecated version
 	for _, version := range component.Versions {
 		if !version.Deprecated {
-			g.logger.Logf("Debug: Using first non-deprecated version: %s\n", version.Name)
 			return &version
 		}
 	}

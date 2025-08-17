@@ -72,16 +72,10 @@ func (g *Generator) Generate(ctx context.Context, req types.GenerationRequest) e
 
 	// Convert issues to opportunities
 	opportunities := g.convertIssuesToOpportunities(analysis)
-	g.logger.Logf("Debug: Found %d opportunities before filtering\n", len(opportunities))
-	for i, opp := range opportunities {
-		g.logger.Logf("Debug: Opportunity %d: Type=%s, Language=%s, FilePath=%s\n", i, opp.Type, opp.Language, opp.FilePath)
-	}
 
 	// Filter by language if specified
 	if req.Language != "" {
-		g.logger.Logf("Debug: Filtering by language: %s\n", req.Language)
 		opportunities = g.filterByLanguage(opportunities, req.Language)
-		g.logger.Logf("Debug: Found %d opportunities after filtering\n", len(opportunities))
 	}
 
 	if len(opportunities) == 0 {
@@ -170,15 +164,9 @@ func (g *Generator) validateStrategyRequirements(strategy types.CodeGenerationSt
 func (g *Generator) convertIssuesToOpportunities(analysis *detector.Analysis) []domain.Opportunity {
 	var opportunities []domain.Opportunity
 
-	g.logger.Logf("Debug: Converting issues to opportunities, found %d directories\n", len(analysis.DirectoryAnalyses))
-	
 	// Extract issues from the analysis
-	for dirKey, dirAnalysis := range analysis.DirectoryAnalyses {
-		g.logger.Logf("Debug: Directory %s has %d issues, language=%s\n", dirKey, len(dirAnalysis.Issues), dirAnalysis.Language)
-		for i, issue := range dirAnalysis.Issues {
-			g.logger.Logf("Debug: Issue %d: Category=%s, Language=%s, Title=%s\n", i, issue.Category, issue.Language, issue.Title)
-		}
-		
+	for _, dirAnalysis := range analysis.DirectoryAnalyses {
+
 		// Ensure we only create InstallOTEL opportunities once per directory
 		addedInstallForDir := false
 		opportunities = append(opportunities, g.createOpportunitiesFromInstrumentations(dirAnalysis)...)
@@ -186,7 +174,6 @@ func (g *Generator) convertIssuesToOpportunities(analysis *detector.Analysis) []
 			switch issue.Category {
 			case domain.CategoryMissingOtel:
 				if !addedInstallForDir {
-					g.logger.Logf("Debug: Creating InstallOTEL opportunity for directory %s, language %s\n", dirAnalysis.Directory, issue.Language)
 					opportunities = append(opportunities, domain.Opportunity{
 						Type:     domain.OpportunityInstallOTEL,
 						Language: issue.Language,

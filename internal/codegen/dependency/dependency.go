@@ -54,7 +54,6 @@ func (dm *DependencyWriter) AddDependencies(
 	operationsData *generatorTypes.OperationsData,
 	req generatorTypes.GenerationRequest,
 ) error {
-	dm.logger.Logf("Debug: AddDependencies called for language=%s, path=%s, installOTEL=%v\n", language, projectPath, operationsData.InstallOTEL)
 	// Convert OperationsData to InstallPlan
 	plan := types.InstallPlan{
 		Language:                language,

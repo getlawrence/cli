@@ -11,6 +11,7 @@ import (
 	"runtime"
 	"sync"
 
+	"github.com/getlawrence/cli/internal/logger"
 	"github.com/getlawrence/cli/pkg/knowledge/pipeline"
 	"github.com/getlawrence/cli/pkg/knowledge/providers"
 	"github.com/getlawrence/cli/pkg/knowledge/storage"
@@ -122,9 +123,11 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 	workerCount, _ := cmd.Flags().GetInt("workers")
 	rateLimit, _ := cmd.Flags().GetInt("rate-limit")
 
+	ui := logger.NewUILogger()
+
 	// If no language was specified, update all supported languages
 	if languageStr == "" {
-		fmt.Println("Updating all supported languages in parallel...")
+		ui.Log("Updating all supported languages in parallel...")
 		supportedLanguages := []types.ComponentLanguage{
 			types.ComponentLanguageJavaScript,
 			types.ComponentLanguagePython,
@@ -136,7 +139,7 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 		}
 
 		// Use parallel processing for better performance
-		return runUpdateAllLanguagesParallel(supportedLanguages, outputPath, workerCount, rateLimit)
+		return runUpdateAllLanguagesParallel(supportedLanguages, outputPath, workerCount, rateLimit, ui)
 	}
 
 	// Validate language if one was specified
@@ -148,13 +151,13 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 	// Check if output file exists and is recent (unless force is specified)
 	if !force {
 		if exists, recent := checkFileRecency(outputPath); exists && recent {
-			fmt.Printf("Knowledge base file %s exists and is recent. Use --force to update anyway.\n", outputPath)
+			ui.Logf("Knowledge base file %s exists and is recent. Use --force to update anyway.\n", outputPath)
 			return nil
 		}
 	}
 
-	// Create pipeline
-	p := pipeline.NewPipeline()
+	// Create pipeline with logger
+	p := pipeline.NewPipelineWithLogger(ui)
 
 	// Update knowledge base
 	kb, err := p.UpdateKnowledgeBase(language)
@@ -163,7 +166,7 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 	}
 
 	// Save to database
-	storageClient, err := storage.NewStorage("knowledge.db")
+	storageClient, err := storage.NewStorageWithLogger("knowledge.db", ui)
 	if err != nil {
 		return fmt.Errorf("failed to create storage: %w", err)
 	}
@@ -173,14 +176,14 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to save knowledge base: %w", err)
 	}
 
-	fmt.Printf("Successfully updated knowledge base for %s. Saved to %s\n", language, outputPath)
-	fmt.Printf("Total components: %d, Total versions: %d\n", kb.Statistics.TotalComponents, kb.Statistics.TotalVersions)
+	ui.Logf("Successfully updated knowledge base for %s. Saved to %s\n", language, outputPath)
+	ui.Logf("Total components: %d, Total versions: %d\n", kb.Statistics.TotalComponents, kb.Statistics.TotalVersions)
 
 	return nil
 }
 
 // runUpdateAllLanguagesParallel processes all languages in parallel using channels and goroutines
-func runUpdateAllLanguagesParallel(supportedLanguages []types.ComponentLanguage, outputPath string, workerCount int, rateLimit int) error {
+func runUpdateAllLanguagesParallel(supportedLanguages []types.ComponentLanguage, outputPath string, workerCount int, rateLimit int, ui logger.Logger) error {
 	startTime := time.Now()
 
 	// Determine optimal number of workers
@@ -202,7 +205,7 @@ func runUpdateAllLanguagesParallel(supportedLanguages []types.ComponentLanguage,
 		}
 	}
 
-	fmt.Printf("Using %d parallel workers for %d languages\n", numWorkers, len(supportedLanguages))
+	ui.Logf("Using %d parallel workers for %d languages\n", numWorkers, len(supportedLanguages))
 
 	// Create channels for parallel processing
 	languageChan := make(chan types.ComponentLanguage, len(supportedLanguages))
@@ -214,7 +217,7 @@ func runUpdateAllLanguagesParallel(supportedLanguages []types.ComponentLanguage,
 	var wg sync.WaitGroup
 	for i := 0; i < numWorkers; i++ {
 		wg.Add(1)
-		go languageUpdateWorker(languageChan, resultChan, errorChan, stopChan, &wg, rateLimit)
+		go languageUpdateWorker(languageChan, resultChan, errorChan, stopChan, &wg, rateLimit, ui)
 	}
 
 	// Send languages to workers
@@ -252,7 +255,7 @@ func runUpdateAllLanguagesParallel(supportedLanguages []types.ComponentLanguage,
 		allComponents = append(allComponents, result.kb.Components...)
 		totalVersions += result.kb.Statistics.TotalVersions
 
-		fmt.Printf("✓ %s: %d components, %d versions\n", result.language, len(result.kb.Components), result.kb.Statistics.TotalVersions)
+		ui.Logf("✓ %s: %d components, %d versions\n", result.language, len(result.kb.Components), result.kb.Statistics.TotalVersions)
 	}
 
 	// Check for any errors that occurred during processing
@@ -269,13 +272,13 @@ func runUpdateAllLanguagesParallel(supportedLanguages []types.ComponentLanguage,
 	wg.Wait()
 
 	// Report results
-	fmt.Printf("\n📊 Parallel processing completed in %v\n", time.Since(startTime))
-	fmt.Printf("✅ Successful languages: %d/%d\n", len(successfulLanguages), len(supportedLanguages))
+	ui.Logf("\n📊 Parallel processing completed in %v\n", time.Since(startTime))
+	ui.Logf("✅ Successful languages: %d/%d\n", len(successfulLanguages), len(supportedLanguages))
 
 	if len(failedLanguages) > 0 {
-		fmt.Printf("❌ Failed languages: %d/%d\n", len(failedLanguages), len(supportedLanguages))
+		ui.Logf("❌ Failed languages: %d/%d\n", len(failedLanguages), len(supportedLanguages))
 		for _, failed := range failedLanguages {
-			fmt.Printf("   - %s\n", failed)
+			ui.Logf("   - %s\n", failed)
 		}
 	}
 
@@ -342,7 +345,7 @@ func runUpdateAllLanguagesParallel(supportedLanguages []types.ComponentLanguage,
 	}
 
 	// Save to database
-	storageClient, err := storage.NewStorage("knowledge.db")
+	storageClient, err := storage.NewStorageWithLogger("knowledge.db", ui)
 	if err != nil {
 		return fmt.Errorf("failed to create storage: %w", err)
 	}
@@ -352,15 +355,15 @@ func runUpdateAllLanguagesParallel(supportedLanguages []types.ComponentLanguage,
 		return fmt.Errorf("failed to save combined knowledge base: %w", err)
 	}
 
-	fmt.Printf("\n🎉 All supported languages updated successfully!\n")
-	fmt.Printf("📁 Saved to: knowledge.db\n")
-	fmt.Printf("📊 Total components: %d\n", combinedKB.Statistics.TotalComponents)
-	fmt.Printf("📦 Total versions: %d\n", combinedKB.Statistics.TotalVersions)
+	ui.Log("\n🎉 All supported languages updated successfully!")
+	ui.Log("📁 Saved to: knowledge.db")
+	ui.Logf("📊 Total components: %d\n", combinedKB.Statistics.TotalComponents)
+	ui.Logf("📦 Total versions: %d\n", combinedKB.Statistics.TotalVersions)
 
 	// Show breakdown by language
-	fmt.Printf("\n📈 Breakdown by language:\n")
+	ui.Log("\n📈 Breakdown by language:")
 	for lang, count := range combinedKB.Statistics.ByLanguage {
-		fmt.Printf("  %s: %d components\n", lang, count)
+		ui.Logf("  %s: %d components\n", lang, count)
 	}
 
 	return nil
@@ -374,7 +377,7 @@ type languageUpdateResult struct {
 }
 
 // languageUpdateWorker processes language updates in parallel
-func languageUpdateWorker(languageChan <-chan types.ComponentLanguage, resultChan chan<- *languageUpdateResult, errorChan chan<- error, stopChan <-chan struct{}, wg *sync.WaitGroup, rateLimit int) {
+func languageUpdateWorker(languageChan <-chan types.ComponentLanguage, resultChan chan<- *languageUpdateResult, errorChan chan<- error, stopChan <-chan struct{}, wg *sync.WaitGroup, rateLimit int, ui logger.Logger) {
 	defer wg.Done()
 
 	// Create rate limiter for this worker
@@ -402,7 +405,7 @@ func languageUpdateWorker(languageChan <-chan types.ComponentLanguage, resultCha
 		}
 
 		// Update knowledge base for this language
-		p := pipeline.NewPipeline()
+		p := pipeline.NewPipelineWithLogger(ui)
 		kb, err := p.UpdateKnowledgeBase(language)
 
 		// Send result
@@ -441,8 +444,10 @@ func runQuery(cmd *cobra.Command, args []string) error {
 	outputFormat, _ := cmd.Flags().GetString("output")
 	filePath, _ := cmd.Flags().GetString("file")
 
+	ui := logger.NewUILogger()
+
 	// Load knowledge base
-	storageClient, err := storage.NewStorage("knowledge.db")
+	storageClient, err := storage.NewStorageWithLogger("knowledge.db", ui)
 	if err != nil {
 		return fmt.Errorf("failed to create storage: %w", err)
 	}
@@ -483,8 +488,10 @@ func runInfo(cmd *cobra.Command, args []string) error {
 	filePath, _ := cmd.Flags().GetString("file")
 	outputFormat, _ := cmd.Flags().GetString("output")
 
+	ui := logger.NewUILogger()
+
 	// Load knowledge base from the same database file used by update command
-	storageClient, err := storage.NewStorage("knowledge.db")
+	storageClient, err := storage.NewStorageWithLogger("knowledge.db", ui)
 	if err != nil {
 		return fmt.Errorf("failed to create storage: %w", err)
 	}

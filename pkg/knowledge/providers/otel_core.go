@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/getlawrence/cli/internal/logger"
 	"github.com/getlawrence/cli/pkg/knowledge/types"
 )
 
@@ -15,6 +16,7 @@ import (
 type OTELCoreProvider struct {
 	language       types.ComponentLanguage
 	registryClient *http.Client
+	logger         logger.Logger
 }
 
 // NewOTELCoreProvider creates a new OTEL core provider
@@ -22,6 +24,16 @@ func NewOTELCoreProvider(language types.ComponentLanguage) *OTELCoreProvider {
 	return &OTELCoreProvider{
 		language:       language,
 		registryClient: &http.Client{Timeout: 30 * time.Second},
+		logger:         &logger.StdoutLogger{}, // Default logger
+	}
+}
+
+// NewOTELCoreProviderWithLogger creates a new OTEL core provider with a custom logger
+func NewOTELCoreProviderWithLogger(language types.ComponentLanguage, l logger.Logger) *OTELCoreProvider {
+	return &OTELCoreProvider{
+		language:       language,
+		registryClient: &http.Client{Timeout: 30 * time.Second},
+		logger:         l,
 	}
 }
 
@@ -55,7 +67,7 @@ func (p *OTELCoreProvider) DiscoverComponentsForRegistry(ctx context.Context, la
 	registryComponents, err := p.discoverRegistryComponents()
 	if err != nil {
 		// Log warning but continue with core packages
-		fmt.Printf("Warning: failed to discover registry components: %v\n", err)
+		p.logger.Logf("Warning: failed to discover registry components: %v\n", err)
 	} else {
 		allComponents = append(allComponents, registryComponents...)
 	}
@@ -81,7 +93,7 @@ func (p *OTELCoreProvider) discoverCorePackages() ([]RegistryComponent, error) {
 		component, err := p.discoverPackage(pkg.Name, pkg.Type)
 		if err != nil {
 			// Log warning but continue with other packages
-			fmt.Printf("Warning: failed to discover package %s: %v\n", pkg.Name, err)
+			p.logger.Logf("Warning: failed to discover package %s: %v\n", pkg.Name, err)
 			continue
 		}
 		components = append(components, component)

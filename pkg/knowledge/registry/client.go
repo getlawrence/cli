@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/getlawrence/cli/internal/logger"
 	"gopkg.in/yaml.v3"
 )
 
@@ -23,6 +24,7 @@ const (
 type Client struct {
 	baseURL    string
 	httpClient *http.Client
+	logger     logger.Logger
 }
 
 // NewClient creates a new registry client
@@ -32,6 +34,18 @@ func NewClient() *Client {
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
 		},
+		logger: &logger.StdoutLogger{}, // Default logger
+	}
+}
+
+// NewClientWithLogger creates a new registry client with a custom logger
+func NewClientWithLogger(l logger.Logger) *Client {
+	return &Client{
+		baseURL: RegistryBaseURL,
+		httpClient: &http.Client{
+			Timeout: 30 * time.Second,
+		},
+		logger: l,
 	}
 }
 
@@ -156,7 +170,7 @@ func (c *Client) GetComponentsByLanguage(language string) ([]RegistryComponent, 
 				component, err := c.fetchComponentFromYAML(content.DownloadURL)
 				if err != nil {
 					// Log error but continue with other files
-					fmt.Printf("Warning: failed to parse %s: %v\n", content.Name, err)
+					c.logger.Logf("Warning: failed to parse %s: %v\n", content.Name, err)
 					continue
 				}
 

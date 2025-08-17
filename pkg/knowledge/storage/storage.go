@@ -8,17 +8,24 @@ import (
 	"sync"
 	"time"
 
+	"github.com/getlawrence/cli/internal/logger"
 	"github.com/getlawrence/cli/pkg/knowledge/types"
 	_ "github.com/mattn/go-sqlite3"
 )
 
 // Storage represents the knowledge base storage interface using SQLite
 type Storage struct {
-	db *sql.DB
+	db     *sql.DB
+	logger logger.Logger
 }
 
 // NewStorage creates a new storage instance with SQLite database
 func NewStorage(dbPath string) (*Storage, error) {
+	return NewStorageWithLogger(dbPath, &logger.StdoutLogger{})
+}
+
+// NewStorageWithLogger creates a new storage instance with a custom logger
+func NewStorageWithLogger(dbPath string, l logger.Logger) (*Storage, error) {
 	// Handle empty path by creating an in-memory database
 	if dbPath == "" {
 		dbPath = ":memory:"
@@ -30,12 +37,12 @@ func NewStorage(dbPath string) (*Storage, error) {
 	}
 
 	// Initialize the database schema
-	if err := initDatabase(db); err != nil {
+	if err := initDatabase(db, l); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("failed to initialize database: %w", err)
 	}
 
-	return &Storage{db: db}, nil
+	return &Storage{db: db, logger: l}, nil
 }
 
 // Close closes the database connection
@@ -51,7 +58,7 @@ func (s *Storage) SaveKnowledgeBase(kb *types.KnowledgeBase, filename string) er
 	if len(kb.Components) < 10 {
 		err := s.saveKnowledgeBaseSequential(kb)
 		if err == nil {
-			fmt.Printf("Sequential processing completed in %v for %d components\n", time.Since(startTime), len(kb.Components))
+			s.logger.Logf("Sequential processing completed in %v for %d components\n", time.Since(startTime), len(kb.Components))
 		}
 		return err
 	}
@@ -74,7 +81,7 @@ func (s *Storage) SaveKnowledgeBase(kb *types.KnowledgeBase, filename string) er
 	// Use parallel processing for better performance
 	err = s.saveKnowledgeBaseParallel(tx, kb)
 	if err == nil {
-		fmt.Printf("Parallel processing completed in %v for %d components using %d workers\n",
+		s.logger.Logf("Parallel processing completed in %v for %d components using %d workers\n",
 			time.Since(startTime), len(kb.Components), runtime.NumCPU())
 	}
 	return err
@@ -319,9 +326,9 @@ func (s *Storage) insertVersionsBatch(tx *sql.Tx, tasks []*versionInsertTask) er
 }
 
 // initDatabase creates the database schema and handles migrations
-func initDatabase(db *sql.DB) error {
+func initDatabase(db *sql.DB, l logger.Logger) error {
 	// Check if we need to migrate from old schema
-	if err := migrateDatabaseIfNeeded(db); err != nil {
+	if err := migrateDatabaseIfNeeded(db, l); err != nil {
 		return fmt.Errorf("failed to migrate database: %w", err)
 	}
 
@@ -412,7 +419,7 @@ func initDatabase(db *sql.DB) error {
 }
 
 // migrateDatabaseIfNeeded handles database schema migrations
-func migrateDatabaseIfNeeded(db *sql.DB) error {
+func migrateDatabaseIfNeeded(db *sql.DB, l logger.Logger) error {
 	// Check if components table exists
 	var tableExists bool
 	err := db.QueryRow(`
@@ -445,7 +452,7 @@ func migrateDatabaseIfNeeded(db *sql.DB) error {
 	}
 
 	// We need to migrate from the old schema
-	fmt.Println("Migrating database schema to support parallel processing...")
+	l.Log("Migrating database schema to support parallel processing...")
 
 	// Start a transaction for the migration
 	tx, err := db.Begin()
@@ -526,7 +533,7 @@ func migrateDatabaseIfNeeded(db *sql.DB) error {
 		return fmt.Errorf("failed to commit migration: %w", err)
 	}
 
-	fmt.Println("Database migration completed successfully!")
+	l.Log("Database migration completed successfully!")
 	return nil
 }
 

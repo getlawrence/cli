@@ -6,6 +6,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/getlawrence/cli/internal/logger"
 	"github.com/getlawrence/cli/pkg/knowledge/registry"
 	"github.com/getlawrence/cli/pkg/knowledge/types"
 )
@@ -682,6 +683,7 @@ func (p *GenericPackageManagerProvider) IsHealthy(ctx context.Context) bool {
 type CombinedRegistryProvider struct {
 	language  types.ComponentLanguage
 	providers []RegistryProvider
+	logger    logger.Logger
 }
 
 // NewCombinedRegistryProvider creates a new combined registry provider
@@ -693,6 +695,7 @@ func NewCombinedRegistryProvider(providers ...RegistryProvider) *CombinedRegistr
 	return &CombinedRegistryProvider{
 		language:  providers[0].GetLanguage(),
 		providers: providers,
+		logger:    &logger.StdoutLogger{}, // Default logger
 	}
 }
 
@@ -720,7 +723,7 @@ func (p *CombinedRegistryProvider) DiscoverComponents(ctx context.Context, langu
 		components, err := provider.DiscoverComponents(ctx, language)
 		if err != nil {
 			// Log warning but continue with other providers
-			fmt.Printf("Warning: provider %s failed to discover components: %v\n", provider.GetName(), err)
+			p.logger.Logf("Warning: provider %s failed to discover components: %v\n", provider.GetName(), err)
 			continue
 		}
 
