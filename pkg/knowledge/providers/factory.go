@@ -38,8 +38,10 @@ func (f *DefaultProviderFactory) registerDefaultProviders() {
 	pythonProvider := NewPythonProvider()
 	f.RegisterProvider(pythonProvider)
 
-	// Register generic providers for other languages
-	languages := []types.ComponentLanguage{
+	// Register OTEL core providers for all languages to ensure core packages are included
+	allLanguages := []types.ComponentLanguage{
+		types.ComponentLanguageJavaScript,
+		types.ComponentLanguagePython,
 		types.ComponentLanguageGo,
 		types.ComponentLanguageJava,
 		types.ComponentLanguageCSharp,
@@ -47,9 +49,45 @@ func (f *DefaultProviderFactory) registerDefaultProviders() {
 		types.ComponentLanguageRuby,
 	}
 
-	for _, lang := range languages {
-		genericProvider := NewGenericLanguageProvider(lang)
-		f.RegisterProvider(genericProvider)
+	for _, lang := range allLanguages {
+		// Create OTEL core provider for this language
+		otelCoreProvider := NewOTELCoreProvider(lang)
+
+		// Create a composite provider that combines OTEL core with existing providers
+		if lang == types.ComponentLanguageJavaScript {
+			// For JavaScript, combine with existing provider
+			jsPackageManagerProvider := jsProvider.GetPackageManagerProvider()
+
+			compositeProvider := NewCompositeProvider(
+				fmt.Sprintf("JavaScript OTEL Core Provider"),
+				lang,
+				otelCoreProvider,
+				jsPackageManagerProvider,
+			)
+			f.RegisterProvider(compositeProvider)
+		} else if lang == types.ComponentLanguagePython {
+			// For Python, combine with existing provider
+			pythonPackageManagerProvider := pythonProvider.GetPackageManagerProvider()
+
+			compositeProvider := NewCompositeProvider(
+				fmt.Sprintf("Python OTEL Core Provider"),
+				lang,
+				otelCoreProvider,
+				pythonPackageManagerProvider,
+			)
+			f.RegisterProvider(compositeProvider)
+		} else {
+			// For other languages, create a composite provider with OTEL core
+			genericPackageManagerProvider := NewGenericPackageManagerProvider(lang)
+
+			compositeProvider := NewCompositeProvider(
+				fmt.Sprintf("%s OTEL Core Provider", strings.Title(string(lang))),
+				lang,
+				otelCoreProvider,
+				genericPackageManagerProvider,
+			)
+			f.RegisterProvider(compositeProvider)
+		}
 	}
 }
 
@@ -73,12 +111,7 @@ func (f *DefaultProviderFactory) GetRegistryProvider(language types.ComponentLan
 		return nil, err
 	}
 
-	// Check if the provider implements RegistryProvider directly
-	if registryProvider, ok := provider.(RegistryProvider); ok {
-		return registryProvider, nil
-	}
-
-	// If not, try to get a composite provider
+	// Try to get a composite provider
 	if compositeProvider, ok := provider.(*CompositeProvider); ok {
 		return compositeProvider.registryProvider, nil
 	}
@@ -98,12 +131,7 @@ func (f *DefaultProviderFactory) GetPackageManagerProvider(language types.Compon
 		return nil, err
 	}
 
-	// Check if the provider implements PackageManagerProvider directly
-	if packageManagerProvider, ok := provider.(PackageManagerProvider); ok {
-		return packageManagerProvider, nil
-	}
-
-	// If not, try to get a composite provider
+	// Try to get a composite provider
 	if compositeProvider, ok := provider.(*CompositeProvider); ok {
 		return compositeProvider.packageManagerProvider, nil
 	}
@@ -178,25 +206,154 @@ func (p *CompositeProvider) GetPackageManagerType() string {
 	return p.packageManagerProvider.GetPackageManagerType()
 }
 
-// DiscoverComponents discovers all components for the language
+// DiscoverComponents implements the Provider interface
 func (p *CompositeProvider) DiscoverComponents(ctx context.Context) ([]types.Component, error) {
-	// This would implement the logic to combine registry and package manager data
-	// For now, return empty slice - will be implemented in the pipeline
-	return []types.Component{}, nil
+	// Get components from registry provider
+	registryComponents, err := p.registryProvider.DiscoverComponents(ctx, string(p.language))
+	if err != nil {
+		return nil, err
+	}
+
+	// Convert RegistryComponent to types.Component
+	var components []types.Component
+	for _, rc := range registryComponents {
+		component := types.Component{
+			Name:                   rc.Name,
+			Type:                   p.mapComponentType(rc.Type),
+			Category:               p.determineComponentCategory(rc),
+			Status:                 p.determineComponentStatus(rc),
+			SupportLevel:           p.determineSupportLevel(rc),
+			Language:               p.language,
+			Description:            rc.Description,
+			Repository:             rc.Repository,
+			RegistryURL:            rc.RegistryURL,
+			Homepage:               rc.Homepage,
+			Tags:                   rc.Tags,
+			Maintainers:            rc.Maintainers,
+			License:                rc.License,
+			LastUpdated:            rc.LastUpdated,
+			Versions:               []types.Version{}, // Will be populated by package manager
+			InstrumentationTargets: []types.InstrumentationTarget{},
+			DocumentationURL:       rc.Homepage,
+			ExamplesURL:            "",
+			MigrationGuideURL:      "",
+		}
+		components = append(components, component)
+	}
+
+	return components, nil
 }
 
-// GetComponentMetadata gets metadata for a specific component
+// GetComponentMetadata implements the Provider interface
 func (p *CompositeProvider) GetComponentMetadata(ctx context.Context, name string) (*types.Component, error) {
-	// This would implement the logic to combine registry and package manager data
-	// For now, return nil - will be implemented in the pipeline
-	return nil, nil
+	registryComponent, err := p.registryProvider.GetComponentByName(ctx, name)
+	if err != nil {
+		return nil, err
+	}
+	if registryComponent == nil {
+		return nil, nil
+	}
+
+	// Convert to types.Component
+	component := types.Component{
+		Name:                   registryComponent.Name,
+		Type:                   p.mapComponentType(registryComponent.Type),
+		Category:               p.determineComponentCategory(*registryComponent),
+		Status:                 p.determineComponentStatus(*registryComponent),
+		SupportLevel:           p.determineSupportLevel(*registryComponent),
+		Language:               p.language,
+		Description:            registryComponent.Description,
+		Repository:             registryComponent.Repository,
+		RegistryURL:            registryComponent.RegistryURL,
+		Homepage:               registryComponent.Homepage,
+		Tags:                   registryComponent.Tags,
+		Maintainers:            registryComponent.Maintainers,
+		License:                registryComponent.License,
+		LastUpdated:            registryComponent.LastUpdated,
+		Versions:               []types.Version{}, // Will be populated by package manager
+		InstrumentationTargets: []types.InstrumentationTarget{},
+		DocumentationURL:       registryComponent.Homepage,
+		ExamplesURL:            "",
+		MigrationGuideURL:      "",
+	}
+
+	return &component, nil
 }
 
-// GetComponentVersions gets versions for a specific component
+// GetComponentVersions implements the Provider interface
 func (p *CompositeProvider) GetComponentVersions(ctx context.Context, name string) ([]types.Version, error) {
-	// This would implement the logic to get versions from package manager
-	// For now, return empty slice - will be implemented in the pipeline
+	// For now, return empty versions - this will be populated by package manager
 	return []types.Version{}, nil
+}
+
+// Helper methods for converting component types and determining metadata
+func (p *CompositeProvider) mapComponentType(registryType string) types.ComponentType {
+	switch registryType {
+	case "api":
+		return types.ComponentTypeAPI
+	case "sdk":
+		return types.ComponentTypeSDK
+	case "exporter":
+		return types.ComponentTypeExporter
+	case "propagator":
+		return types.ComponentTypePropagator
+	case "sampler":
+		return types.ComponentTypeSampler
+	default:
+		return types.ComponentTypeInstrumentation
+	}
+}
+
+func (p *CompositeProvider) determineComponentCategory(rc RegistryComponent) types.ComponentCategory {
+	name := strings.ToLower(rc.Name)
+
+	if strings.Contains(name, "sdk") && !strings.Contains(name, "experimental") {
+		return types.ComponentCategoryStableSDK
+	}
+	if strings.Contains(name, "api") {
+		return types.ComponentCategoryAPI
+	}
+	if strings.Contains(name, "experimental") || strings.Contains(name, "contrib") {
+		return types.ComponentCategoryExperimental
+	}
+	if strings.Contains(name, "core") {
+		return types.ComponentCategoryCore
+	}
+
+	return types.ComponentCategoryExperimental
+}
+
+func (p *CompositeProvider) determineComponentStatus(rc RegistryComponent) types.ComponentStatus {
+	name := strings.ToLower(rc.Name)
+
+	if strings.Contains(name, "deprecated") || strings.Contains(name, "legacy") {
+		return types.ComponentStatusExperimental
+	}
+	if strings.Contains(name, "experimental") || strings.Contains(name, "contrib") {
+		return types.ComponentStatusExperimental
+	}
+	if strings.Contains(name, "beta") {
+		return types.ComponentStatusBeta
+	}
+	if strings.Contains(name, "alpha") {
+		return types.ComponentStatusAlpha
+	}
+
+	return types.ComponentStatusStable
+}
+
+func (p *CompositeProvider) determineSupportLevel(rc RegistryComponent) types.SupportLevel {
+	if strings.HasPrefix(rc.Name, "@opentelemetry/") || strings.HasPrefix(rc.Name, "opentelemetry-") {
+		return types.SupportLevelOfficial
+	}
+
+	for _, maintainer := range rc.Maintainers {
+		if strings.Contains(strings.ToLower(maintainer), "opentelemetry") {
+			return types.SupportLevelOfficial
+		}
+	}
+
+	return types.SupportLevelCommunity
 }
 
 // IsHealthy checks if the provider is healthy

@@ -4,22 +4,19 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/getlawrence/cli/pkg/knowledge/npm"
 	"github.com/getlawrence/cli/pkg/knowledge/registry"
 	"github.com/getlawrence/cli/pkg/knowledge/types"
 )
 
 // JavaScriptProvider implements the Provider interface for JavaScript
 type JavaScriptProvider struct {
-	registryClient       *registry.Client
-	packageManagerClient *npm.Client
+	registryClient *registry.Client
 }
 
 // NewJavaScriptProvider creates a new JavaScript provider
 func NewJavaScriptProvider() *JavaScriptProvider {
 	return &JavaScriptProvider{
-		registryClient:       registry.NewClient(),
-		packageManagerClient: npm.NewClient(),
+		registryClient: registry.NewClient(),
 	}
 }
 
@@ -77,7 +74,7 @@ func (p *JavaScriptProvider) GetRegistryProvider() RegistryProvider {
 
 // GetPackageManagerProvider returns the package manager provider
 func (p *JavaScriptProvider) GetPackageManagerProvider() PackageManagerProvider {
-	return &JavaScriptPackageManagerProvider{client: p.packageManagerClient}
+	return &JavaScriptPackageManagerProvider{} // No longer using npm client
 }
 
 // JavaScriptRegistryProvider implements RegistryProvider for JavaScript
@@ -166,7 +163,7 @@ func (p *JavaScriptRegistryProvider) IsHealthy(ctx context.Context) bool {
 
 // JavaScriptPackageManagerProvider implements PackageManagerProvider for JavaScript
 type JavaScriptPackageManagerProvider struct {
-	client *npm.Client
+	// No client needed for now since npm functionality is disabled
 }
 
 // GetName returns the provider name
@@ -186,178 +183,27 @@ func (p *JavaScriptPackageManagerProvider) GetPackageManagerType() string {
 
 // GetPackage gets package metadata by name
 func (p *JavaScriptPackageManagerProvider) GetPackage(ctx context.Context, name string) (*PackageMetadata, error) {
-	npmPackage, err := p.client.GetPackage(name)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get package: %w", err)
-	}
-
-	if npmPackage == nil {
-		return nil, nil
-	}
-
-	// Convert npm.Package to PackageMetadata
-	result := &PackageMetadata{
-		Name:                 npmPackage.Name,
-		Description:          npmPackage.Description,
-		Version:              npmPackage.Version,
-		Homepage:             npmPackage.Homepage,
-		Repository:           npmPackage.Repository.URL,
-		Author:               npmPackage.Author,
-		License:              npmPackage.License,
-		Keywords:             npmPackage.Keywords,
-		Main:                 npmPackage.Main,
-		Types:                npmPackage.Types,
-		Scripts:              npmPackage.Scripts,
-		Dependencies:         npmPackage.Dependencies,
-		DevDependencies:      npmPackage.DevDependencies,
-		PeerDependencies:     npmPackage.PeerDependencies,
-		OptionalDependencies: npmPackage.OptionalDependencies,
-		Engines:              npmPackage.Engines,
-		OS:                   npmPackage.OS,
-		CPU:                  npmPackage.CPU,
-		DistTags:             npmPackage.DistTags,
-		Time:                 npmPackage.Time,
-		Maintainers:          convertMaintainers(npmPackage.Maintainers),
-		Contributors:         convertMaintainers(npmPackage.Contributors),
-		Bugs:                 npmPackage.Bugs.URL,
-		Readme:               npmPackage.Readme,
-		ID:                   npmPackage.ID,
-		Rev:                  npmPackage.Rev,
-	}
-
-	// Convert versions
-	if npmPackage.Versions != nil {
-		result.Versions = make(map[string]VersionMetadata)
-		for versionStr, versionData := range npmPackage.Versions {
-			result.Versions[versionStr] = VersionMetadata{
-				Name:                 versionData.Name,
-				Version:              versionData.Version,
-				Description:          versionData.Description,
-				Main:                 versionData.Main,
-				Types:                versionData.Types,
-				Scripts:              versionData.Scripts,
-				Dependencies:         versionData.Dependencies,
-				DevDependencies:      versionData.DevDependencies,
-				PeerDependencies:     versionData.PeerDependencies,
-				OptionalDependencies: versionData.OptionalDependencies,
-				Engines:              versionData.Engines,
-				OS:                   versionData.OS,
-				CPU:                  versionData.CPU,
-				Repository:           versionData.Repository.URL,
-				Homepage:             versionData.Homepage,
-				License:              versionData.License,
-				Keywords:             versionData.Keywords,
-				Author:               versionData.Author,
-				Maintainers:          convertMaintainers(versionData.Maintainers),
-				Contributors:         convertMaintainers(versionData.Contributors),
-				Bugs:                 versionData.Bugs.URL,
-				Readme:               versionData.Readme,
-				ID:                   versionData.ID,
-				Rev:                  versionData.Rev,
-			}
-		}
-	}
-
-	return result, nil
+	// This function is no longer directly related to npm, but kept for potential future use or if the interface requires it.
+	// For now, it will return nil as there's no npm client.
+	return nil, fmt.Errorf("package manager functionality not available")
 }
 
 // GetPackageVersion gets specific version metadata
 func (p *JavaScriptPackageManagerProvider) GetPackageVersion(ctx context.Context, name, version string) (*VersionMetadata, error) {
-	npmVersion, err := p.client.GetPackageVersion(name, version)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get package version: %w", err)
-	}
-
-	if npmVersion == nil {
-		return nil, nil
-	}
-
-	result := &VersionMetadata{
-		Name:                 npmVersion.Name,
-		Version:              npmVersion.Version,
-		Description:          npmVersion.Description,
-		Main:                 npmVersion.Main,
-		Types:                npmVersion.Types,
-		Scripts:              npmVersion.Scripts,
-		Dependencies:         npmVersion.Dependencies,
-		DevDependencies:      npmVersion.DevDependencies,
-		PeerDependencies:     npmVersion.PeerDependencies,
-		OptionalDependencies: npmVersion.OptionalDependencies,
-		Engines:              npmVersion.Engines,
-		OS:                   npmVersion.OS,
-		CPU:                  npmVersion.CPU,
-		Repository:           npmVersion.Repository.URL,
-		Homepage:             npmVersion.Homepage,
-		License:              npmVersion.License,
-		Keywords:             npmVersion.Keywords,
-		Author:               npmVersion.Author,
-		Maintainers:          convertMaintainers(npmVersion.Maintainers),
-		Contributors:         convertMaintainers(npmVersion.Contributors),
-		Bugs:                 npmVersion.Bugs.URL,
-		Readme:               npmVersion.Readme,
-		ID:                   npmVersion.ID,
-		Rev:                  npmVersion.Rev,
-	}
-
-	return result, nil
+	// This function is no longer directly related to npm, but kept for potential future use or if the interface requires it.
+	// For now, it will return nil as there's no npm client.
+	return nil, fmt.Errorf("package manager functionality not available")
 }
 
 // GetLatestVersion gets the latest version of a package
 func (p *JavaScriptPackageManagerProvider) GetLatestVersion(ctx context.Context, name string) (*VersionMetadata, error) {
-	npmVersion, err := p.client.GetLatestVersion(name)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get latest version: %w", err)
-	}
-
-	if npmVersion == nil {
-		return nil, nil
-	}
-
-	result := &VersionMetadata{
-		Name:                 npmVersion.Name,
-		Version:              npmVersion.Version,
-		Description:          npmVersion.Description,
-		Main:                 npmVersion.Main,
-		Types:                npmVersion.Types,
-		Scripts:              npmVersion.Scripts,
-		Dependencies:         npmVersion.Dependencies,
-		DevDependencies:      npmVersion.DevDependencies,
-		PeerDependencies:     npmVersion.PeerDependencies,
-		OptionalDependencies: npmVersion.OptionalDependencies,
-		Engines:              npmVersion.Engines,
-		OS:                   npmVersion.OS,
-		CPU:                  npmVersion.CPU,
-		Repository:           npmVersion.Repository.URL,
-		Homepage:             npmVersion.Homepage,
-		License:              npmVersion.License,
-		Keywords:             npmVersion.Keywords,
-		Author:               npmVersion.Author,
-		Maintainers:          convertMaintainers(npmVersion.Maintainers),
-		Contributors:         convertMaintainers(npmVersion.Contributors),
-		Bugs:                 npmVersion.Bugs.URL,
-		Readme:               npmVersion.Readme,
-		ID:                   npmVersion.ID,
-		Rev:                  npmVersion.Rev,
-	}
-
-	return result, nil
+	// This function is no longer directly related to npm, but kept for potential future use or if the interface requires it.
+	// For now, it will return nil as there's no npm client.
+	return nil, fmt.Errorf("package manager functionality not available")
 }
 
 // IsHealthy checks if the package manager is accessible
 func (p *JavaScriptPackageManagerProvider) IsHealthy(ctx context.Context) bool {
 	// Simple health check - could be enhanced
 	return true
-}
-
-// convertMaintainers converts npm maintainer format to string slice
-func convertMaintainers(maintainers []npm.Maintainer) []string {
-	var result []string
-	for _, m := range maintainers {
-		if m.Name != "" {
-			result = append(result, m.Name)
-		} else if m.Email != "" {
-			result = append(result, m.Email)
-		}
-	}
-	return result
 }
