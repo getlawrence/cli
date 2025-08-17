@@ -708,51 +708,101 @@ func (s *Storage) loadVersions(componentID int64) ([]types.Version, error) {
 	return versions, nil
 }
 
-// calculateStatistics calculates statistics for the knowledge base
-func (s *Storage) calculateStatistics(components []types.Component) types.Statistics {
+// calculateStatistics calculates statistics for the knowledge base using SQL aggregation
+func (s *Storage) calculateStatistics() (types.Statistics, error) {
 	stats := types.Statistics{
-		TotalComponents: len(components),
-		ByLanguage:      make(map[string]int),
-		ByType:          make(map[string]int),
-		ByCategory:      make(map[string]int),
-		ByStatus:        make(map[string]int),
-		BySupportLevel:  make(map[string]int),
-		LastUpdate:      time.Now(),
-		Source:          "SQLite Database",
+		ByLanguage:     make(map[string]int),
+		ByType:         make(map[string]int),
+		ByCategory:     make(map[string]int),
+		ByStatus:       make(map[string]int),
+		BySupportLevel: make(map[string]int),
+		LastUpdate:     time.Now(),
+		Source:         "SQLite Database",
 	}
 
-	for _, component := range components {
-		// Count by language
-		lang := string(component.Language)
-		stats.ByLanguage[lang]++
-
-		// Count by type
-		compType := string(component.Type)
-		stats.ByType[compType]++
-
-		// Count by category
-		if component.Category != "" {
-			cat := string(component.Category)
-			stats.ByCategory[cat]++
-		}
-
-		// Count by status
-		if component.Status != "" {
-			status := string(component.Status)
-			stats.ByStatus[status]++
-		}
-
-		// Count by support level
-		if component.SupportLevel != "" {
-			support := string(component.SupportLevel)
-			stats.BySupportLevel[support]++
-		}
-
-		// Count total versions
-		stats.TotalVersions += len(component.Versions)
+	// Get total component count
+	err := s.db.QueryRow("SELECT COUNT(*) FROM components").Scan(&stats.TotalComponents)
+	if err != nil {
+		return stats, fmt.Errorf("failed to get total components count: %w", err)
 	}
 
-	return stats
+	// Get total version count
+	err = s.db.QueryRow("SELECT COUNT(*) FROM versions").Scan(&stats.TotalVersions)
+	if err != nil {
+		return stats, fmt.Errorf("failed to get total versions count: %w", err)
+	}
+
+	// Count by language
+	rows, err := s.db.Query("SELECT language, COUNT(*) FROM components GROUP BY language")
+	if err != nil {
+		return stats, fmt.Errorf("failed to get language statistics: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var language string
+		var count int
+		if err := rows.Scan(&language, &count); err == nil {
+			stats.ByLanguage[language] = count
+		}
+	}
+
+	// Count by type
+	rows, err = s.db.Query("SELECT type, COUNT(*) FROM components GROUP BY type")
+	if err != nil {
+		return stats, fmt.Errorf("failed to get type statistics: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var componentType string
+		var count int
+		if err := rows.Scan(&componentType, &count); err == nil {
+			stats.ByType[componentType] = count
+		}
+	}
+
+	// Count by category (excluding empty categories)
+	rows, err = s.db.Query("SELECT category, COUNT(*) FROM components WHERE category != '' GROUP BY category")
+	if err != nil {
+		return stats, fmt.Errorf("failed to get category statistics: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var category string
+		var count int
+		if err := rows.Scan(&category, &count); err == nil {
+			stats.ByCategory[category] = count
+		}
+	}
+
+	// Count by status (excluding empty statuses)
+	rows, err = s.db.Query("SELECT status, COUNT(*) FROM components WHERE status != '' GROUP BY status")
+	if err != nil {
+		return stats, fmt.Errorf("failed to get status statistics: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var status string
+		var count int
+		if err := rows.Scan(&status, &count); err == nil {
+			stats.ByStatus[status] = count
+		}
+	}
+
+	// Count by support level (excluding empty support levels)
+	rows, err = s.db.Query("SELECT support_level, COUNT(*) FROM components WHERE support_level != '' GROUP BY support_level")
+	if err != nil {
+		return stats, fmt.Errorf("failed to get support level statistics: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var supportLevel string
+		var count int
+		if err := rows.Scan(&supportLevel, &count); err == nil {
+			stats.BySupportLevel[supportLevel] = count
+		}
+	}
+
+	return stats, nil
 }
 
 // buildQuerySQL builds a SQL query based on the query criteria
@@ -771,55 +821,55 @@ func (s *Storage) buildQuerySQL(query Query) (string, []interface{}) {
 
 	// Add filters based on query criteria
 	if query.Language != "" {
-		baseQuery += fmt.Sprintf(" AND language = ?")
+		baseQuery += " AND language = ?"
 		args = append(args, query.Language)
 		argIndex++
 	}
 
 	if query.Type != "" {
-		baseQuery += fmt.Sprintf(" AND type = ?")
+		baseQuery += " AND type = ?"
 		args = append(args, query.Type)
 		argIndex++
 	}
 
 	if query.Category != "" {
-		baseQuery += fmt.Sprintf(" AND category = ?")
+		baseQuery += " AND category = ?"
 		args = append(args, query.Category)
 		argIndex++
 	}
 
 	if query.Status != "" {
-		baseQuery += fmt.Sprintf(" AND status = ?")
+		baseQuery += " AND status = ?"
 		args = append(args, query.Status)
 		argIndex++
 	}
 
 	if query.SupportLevel != "" {
-		baseQuery += fmt.Sprintf(" AND support_level = ?")
+		baseQuery += " AND support_level = ?"
 		args = append(args, query.SupportLevel)
 		argIndex++
 	}
 
 	if query.Name != "" {
-		baseQuery += fmt.Sprintf(" AND name LIKE ?")
+		baseQuery += " AND name LIKE ?"
 		args = append(args, "%"+query.Name+"%")
 		argIndex++
 	}
 
 	if query.Framework != "" {
-		baseQuery += fmt.Sprintf(" AND instrumentation_targets LIKE ?")
+		baseQuery += " AND instrumentation_targets LIKE ?"
 		args = append(args, "%"+query.Framework+"%")
 		argIndex++
 	}
 
 	if !query.MinDate.IsZero() {
-		baseQuery += fmt.Sprintf(" AND last_updated >= ?")
+		baseQuery += " AND last_updated >= ?"
 		args = append(args, query.MinDate)
 		argIndex++
 	}
 
 	if !query.MaxDate.IsZero() {
-		baseQuery += fmt.Sprintf(" AND last_updated <= ?")
+		baseQuery += " AND last_updated <= ?"
 		args = append(args, query.MaxDate)
 		argIndex++
 	}
@@ -827,11 +877,83 @@ func (s *Storage) buildQuerySQL(query Query) (string, []interface{}) {
 	// Add ORDER BY
 	baseQuery += " ORDER BY name"
 
+	// Add pagination if specified
+	if query.Limit > 0 {
+		baseQuery += fmt.Sprintf(" LIMIT %d", query.Limit)
+		if query.Offset > 0 {
+			baseQuery += fmt.Sprintf(" OFFSET %d", query.Offset)
+		}
+	}
+
 	return baseQuery, args
 }
 
-// scanComponents scans database rows into Component structs
+// getQueryTotalCount gets the total count of components matching the query criteria (without pagination)
+func (s *Storage) getQueryTotalCount(query Query) int {
+	baseQuery := "SELECT COUNT(*) FROM components WHERE 1=1"
+	var args []interface{}
+
+	// Add the same filters as buildQuerySQL but only for counting
+	if query.Language != "" {
+		baseQuery += " AND language = ?"
+		args = append(args, query.Language)
+	}
+
+	if query.Type != "" {
+		baseQuery += " AND type = ?"
+		args = append(args, query.Type)
+	}
+
+	if query.Category != "" {
+		baseQuery += " AND category = ?"
+		args = append(args, query.Category)
+	}
+
+	if query.Status != "" {
+		baseQuery += " AND status = ?"
+		args = append(args, query.Status)
+	}
+
+	if query.SupportLevel != "" {
+		baseQuery += " AND support_level = ?"
+		args = append(args, query.SupportLevel)
+	}
+
+	if query.Name != "" {
+		baseQuery += " AND name LIKE ?"
+		args = append(args, "%"+query.Name+"%")
+	}
+
+	if query.Framework != "" {
+		baseQuery += " AND instrumentation_targets LIKE ?"
+		args = append(args, "%"+query.Framework+"%")
+	}
+
+	if !query.MinDate.IsZero() {
+		baseQuery += " AND last_updated >= ?"
+		args = append(args, query.MinDate)
+	}
+
+	if !query.MaxDate.IsZero() {
+		baseQuery += " AND last_updated <= ?"
+		args = append(args, query.MaxDate)
+	}
+
+	var count int
+	err := s.db.QueryRow(baseQuery, args...).Scan(&count)
+	if err != nil {
+		return 0
+	}
+	return count
+}
+
+// scanComponents scans database rows into Component structs with optional lazy loading of versions
 func (s *Storage) scanComponents(rows *sql.Rows) []types.Component {
+	return s.scanComponentsWithVersions(rows, true)
+}
+
+// scanComponentsWithVersions scans database rows into Component structs with control over version loading
+func (s *Storage) scanComponentsWithVersions(rows *sql.Rows, loadVersions bool) []types.Component {
 	var components []types.Component
 	for rows.Next() {
 		var component types.Component
@@ -855,10 +977,15 @@ func (s *Storage) scanComponents(rows *sql.Rows) []types.Component {
 		json.Unmarshal([]byte(maintainersJSON), &component.Maintainers)
 		json.Unmarshal([]byte(targetsJSON), &component.InstrumentationTargets)
 
-		// Load versions for this component
-		versions, err := s.loadVersions(id)
-		if err == nil {
-			component.Versions = versions
+		// Load versions only if requested (lazy loading support)
+		if loadVersions {
+			versions, err := s.loadVersions(id)
+			if err == nil {
+				component.Versions = versions
+			}
+		} else {
+			// Initialize empty versions slice for lazy loading
+			component.Versions = []types.Version{}
 		}
 
 		components = append(components, component)
@@ -867,20 +994,21 @@ func (s *Storage) scanComponents(rows *sql.Rows) []types.Component {
 	return components
 }
 
-// LoadKnowledgeBase loads the knowledge base from the SQLite database
+// LoadKnowledgeBase loads the knowledge base metadata from the SQLite database without loading all components
+// Components are loaded on-demand through query methods
 func (s *Storage) LoadKnowledgeBase(filename string) (*types.KnowledgeBase, error) {
-	// Query all components
-	components, err := s.loadComponents()
+	// Calculate statistics using SQL aggregation instead of loading all components
+	stats, err := s.calculateStatistics()
 	if err != nil {
-		return nil, fmt.Errorf("failed to load components: %w", err)
+		return nil, fmt.Errorf("failed to calculate statistics: %w", err)
 	}
 
-	// Create knowledge base
+	// Create knowledge base with empty components slice - components loaded on-demand
 	kb := &types.KnowledgeBase{
 		SchemaVersion: "1.0.0",
 		GeneratedAt:   time.Now(),
-		Components:    components,
-		Statistics:    s.calculateStatistics(components),
+		Components:    []types.Component{}, // Empty - use query methods to load specific components
+		Statistics:    stats,
 	}
 
 	return kb, nil
@@ -900,18 +1028,26 @@ type Query struct {
 	Tags         []string
 	Maintainers  []string
 	Framework    string // For instrumentation targets
+	// Pagination support
+	Limit  int // Maximum number of results to return (0 = no limit)
+	Offset int // Number of results to skip
 }
 
 // QueryResult represents the result of a query
 type QueryResult struct {
 	Components []types.Component
-	Total      int
+	Total      int // Total number of matching components (ignoring pagination)
+	Returned   int // Number of components returned in this result
 	Query      Query
+	HasMore    bool // Whether there are more results available
 }
 
-// QueryKnowledgeBase queries the knowledge base based on criteria using SQLite
+// QueryKnowledgeBase queries the knowledge base based on criteria using SQLite with pagination support
 func (s *Storage) QueryKnowledgeBase(kb *types.KnowledgeBase, query Query) *QueryResult {
-	// Build the SQL query dynamically based on the query criteria
+	// First, get the total count without pagination
+	totalCount := s.getQueryTotalCount(query)
+
+	// Build the SQL query with pagination
 	sqlQuery, args := s.buildQuerySQL(query)
 
 	rows, err := s.db.Query(sqlQuery, args...)
@@ -920,7 +1056,9 @@ func (s *Storage) QueryKnowledgeBase(kb *types.KnowledgeBase, query Query) *Quer
 		return &QueryResult{
 			Components: []types.Component{},
 			Total:      0,
+			Returned:   0,
 			Query:      query,
+			HasMore:    false,
 		}
 	}
 	defer rows.Close()
@@ -957,10 +1095,18 @@ func (s *Storage) QueryKnowledgeBase(kb *types.KnowledgeBase, query Query) *Quer
 		results = append(results, component)
 	}
 
+	// Calculate if there are more results
+	hasMore := false
+	if query.Limit > 0 && len(results) == query.Limit {
+		hasMore = (query.Offset + len(results)) < totalCount
+	}
+
 	return &QueryResult{
 		Components: results,
-		Total:      len(results),
+		Total:      totalCount,
+		Returned:   len(results),
 		Query:      query,
+		HasMore:    hasMore,
 	}
 }
 
@@ -1237,4 +1383,69 @@ func (s *Storage) GetBreakingChanges(kb *types.KnowledgeBase, componentName stri
 	}
 
 	return allBreakingChanges
+}
+
+// GetComponentsLight returns components without loading their versions (for performance)
+func (s *Storage) GetComponentsLight(query Query) *QueryResult {
+	// First, get the total count without pagination
+	totalCount := s.getQueryTotalCount(query)
+
+	// Build the SQL query with pagination
+	sqlQuery, args := s.buildQuerySQL(query)
+
+	rows, err := s.db.Query(sqlQuery, args...)
+	if err != nil {
+		return &QueryResult{
+			Components: []types.Component{},
+			Total:      0,
+			Returned:   0,
+			Query:      query,
+			HasMore:    false,
+		}
+	}
+	defer rows.Close()
+
+	// Scan components without loading versions for better performance
+	results := s.scanComponentsWithVersions(rows, false)
+
+	// Calculate if there are more results
+	hasMore := false
+	if query.Limit > 0 && len(results) == query.Limit {
+		hasMore = (query.Offset + len(results)) < totalCount
+	}
+
+	return &QueryResult{
+		Components: results,
+		Total:      totalCount,
+		Returned:   len(results),
+		Query:      query,
+		HasMore:    hasMore,
+	}
+}
+
+// LoadComponentVersions loads versions for a specific component by name
+func (s *Storage) LoadComponentVersions(componentName string) ([]types.Version, error) {
+	// First get the component ID
+	var componentID int64
+	err := s.db.QueryRow("SELECT id FROM components WHERE name = ?", componentName).Scan(&componentID)
+	if err != nil {
+		return nil, fmt.Errorf("component %s not found: %w", componentName, err)
+	}
+
+	// Load versions for this component
+	return s.loadVersions(componentID)
+}
+
+// GetComponentCount returns the total number of components in the database
+func (s *Storage) GetComponentCount() (int, error) {
+	var count int
+	err := s.db.QueryRow("SELECT COUNT(*) FROM components").Scan(&count)
+	return count, err
+}
+
+// GetVersionCount returns the total number of versions in the database
+func (s *Storage) GetVersionCount() (int, error) {
+	var count int
+	err := s.db.QueryRow("SELECT COUNT(*) FROM versions").Scan(&count)
+	return count, err
 }

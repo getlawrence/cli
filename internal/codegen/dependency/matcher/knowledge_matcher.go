@@ -3,39 +3,31 @@ package matcher
 import (
 	"strings"
 
-	"github.com/getlawrence/cli/internal/codegen/dependency/knowledge"
 	"github.com/getlawrence/cli/internal/codegen/dependency/types"
-	"github.com/getlawrence/cli/pkg/knowledge/storage"
+	"github.com/getlawrence/cli/pkg/knowledge/client"
 	kbtypes "github.com/getlawrence/cli/pkg/knowledge/types"
 )
 
 // KnowledgeEnhancedMatcher extends the base matcher with knowledge base version resolution
 type KnowledgeEnhancedMatcher struct {
 	*PlanMatcher
-	knowledgeStorage *storage.Storage
+	knowledgeClient *client.KnowledgeClient
 }
 
 // NewKnowledgeEnhancedMatcher creates a new knowledge-enhanced matcher
-func NewKnowledgeEnhancedMatcher(knowledgeStorage *storage.Storage) Matcher {
+func NewKnowledgeEnhancedMatcher(knowledgeClient *client.KnowledgeClient) Matcher {
 	return &KnowledgeEnhancedMatcher{
-		PlanMatcher:      &PlanMatcher{},
-		knowledgeStorage: knowledgeStorage,
+		PlanMatcher:     &PlanMatcher{},
+		knowledgeClient: knowledgeClient,
 	}
 }
 
 // Match computes missing dependencies with specific versions from the knowledge base
-func (m *KnowledgeEnhancedMatcher) Match(existingDeps []string, plan types.InstallPlan, kb *knowledge.KnowledgeBase) []string {
+func (m *KnowledgeEnhancedMatcher) Match(existingDeps []string, plan types.InstallPlan, kb *client.KnowledgeClient) []string {
 	// First get the basic missing packages
 	basicMissing := m.PlanMatcher.Match(existingDeps, plan, kb)
 	if len(basicMissing) == 0 {
 		return nil
-	}
-
-	// Load knowledge base for version resolution
-	knowledgeBase, err := m.knowledgeStorage.LoadKnowledgeBase("")
-	if err != nil {
-		// Fallback to basic matching if knowledge base is not available
-		return basicMissing
 	}
 
 	// Enhance with specific versions and filter out packages with invalid versions
@@ -48,11 +40,11 @@ func (m *KnowledgeEnhancedMatcher) Match(existingDeps []string, plan types.Insta
 		}
 
 		// Try to find the package in the knowledge base and get latest stable version
-		if versionedPkg := m.getPackageWithVersion(knowledgeBase, pkg, plan.Language); versionedPkg != "" {
+		if versionedPkg := m.getPackageWithVersion(pkg, plan.Language); versionedPkg != "" {
 			enhancedMissing = append(enhancedMissing, versionedPkg)
 		} else {
 			// Check if this package has "unknown" version - if so, skip it entirely
-			if m.hasUnknownVersion(knowledgeBase, pkg) {
+			if m.hasUnknownVersion(pkg) {
 				// Skip packages that exist in registry but not in package manager
 				continue
 			}
@@ -65,10 +57,10 @@ func (m *KnowledgeEnhancedMatcher) Match(existingDeps []string, plan types.Insta
 }
 
 // getPackageWithVersion finds a package in the knowledge base and returns it with the latest stable version
-func (m *KnowledgeEnhancedMatcher) getPackageWithVersion(kb *kbtypes.KnowledgeBase, packageName, language string) string {
+func (m *KnowledgeEnhancedMatcher) getPackageWithVersion(packageName, language string) string {
 	// Find the component in the knowledge base
-	component := m.knowledgeStorage.GetComponentByName(kb, packageName)
-	if component == nil {
+	component, err := m.knowledgeClient.GetComponentByName(packageName)
+	if err != nil || component == nil {
 		return ""
 	}
 
@@ -169,9 +161,9 @@ func hasVersionSpecifier(pkg string) bool {
 }
 
 // hasUnknownVersion checks if a package exists in the knowledge base but only has "unknown" versions
-func (m *KnowledgeEnhancedMatcher) hasUnknownVersion(kb *kbtypes.KnowledgeBase, packageName string) bool {
-	component := m.knowledgeStorage.GetComponentByName(kb, packageName)
-	if component == nil {
+func (m *KnowledgeEnhancedMatcher) hasUnknownVersion(packageName string) bool {
+	component, err := m.knowledgeClient.GetComponentByName(packageName)
+	if err != nil || component == nil {
 		return false
 	}
 

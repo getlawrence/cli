@@ -3,13 +3,13 @@ package matcher
 import (
 	"strings"
 
-	"github.com/getlawrence/cli/internal/codegen/dependency/knowledge"
 	"github.com/getlawrence/cli/internal/codegen/dependency/types"
+	"github.com/getlawrence/cli/pkg/knowledge/client"
 )
 
 // Matcher computes required dependencies based on plan and existing deps
 type Matcher interface {
-	Match(existingDeps []string, plan types.InstallPlan, kb *knowledge.KnowledgeBase) []string
+	Match(existingDeps []string, plan types.InstallPlan, kb *client.KnowledgeClient) []string
 }
 
 // PlanMatcher implements Matcher using InstallPlan and prerequisites
@@ -21,7 +21,7 @@ func NewPlanMatcher() Matcher {
 }
 
 // Match computes missing dependencies based on the install plan
-func (m *PlanMatcher) Match(existingDeps []string, plan types.InstallPlan, kb *knowledge.KnowledgeBase) []string {
+func (m *PlanMatcher) Match(existingDeps []string, plan types.InstallPlan, kb *client.KnowledgeClient) []string {
 	// Build set of existing dependencies (normalized)
 	existing := make(map[string]bool)
 	for _, dep := range existingDeps {
@@ -33,17 +33,25 @@ func (m *PlanMatcher) Match(existingDeps []string, plan types.InstallPlan, kb *k
 
 	// Add core packages if requested
 	if plan.InstallOTEL {
-		for _, pkg := range kb.GetCorePackages(plan.Language) {
-			required[normalizePackage(pkg)] = pkg
+		corePackages, err := kb.GetCorePackages(plan.Language)
+		if err == nil {
+			for _, pkg := range corePackages {
+				required[normalizePackage(pkg)] = pkg
+			}
 		}
 	}
 
 	// Expand instrumentations with prerequisites
-	instrumentations := m.expandPrerequisites(plan.InstallInstrumentations, kb.GetPrerequisites(plan.Language))
+	prerequisites, err := kb.GetPrerequisites(plan.Language)
+	if err != nil {
+		prerequisites = []client.PrerequisiteRule{} // fallback to empty
+	}
+	instrumentations := m.expandPrerequisites(plan.InstallInstrumentations, prerequisites)
 
 	// Add instrumentation packages
 	for _, inst := range instrumentations {
-		if pkg := kb.GetInstrumentationPackage(plan.Language, inst); pkg != "" {
+		pkg, err := kb.GetInstrumentationPackage(plan.Language, inst)
+		if err == nil && pkg != "" {
 			required[normalizePackage(pkg)] = pkg
 		}
 	}
@@ -51,7 +59,8 @@ func (m *PlanMatcher) Match(existingDeps []string, plan types.InstallPlan, kb *k
 	// Add component packages
 	for compType, components := range plan.InstallComponents {
 		for _, comp := range components {
-			if pkg := kb.GetComponentPackage(plan.Language, compType, comp); pkg != "" {
+			pkg, err := kb.GetComponentPackage(plan.Language, compType, comp)
+			if err == nil && pkg != "" {
 				required[normalizePackage(pkg)] = pkg
 			}
 		}
@@ -69,7 +78,7 @@ func (m *PlanMatcher) Match(existingDeps []string, plan types.InstallPlan, kb *k
 }
 
 // expandPrerequisites applies prerequisite rules to expand instrumentation list
-func (m *PlanMatcher) expandPrerequisites(instrumentations []string, rules []knowledge.PrerequisiteRule) []string {
+func (m *PlanMatcher) expandPrerequisites(instrumentations []string, rules []client.PrerequisiteRule) []string {
 	// Build set of current instrumentations
 	instSet := make(map[string]bool)
 	for _, inst := range instrumentations {

@@ -8,32 +8,32 @@ import (
 	"github.com/getlawrence/cli/internal/codegen/types"
 	"github.com/getlawrence/cli/internal/detector"
 	"github.com/getlawrence/cli/internal/domain"
-	"github.com/getlawrence/cli/pkg/knowledge/storage"
+	"github.com/getlawrence/cli/pkg/knowledge/client"
 	kbtypes "github.com/getlawrence/cli/pkg/knowledge/types"
 )
 
 // KnowledgeEnhancedGenerator extends the base generator with knowledge base capabilities
 type KnowledgeEnhancedGenerator struct {
 	*Generator
-	knowledgeStorage *storage.Storage
+	knowledgeClient *client.KnowledgeClient
 }
 
 // NewKnowledgeEnhancedGenerator creates a new knowledge-enhanced generator
 func NewKnowledgeEnhancedGenerator(baseGenerator *Generator) (*KnowledgeEnhancedGenerator, error) {
-	knowledgeStorage, err := storage.NewStorage("knowledge.db")
+	knowledgeClient, err := client.NewKnowledgeClient("knowledge.db")
 	if err != nil {
-		return nil, fmt.Errorf("failed to create knowledge storage: %w", err)
+		return nil, fmt.Errorf("failed to create knowledge client: %w", err)
 	}
 
 	return &KnowledgeEnhancedGenerator{
-		Generator:        baseGenerator,
-		knowledgeStorage: knowledgeStorage,
+		Generator:       baseGenerator,
+		knowledgeClient: knowledgeClient,
 	}, nil
 }
 
 // Close closes the underlying resources
 func (g *KnowledgeEnhancedGenerator) Close() error {
-	return g.knowledgeStorage.Close()
+	return g.knowledgeClient.Close()
 }
 
 // GenerateWithKnowledge generates code with enhanced knowledge base recommendations
@@ -54,12 +54,6 @@ func (g *KnowledgeEnhancedGenerator) GenerateWithKnowledge(ctx context.Context, 
 
 // enhanceWithKnowledge enhances the generation with knowledge base insights
 func (g *KnowledgeEnhancedGenerator) enhanceWithKnowledge(ctx context.Context, req types.GenerationRequest) error {
-	// Load knowledge base
-	kb, err := g.knowledgeStorage.LoadKnowledgeBase("")
-	if err != nil {
-		return fmt.Errorf("failed to load knowledge base: %w", err)
-	}
-
 	// Analyze the codebase to get package information
 	analysis, err := g.Generator.detector.AnalyzeCodebase(ctx, req.CodebasePath)
 	if err != nil {
@@ -67,7 +61,7 @@ func (g *KnowledgeEnhancedGenerator) enhanceWithKnowledge(ctx context.Context, r
 	}
 
 	// Generate enhanced recommendations
-	recommendations := g.generateEnhancedRecommendations(ctx, analysis, kb, req)
+	recommendations := g.generateEnhancedRecommendations(ctx, analysis, req)
 	g.logger.Logf("Debug: Generated %d enhanced recommendations\n", len(recommendations))
 	if len(recommendations) > 0 {
 		g.outputEnhancedRecommendations(recommendations)
@@ -76,8 +70,8 @@ func (g *KnowledgeEnhancedGenerator) enhanceWithKnowledge(ctx context.Context, r
 		for _, dirAnalysis := range analysis.DirectoryAnalyses {
 			g.logger.Logf("Debug: Directory %s has %d packages\n", dirAnalysis.Directory, len(dirAnalysis.Packages))
 			for _, pkg := range dirAnalysis.Packages {
-				component := g.knowledgeStorage.GetComponentByName(kb, pkg.Name)
-				if component == nil {
+				component, err := g.knowledgeClient.GetComponentByName(pkg.Name)
+				if err != nil || component == nil {
 					g.logger.Logf("Debug: Package %s not found in knowledge base\n", pkg.Name)
 				} else {
 					g.logger.Logf("Debug: Package %s found in knowledge base: %s\n", pkg.Name, component.Type)
@@ -104,14 +98,14 @@ type EnhancedRecommendation struct {
 }
 
 // generateEnhancedRecommendations generates enhanced recommendations using the knowledge base
-func (g *KnowledgeEnhancedGenerator) generateEnhancedRecommendations(ctx context.Context, analysis *detector.Analysis, kb *kbtypes.KnowledgeBase, req types.GenerationRequest) []EnhancedRecommendation {
+func (g *KnowledgeEnhancedGenerator) generateEnhancedRecommendations(ctx context.Context, analysis *detector.Analysis, req types.GenerationRequest) []EnhancedRecommendation {
 	var recommendations []EnhancedRecommendation
 
 	for _, dirAnalysis := range analysis.DirectoryAnalyses {
 		for _, pkg := range dirAnalysis.Packages {
 			// Find the package in the knowledge base
-			component := g.knowledgeStorage.GetComponentByName(kb, pkg.Name)
-			if component == nil {
+			component, err := g.knowledgeClient.GetComponentByName(pkg.Name)
+			if err != nil || component == nil {
 				continue
 			}
 
@@ -246,18 +240,17 @@ func (g *KnowledgeEnhancedGenerator) findInstrumentationsForPackage(component *k
 	var instrumentations []string
 
 	// Query for instrumentations that target this package
-	query := storage.Query{
+	query := client.ComponentQuery{
 		Language:  string(g.convertLanguage(pkg.Language)),
 		Type:      string(kbtypes.ComponentTypeInstrumentation),
 		Framework: pkg.Name,
 	}
 
-	kb, err := g.knowledgeStorage.LoadKnowledgeBase("")
+	result, err := g.knowledgeClient.QueryComponents(query)
 	if err != nil {
 		return instrumentations
 	}
 
-	result := g.knowledgeStorage.QueryKnowledgeBase(kb, query)
 	for _, comp := range result.Components {
 		instrumentations = append(instrumentations, comp.Name)
 	}

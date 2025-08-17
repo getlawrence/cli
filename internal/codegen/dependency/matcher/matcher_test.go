@@ -1,51 +1,227 @@
 package matcher
 
 import (
+	"os"
 	"testing"
+	"time"
 
-	"github.com/getlawrence/cli/internal/codegen/dependency/knowledge"
 	"github.com/getlawrence/cli/internal/codegen/dependency/types"
+	"github.com/getlawrence/cli/pkg/knowledge/client"
+	"github.com/getlawrence/cli/pkg/knowledge/storage"
+	kbtypes "github.com/getlawrence/cli/pkg/knowledge/types"
 )
 
-func TestPlanMatcher(t *testing.T) {
-	// Create test knowledge base
-	kb := &knowledge.KnowledgeBase{
-		Languages: map[string]knowledge.LanguagePackages{
-			"go": {
-				Core: []string{
-					"go.opentelemetry.io/otel",
-					"go.opentelemetry.io/otel/sdk",
-				},
-				Instrumentations: map[string]string{
-					"http": "go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp",
-					"gin":  "go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin",
-				},
-				Components: map[string]map[string]string{
-					"exporter": {
-						"jaeger": "go.opentelemetry.io/otel/exporters/jaeger",
+func createTestKnowledgeClient(t *testing.T) *client.KnowledgeClient {
+	// Create a temporary database file
+	dbPath := "test_matcher.db"
+	t.Cleanup(func() {
+		os.Remove(dbPath)
+		os.Remove(dbPath + "-journal")
+	})
+
+	// Create new storage
+	store, err := storage.NewStorage(dbPath)
+	if err != nil {
+		t.Fatalf("Failed to create storage: %v", err)
+	}
+
+	// Create test knowledge base with required components
+	kb := &kbtypes.KnowledgeBase{
+		SchemaVersion: "1.0.0",
+		GeneratedAt:   time.Now(),
+		Components: []kbtypes.Component{
+			// Go core packages
+			{
+				Name:         "go.opentelemetry.io/otel",
+				Type:         kbtypes.ComponentTypeAPI,
+				Category:     kbtypes.ComponentCategoryAPI,
+				Status:       kbtypes.ComponentStatusStable,
+				SupportLevel: kbtypes.SupportLevelOfficial,
+				Language:     kbtypes.ComponentLanguageGo,
+				Description:  "OpenTelemetry API for Go",
+				Repository:   "https://github.com/open-telemetry/opentelemetry-go",
+				LastUpdated:  time.Now(),
+				Versions: []kbtypes.Version{
+					{
+						Name:        "1.0.0",
+						ReleaseDate: time.Now(),
+						Status:      kbtypes.VersionStatusLatest,
 					},
 				},
 			},
-			"javascript": {
-				Core: []string{
-					"@opentelemetry/api",
-					"@opentelemetry/sdk-node",
-				},
-				Instrumentations: map[string]string{
-					"http":    "@opentelemetry/instrumentation-http",
-					"express": "@opentelemetry/instrumentation-express",
-					"auto":    "@opentelemetry/auto-instrumentations-node",
-				},
-				Prerequisites: []knowledge.PrerequisiteRule{
+			{
+				Name:         "go.opentelemetry.io/otel/sdk",
+				Type:         kbtypes.ComponentTypeSDK,
+				Category:     kbtypes.ComponentCategoryCore,
+				Status:       kbtypes.ComponentStatusStable,
+				SupportLevel: kbtypes.SupportLevelOfficial,
+				Language:     kbtypes.ComponentLanguageGo,
+				Description:  "OpenTelemetry SDK for Go",
+				Repository:   "https://github.com/open-telemetry/opentelemetry-go",
+				LastUpdated:  time.Now(),
+				Versions: []kbtypes.Version{
 					{
-						If:       []string{"express"},
-						Requires: []string{"http"},
-						Unless:   []string{"auto"},
+						Name:        "1.0.0",
+						ReleaseDate: time.Now(),
+						Status:      kbtypes.VersionStatusLatest,
+					},
+				},
+			},
+			// Go instrumentations
+			{
+				Name:         "go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp",
+				Type:         kbtypes.ComponentTypeInstrumentation,
+				Category:     kbtypes.ComponentCategoryContrib,
+				Status:       kbtypes.ComponentStatusStable,
+				SupportLevel: kbtypes.SupportLevelOfficial,
+				Language:     kbtypes.ComponentLanguageGo,
+				Description:  "HTTP instrumentation for Go",
+				Repository:   "https://github.com/open-telemetry/opentelemetry-go-contrib",
+				LastUpdated:  time.Now(),
+				Versions: []kbtypes.Version{
+					{
+						Name:        "1.0.0",
+						ReleaseDate: time.Now(),
+						Status:      kbtypes.VersionStatusLatest,
+					},
+				},
+			},
+			// Go exporters
+			{
+				Name:         "go.opentelemetry.io/otel/exporters/jaeger",
+				Type:         kbtypes.ComponentTypeExporter,
+				Category:     kbtypes.ComponentCategoryCore,
+				Status:       kbtypes.ComponentStatusStable,
+				SupportLevel: kbtypes.SupportLevelOfficial,
+				Language:     kbtypes.ComponentLanguageGo,
+				Description:  "Jaeger exporter for Go",
+				Repository:   "https://github.com/open-telemetry/opentelemetry-go",
+				LastUpdated:  time.Now(),
+				Versions: []kbtypes.Version{
+					{
+						Name:        "1.0.0",
+						ReleaseDate: time.Now(),
+						Status:      kbtypes.VersionStatusLatest,
+					},
+				},
+			},
+			// JavaScript core packages
+			{
+				Name:         "@opentelemetry/api",
+				Type:         kbtypes.ComponentTypeAPI,
+				Category:     kbtypes.ComponentCategoryAPI,
+				Status:       kbtypes.ComponentStatusStable,
+				SupportLevel: kbtypes.SupportLevelOfficial,
+				Language:     kbtypes.ComponentLanguageJavaScript,
+				Description:  "OpenTelemetry API for JavaScript",
+				Repository:   "https://github.com/open-telemetry/opentelemetry-js",
+				LastUpdated:  time.Now(),
+				Versions: []kbtypes.Version{
+					{
+						Name:        "1.0.0",
+						ReleaseDate: time.Now(),
+						Status:      kbtypes.VersionStatusLatest,
+					},
+				},
+			},
+			{
+				Name:         "@opentelemetry/sdk-node",
+				Type:         kbtypes.ComponentTypeSDK,
+				Category:     kbtypes.ComponentCategoryCore,
+				Status:       kbtypes.ComponentStatusStable,
+				SupportLevel: kbtypes.SupportLevelOfficial,
+				Language:     kbtypes.ComponentLanguageJavaScript,
+				Description:  "OpenTelemetry SDK for Node.js",
+				Repository:   "https://github.com/open-telemetry/opentelemetry-js",
+				LastUpdated:  time.Now(),
+				Versions: []kbtypes.Version{
+					{
+						Name:        "1.0.0",
+						ReleaseDate: time.Now(),
+						Status:      kbtypes.VersionStatusLatest,
+					},
+				},
+			},
+			// JavaScript instrumentations
+			{
+				Name:         "@opentelemetry/instrumentation-http",
+				Type:         kbtypes.ComponentTypeInstrumentation,
+				Category:     kbtypes.ComponentCategoryContrib,
+				Status:       kbtypes.ComponentStatusStable,
+				SupportLevel: kbtypes.SupportLevelOfficial,
+				Language:     kbtypes.ComponentLanguageJavaScript,
+				Description:  "HTTP instrumentation for JavaScript",
+				Repository:   "https://github.com/open-telemetry/opentelemetry-js-contrib",
+				LastUpdated:  time.Now(),
+				Versions: []kbtypes.Version{
+					{
+						Name:        "1.0.0",
+						ReleaseDate: time.Now(),
+						Status:      kbtypes.VersionStatusLatest,
+					},
+				},
+			},
+			{
+				Name:         "@opentelemetry/instrumentation-express",
+				Type:         kbtypes.ComponentTypeInstrumentation,
+				Category:     kbtypes.ComponentCategoryContrib,
+				Status:       kbtypes.ComponentStatusStable,
+				SupportLevel: kbtypes.SupportLevelOfficial,
+				Language:     kbtypes.ComponentLanguageJavaScript,
+				Description:  "Express instrumentation for JavaScript",
+				Repository:   "https://github.com/open-telemetry/opentelemetry-js-contrib",
+				LastUpdated:  time.Now(),
+				Versions: []kbtypes.Version{
+					{
+						Name:        "1.0.0",
+						ReleaseDate: time.Now(),
+						Status:      kbtypes.VersionStatusLatest,
+					},
+				},
+			},
+			{
+				Name:         "@opentelemetry/auto-instrumentations-node",
+				Type:         kbtypes.ComponentTypeInstrumentation,
+				Category:     kbtypes.ComponentCategoryContrib,
+				Status:       kbtypes.ComponentStatusStable,
+				SupportLevel: kbtypes.SupportLevelOfficial,
+				Language:     kbtypes.ComponentLanguageJavaScript,
+				Description:  "Auto instrumentation for Node.js",
+				Repository:   "https://github.com/open-telemetry/opentelemetry-js-contrib",
+				LastUpdated:  time.Now(),
+				Versions: []kbtypes.Version{
+					{
+						Name:        "1.0.0",
+						ReleaseDate: time.Now(),
+						Status:      kbtypes.VersionStatusLatest,
 					},
 				},
 			},
 		},
 	}
+
+	// Save the test knowledge base
+	err = store.SaveKnowledgeBase(kb, "test")
+	if err != nil {
+		t.Fatalf("Failed to save test knowledge base: %v", err)
+	}
+
+	// Create and return the knowledge client
+	kc, err := client.NewKnowledgeClient(dbPath)
+	if err != nil {
+		t.Fatalf("Failed to create knowledge client: %v", err)
+	}
+
+	t.Cleanup(func() {
+		kc.Close()
+	})
+
+	return kc
+}
+
+func TestPlanMatcher(t *testing.T) {
+	// Create test knowledge client
+	kb := createTestKnowledgeClient(t)
 
 	matcher := NewPlanMatcher()
 
