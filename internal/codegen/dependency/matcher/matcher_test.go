@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/getlawrence/cli/internal/codegen/dependency/types"
+	"github.com/getlawrence/cli/internal/logger"
 	"github.com/getlawrence/cli/pkg/knowledge/client"
 	"github.com/getlawrence/cli/pkg/knowledge/storage"
 	kbtypes "github.com/getlawrence/cli/pkg/knowledge/types"
@@ -20,7 +21,8 @@ func createTestKnowledgeClient(t *testing.T) *client.KnowledgeClient {
 	})
 
 	// Create new storage
-	store, err := storage.NewStorage(dbPath)
+	logger := &logger.StdoutLogger{}
+	store, err := storage.NewStorage(dbPath, logger)
 	if err != nil {
 		t.Fatalf("Failed to create storage: %v", err)
 	}
@@ -207,7 +209,7 @@ func createTestKnowledgeClient(t *testing.T) *client.KnowledgeClient {
 	}
 
 	// Create and return the knowledge client
-	kc, err := client.NewKnowledgeClient(dbPath)
+	kc, err := client.NewKnowledgeClient(dbPath, logger)
 	if err != nil {
 		t.Fatalf("Failed to create knowledge client: %v", err)
 	}

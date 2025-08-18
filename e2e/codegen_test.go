@@ -42,7 +42,7 @@ func TestCodegenTemplateDryRunOnGoSample(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 		defer cancel()
 		args := []string{
-			"codegen",
+			"gen",
 			samplePath,
 			"--mode", "template",
 			"--output", outputDir,
@@ -109,7 +109,7 @@ func TestCodegenTemplateDryRunOnOtherSamples(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 			defer cancel()
 			args := []string{
-				"codegen",
+				"gen",
 				samplePath,
 				"--mode", "template",
 				"--dry-run",

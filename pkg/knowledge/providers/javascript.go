@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/getlawrence/cli/internal/logger"
 	"github.com/getlawrence/cli/pkg/knowledge/registry"
 	"github.com/getlawrence/cli/pkg/knowledge/types"
 )
@@ -19,7 +20,7 @@ type JavaScriptProvider struct {
 // NewJavaScriptProvider creates a new JavaScript provider
 func NewJavaScriptProvider() *JavaScriptProvider {
 	return &JavaScriptProvider{
-		registryClient: registry.NewClient(),
+		registryClient: registry.NewClient("", &logger.StdoutLogger{}, registry.RegistryBaseURL),
 	}
 }
 

@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/getlawrence/cli/internal/logger"
 	"github.com/getlawrence/cli/pkg/knowledge/registry"
 	"github.com/getlawrence/cli/pkg/knowledge/types"
 )
@@ -85,7 +86,7 @@ type GoRegistryProvider struct {
 // NewGoRegistryProvider creates a new Go registry provider
 func NewGoRegistryProvider() *GoRegistryProvider {
 	return &GoRegistryProvider{
-		registryClient: registry.NewClient(),
+		registryClient: registry.NewClient("", &logger.StdoutLogger{}, registry.RegistryBaseURL),
 	}
 }
 

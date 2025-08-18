@@ -20,8 +20,9 @@ import (
 )
 
 var knowledgeCmd = &cobra.Command{
-	Use:   "knowledge [command]",
-	Short: "Manage OpenTelemetry knowledge base",
+	Use:     "knowledge [command]",
+	Aliases: []string{"kb"},
+	Short:   "Manage OpenTelemetry knowledge base",
 	Long: `Knowledge base management for OpenTelemetry components.
 
 This command provides tools to discover, update, and query OpenTelemetry components
@@ -85,10 +86,11 @@ func init() {
 	knowledgeCmd.AddCommand(providersCmd)
 
 	// Add flags for update command
-	updateCmd.Flags().StringP("output", "o", "pkg/knowledge/otel_packages.json", "Output file path")
+	updateCmd.Flags().StringP("output", "o", "knowledge.db", "Output file path")
 	updateCmd.Flags().BoolP("force", "f", false, "Force update even if recent data exists")
 	updateCmd.Flags().IntP("workers", "w", 0, "Number of parallel workers (0 = auto-detect based on CPU cores)")
 	updateCmd.Flags().IntP("rate-limit", "r", 100, "Rate limit for API requests per second per worker")
+	updateCmd.Flags().StringP("github-token", "", "", "GitHub personal access token for API authentication")
 
 	// Add flags for query command
 	queryCmd.Flags().StringP("language", "l", "", "Filter by language")
@@ -100,11 +102,14 @@ func init() {
 	queryCmd.Flags().String("version", "", "Filter by version")
 	queryCmd.Flags().StringP("framework", "", "", "Filter by instrumentation target framework")
 	queryCmd.Flags().StringP("output", "o", "text", "Output format (text, json)")
-	queryCmd.Flags().StringP("file", "f", "pkg/knowledge/otel_packages.json", "Knowledge base file path")
+	queryCmd.Flags().StringP("file", "f", "knowledge.db", "Knowledge base file path")
 
 	// Add flags for info command
-	infoCmd.Flags().StringP("file", "f", "pkg/knowledge/otel_packages.json", "Knowledge base file path")
+	infoCmd.Flags().StringP("file", "f", "knowledge.db", "Knowledge base file path")
 	infoCmd.Flags().StringP("output", "o", "text", "Output format (text, json)")
+
+	// Add flags for providers command
+	providersCmd.Flags().StringP("github-token", "", "", "GitHub personal access token for API authentication")
 
 	rootCmd.AddCommand(knowledgeCmd)
 }
@@ -125,6 +130,9 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 
 	ui := logger.NewUILogger()
 
+	// Get GitHub token if provided
+	githubToken, _ := cmd.Flags().GetString("github-token")
+
 	// If no language was specified, update all supported languages
 	if languageStr == "" {
 		ui.Log("Updating all supported languages in parallel...")
@@ -139,7 +147,7 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 		}
 
 		// Use parallel processing for better performance
-		return runUpdateAllLanguagesParallel(supportedLanguages, outputPath, workerCount, rateLimit, ui)
+		return runUpdateAllLanguagesParallel(supportedLanguages, outputPath, workerCount, rateLimit, ui, githubToken)
 	}
 
 	// Validate language if one was specified
@@ -156,8 +164,13 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Create pipeline with logger
-	p := pipeline.NewPipelineWithLogger(ui)
+	// Create pipeline with logger and GitHub token if provided
+	var p *pipeline.Pipeline
+	if githubToken != "" {
+		p = pipeline.NewPipeline(providers.NewProviderFactory(githubToken, ui), ui, githubToken)
+	} else {
+		p = pipeline.NewPipeline(providers.NewProviderFactory("", ui), ui, "")
+	}
 
 	// Update knowledge base
 	kb, err := p.UpdateKnowledgeBase(language)
@@ -166,7 +179,7 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 	}
 
 	// Save to database
-	storageClient, err := storage.NewStorageWithLogger("knowledge.db", ui)
+	storageClient, err := storage.NewStorage("knowledge.db", ui)
 	if err != nil {
 		return fmt.Errorf("failed to create storage: %w", err)
 	}
@@ -183,7 +196,7 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 }
 
 // runUpdateAllLanguagesParallel processes all languages in parallel using channels and goroutines
-func runUpdateAllLanguagesParallel(supportedLanguages []types.ComponentLanguage, outputPath string, workerCount int, rateLimit int, ui logger.Logger) error {
+func runUpdateAllLanguagesParallel(supportedLanguages []types.ComponentLanguage, outputPath string, workerCount int, rateLimit int, ui logger.Logger, githubToken string) error {
 	startTime := time.Now()
 
 	// Determine optimal number of workers
@@ -217,7 +230,7 @@ func runUpdateAllLanguagesParallel(supportedLanguages []types.ComponentLanguage,
 	var wg sync.WaitGroup
 	for i := 0; i < numWorkers; i++ {
 		wg.Add(1)
-		go languageUpdateWorker(languageChan, resultChan, errorChan, stopChan, &wg, rateLimit, ui)
+		go languageUpdateWorker(languageChan, resultChan, errorChan, stopChan, &wg, rateLimit, ui, githubToken)
 	}
 
 	// Send languages to workers
@@ -345,7 +358,7 @@ func runUpdateAllLanguagesParallel(supportedLanguages []types.ComponentLanguage,
 	}
 
 	// Save to database
-	storageClient, err := storage.NewStorageWithLogger("knowledge.db", ui)
+	storageClient, err := storage.NewStorage("knowledge.db", ui)
 	if err != nil {
 		return fmt.Errorf("failed to create storage: %w", err)
 	}
@@ -377,7 +390,7 @@ type languageUpdateResult struct {
 }
 
 // languageUpdateWorker processes language updates in parallel
-func languageUpdateWorker(languageChan <-chan types.ComponentLanguage, resultChan chan<- *languageUpdateResult, errorChan chan<- error, stopChan <-chan struct{}, wg *sync.WaitGroup, rateLimit int, ui logger.Logger) {
+func languageUpdateWorker(languageChan <-chan types.ComponentLanguage, resultChan chan<- *languageUpdateResult, errorChan chan<- error, stopChan <-chan struct{}, wg *sync.WaitGroup, rateLimit int, ui logger.Logger, githubToken string) {
 	defer wg.Done()
 
 	// Create rate limiter for this worker
@@ -405,7 +418,7 @@ func languageUpdateWorker(languageChan <-chan types.ComponentLanguage, resultCha
 		}
 
 		// Update knowledge base for this language
-		p := pipeline.NewPipelineWithLogger(ui)
+		p := pipeline.NewPipeline(providers.NewProviderFactory(githubToken, ui), ui, githubToken)
 		kb, err := p.UpdateKnowledgeBase(language)
 
 		// Send result
@@ -442,18 +455,17 @@ func runQuery(cmd *cobra.Command, args []string) error {
 	version, _ := cmd.Flags().GetString("version")
 	framework, _ := cmd.Flags().GetString("framework")
 	outputFormat, _ := cmd.Flags().GetString("output")
-	filePath, _ := cmd.Flags().GetString("file")
 
 	ui := logger.NewUILogger()
 
 	// Load knowledge base
-	storageClient, err := storage.NewStorageWithLogger("knowledge.db", ui)
+	storageClient, err := storage.NewStorage("knowledge.db", ui)
 	if err != nil {
 		return fmt.Errorf("failed to create storage: %w", err)
 	}
 	defer storageClient.Close()
 
-	kb, err := storageClient.LoadKnowledgeBase(filePath)
+	kb, err := storageClient.LoadKnowledgeBase()
 	if err != nil {
 		return fmt.Errorf("failed to create storage: %w", err)
 	}
@@ -485,19 +497,18 @@ func runQuery(cmd *cobra.Command, args []string) error {
 }
 
 func runInfo(cmd *cobra.Command, args []string) error {
-	filePath, _ := cmd.Flags().GetString("file")
 	outputFormat, _ := cmd.Flags().GetString("output")
 
 	ui := logger.NewUILogger()
 
 	// Load knowledge base from the same database file used by update command
-	storageClient, err := storage.NewStorageWithLogger("knowledge.db", ui)
+	storageClient, err := storage.NewStorage("knowledge.db", ui)
 	if err != nil {
 		return fmt.Errorf("failed to create storage: %w", err)
 	}
 	defer storageClient.Close()
 
-	kb, err := storageClient.LoadKnowledgeBase(filePath)
+	kb, err := storageClient.LoadKnowledgeBase()
 	if err != nil {
 		return fmt.Errorf("failed to load knowledge base: %w", err)
 	}
@@ -514,8 +525,12 @@ func runInfo(cmd *cobra.Command, args []string) error {
 }
 
 func runProviders(cmd *cobra.Command, args []string) error {
-	// Create provider factory to list available providers
-	factory := providers.NewProviderFactory()
+	// Get GitHub token if provided
+	githubToken, _ := cmd.Flags().GetString("github-token")
+
+	ui := logger.NewUILogger()
+
+	factory := providers.NewProviderFactory(githubToken, ui)
 
 	fmt.Printf("Available Providers\n")
 	fmt.Printf("==================\n\n")

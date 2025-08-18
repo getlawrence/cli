@@ -12,6 +12,7 @@ import (
 	"github.com/getlawrence/cli/internal/codegen/dependency/commander"
 	"github.com/getlawrence/cli/internal/codegen/dependency/registry"
 	"github.com/getlawrence/cli/internal/codegen/dependency/types"
+	"github.com/getlawrence/cli/internal/logger"
 	"github.com/getlawrence/cli/pkg/knowledge/client"
 	"github.com/getlawrence/cli/pkg/knowledge/storage"
 	kbtypes "github.com/getlawrence/cli/pkg/knowledge/types"
@@ -26,7 +27,8 @@ func createTestKnowledgeClientForOrchestrator(t *testing.T) *client.KnowledgeCli
 	})
 
 	// Create new storage
-	store, err := storage.NewStorage(dbPath)
+	logger := &logger.StdoutLogger{}
+	store, err := storage.NewStorage(dbPath, logger)
 	if err != nil {
 		t.Fatalf("Failed to create storage: %v", err)
 	}
@@ -176,7 +178,7 @@ func createTestKnowledgeClientForOrchestrator(t *testing.T) *client.KnowledgeCli
 	}
 
 	// Create and return the knowledge client
-	kc, err := client.NewKnowledgeClient(dbPath)
+	kc, err := client.NewKnowledgeClient(dbPath, logger)
 	if err != nil {
 		t.Fatalf("Failed to create knowledge client: %v", err)
 	}

@@ -6,14 +6,14 @@ import "time"
 type ComponentType string
 
 const (
-	ComponentTypeAPI             ComponentType = "API"
-	ComponentTypeSDK             ComponentType = "SDK"
-	ComponentTypeInstrumentation ComponentType = "Instrumentation"
-	ComponentTypeExporter        ComponentType = "Exporter"
-	ComponentTypePropagator      ComponentType = "Propagator"
-	ComponentTypeSampler         ComponentType = "Sampler"
-	ComponentTypeProcessor       ComponentType = "Processor"
-	ComponentTypeResource        ComponentType = "Resource"
+	ComponentTypeAPI              ComponentType = "API"
+	ComponentTypeSDK              ComponentType = "SDK"
+	ComponentTypeInstrumentation  ComponentType = "Instrumentation"
+	ComponentTypeExporter         ComponentType = "Exporter"
+	ComponentTypePropagator       ComponentType = "Propagator"
+	ComponentTypeSampler          ComponentType = "Sampler"
+	ComponentTypeProcessor        ComponentType = "Processor"
+	ComponentTypeResource         ComponentType = "Resource"
 	ComponentTypeResourceDetector ComponentType = "ResourceDetector"
 )
 
@@ -22,34 +22,34 @@ type ComponentLanguage string
 
 const (
 	ComponentLanguageJavaScript ComponentLanguage = "javascript"
-	ComponentLanguageGo        ComponentLanguage = "go"
-	ComponentLanguagePython    ComponentLanguage = "python"
-	ComponentLanguageJava      ComponentLanguage = "java"
-	ComponentLanguageCSharp    ComponentLanguage = "csharp"
-	ComponentLanguagePHP       ComponentLanguage = "php"
-	ComponentLanguageRuby      ComponentLanguage = "ruby"
+	ComponentLanguageGo         ComponentLanguage = "go"
+	ComponentLanguagePython     ComponentLanguage = "python"
+	ComponentLanguageJava       ComponentLanguage = "java"
+	ComponentLanguageCSharp     ComponentLanguage = "csharp"
+	ComponentLanguagePHP        ComponentLanguage = "php"
+	ComponentLanguageRuby       ComponentLanguage = "ruby"
 )
 
 // ComponentCategory represents the category of a component
 type ComponentCategory string
 
 const (
-	ComponentCategoryStableSDK      ComponentCategory = "STABLE_SDK"
-	ComponentCategoryExperimental   ComponentCategory = "EXPERIMENTAL"
-	ComponentCategoryAPI            ComponentCategory = "API"
-	ComponentCategoryCore           ComponentCategory = "CORE"
-	ComponentCategoryContrib        ComponentCategory = "CONTRIB"
+	ComponentCategoryStableSDK    ComponentCategory = "STABLE_SDK"
+	ComponentCategoryExperimental ComponentCategory = "EXPERIMENTAL"
+	ComponentCategoryAPI          ComponentCategory = "API"
+	ComponentCategoryCore         ComponentCategory = "CORE"
+	ComponentCategoryContrib      ComponentCategory = "CONTRIB"
 )
 
 // ComponentStatus represents the status of a component
 type ComponentStatus string
 
 const (
-	ComponentStatusStable      ComponentStatus = "stable"
+	ComponentStatusStable       ComponentStatus = "stable"
 	ComponentStatusExperimental ComponentStatus = "experimental"
-	ComponentStatusDeprecated  ComponentStatus = "deprecated"
-	ComponentStatusBeta        ComponentStatus = "beta"
-	ComponentStatusAlpha       ComponentStatus = "alpha"
+	ComponentStatusDeprecated   ComponentStatus = "deprecated"
+	ComponentStatusBeta         ComponentStatus = "beta"
+	ComponentStatusAlpha        ComponentStatus = "alpha"
 )
 
 // SupportLevel represents the support level of a component
@@ -65,10 +65,10 @@ const (
 type VersionStatus string
 
 const (
-	VersionStatusLatest    VersionStatus = "latest"
-	VersionStatusStable    VersionStatus = "stable"
-	VersionStatusBeta      VersionStatus = "beta"
-	VersionStatusAlpha     VersionStatus = "alpha"
+	VersionStatusLatest     VersionStatus = "latest"
+	VersionStatusStable     VersionStatus = "stable"
+	VersionStatusBeta       VersionStatus = "beta"
+	VersionStatusAlpha      VersionStatus = "alpha"
 	VersionStatusDeprecated VersionStatus = "deprecated"
 )
 
@@ -89,20 +89,20 @@ type CompatibleComponent struct {
 
 // BreakingChange represents a breaking change in a version
 type BreakingChange struct {
-	Version              string `json:"version"`
-	Description          string `json:"description"`
-	MigrationGuideURL    string `json:"migration_guide_url,omitempty"`
-	AffectedFeatures     []string `json:"affected_features,omitempty"`
-	Severity             string `json:"severity,omitempty"` // high, medium, low
+	Version           string   `json:"version"`
+	Description       string   `json:"description"`
+	MigrationGuideURL string   `json:"migration_guide_url,omitempty"`
+	AffectedFeatures  []string `json:"affected_features,omitempty"`
+	Severity          string   `json:"severity,omitempty"` // high, medium, low
 }
 
 // InstrumentationTarget represents a target framework/library for instrumentation
 type InstrumentationTarget struct {
-	Framework     string `json:"framework"`
-	VersionRange  string `json:"version_range"`
-	MinVersion    string `json:"min_version,omitempty"`
-	MaxVersion    string `json:"max_version,omitempty"`
-	Notes         string `json:"notes,omitempty"`
+	Framework    string `json:"framework"`
+	VersionRange string `json:"version_range"`
+	MinVersion   string `json:"min_version,omitempty"`
+	MaxVersion   string `json:"max_version,omitempty"`
+	Notes        string `json:"notes,omitempty"`
 }
 
 // Version represents a specific version of a component
@@ -120,6 +120,7 @@ type Version struct {
 	NPMURL              string                 `json:"npm_url,omitempty"`
 	GitHubURL           string                 `json:"github_url,omitempty"`
 	ChangelogURL        string                 `json:"changelog_url,omitempty"`
+	Changelog           string                 `json:"changelog,omitempty"`
 	CoreVersion         string                 `json:"core_version,omitempty"`
 	ExperimentalVersion string                 `json:"experimental_version,omitempty"`
 	Compatible          []CompatibleComponent  `json:"compatible,omitempty"`
@@ -127,25 +128,25 @@ type Version struct {
 
 // Component represents an OpenTelemetry component
 type Component struct {
-	Name                  string                  `json:"name"`
-	Type                  ComponentType           `json:"type"`
-	Category              ComponentCategory       `json:"category,omitempty"`
-	Status                ComponentStatus         `json:"status,omitempty"`
-	SupportLevel          SupportLevel            `json:"support_level,omitempty"`
-	Language              ComponentLanguage       `json:"language"`
-	Description           string                  `json:"description,omitempty"`
-	Repository            string                  `json:"repository"`
-	RegistryURL           string                 `json:"registry_url,omitempty"`
-	Homepage              string                  `json:"homepage,omitempty"`
-	Versions              []Version               `json:"versions"`
-	Tags                  []string                `json:"tags,omitempty"`
-	Maintainers           []string                `json:"maintainers,omitempty"`
-	License               string                  `json:"license,omitempty"`
-	LastUpdated           time.Time               `json:"last_updated"`
+	Name                   string                  `json:"name"`
+	Type                   ComponentType           `json:"type"`
+	Category               ComponentCategory       `json:"category,omitempty"`
+	Status                 ComponentStatus         `json:"status,omitempty"`
+	SupportLevel           SupportLevel            `json:"support_level,omitempty"`
+	Language               ComponentLanguage       `json:"language"`
+	Description            string                  `json:"description,omitempty"`
+	Repository             string                  `json:"repository"`
+	RegistryURL            string                  `json:"registry_url,omitempty"`
+	Homepage               string                  `json:"homepage,omitempty"`
+	Versions               []Version               `json:"versions"`
+	Tags                   []string                `json:"tags,omitempty"`
+	Maintainers            []string                `json:"maintainers,omitempty"`
+	License                string                  `json:"license,omitempty"`
+	LastUpdated            time.Time               `json:"last_updated"`
 	InstrumentationTargets []InstrumentationTarget `json:"instrumentation_targets,omitempty"`
-	DocumentationURL      string                 `json:"documentation_url,omitempty"`
-	ExamplesURL           string                 `json:"examples_url,omitempty"`
-	MigrationGuideURL     string                 `json:"migration_guide_url,omitempty"`
+	DocumentationURL       string                  `json:"documentation_url,omitempty"`
+	ExamplesURL            string                  `json:"examples_url,omitempty"`
+	MigrationGuideURL      string                  `json:"migration_guide_url,omitempty"`
 }
 
 // KnowledgeBase represents the complete knowledge base

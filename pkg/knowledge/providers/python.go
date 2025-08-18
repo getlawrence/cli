@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/getlawrence/cli/internal/logger"
 	"github.com/getlawrence/cli/pkg/knowledge/registry"
 	"github.com/getlawrence/cli/pkg/knowledge/types"
 )
@@ -91,7 +92,7 @@ type PythonRegistryProvider struct {
 // NewPythonRegistryProvider creates a new Python registry provider
 func NewPythonRegistryProvider() *PythonRegistryProvider {
 	return &PythonRegistryProvider{
-		client: registry.NewClient(),
+		client: registry.NewClient("", &logger.StdoutLogger{}, registry.RegistryBaseURL),
 	}
 }
 

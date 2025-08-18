@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/getlawrence/cli/internal/logger"
 	"github.com/getlawrence/cli/pkg/knowledge/storage"
 	"github.com/getlawrence/cli/pkg/knowledge/types"
 )
@@ -16,12 +17,12 @@ type KnowledgeClient struct {
 }
 
 // NewKnowledgeClient creates a new knowledge client
-func NewKnowledgeClient(dbPath string) (*KnowledgeClient, error) {
+func NewKnowledgeClient(dbPath string, logger logger.Logger) (*KnowledgeClient, error) {
 	if dbPath == "" {
 		dbPath = "knowledge.db"
 	}
 
-	storageClient, err := storage.NewStorage(dbPath)
+	storageClient, err := storage.NewStorage(dbPath, logger)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create knowledge storage: %w", err)
 	}
@@ -238,7 +239,7 @@ func (kc *KnowledgeClient) QueryComponents(query ComponentQuery) (*ComponentResu
 
 // GetStatistics returns knowledge base statistics
 func (kc *KnowledgeClient) GetStatistics() (*types.Statistics, error) {
-	kb, err := kc.storage.LoadKnowledgeBase("")
+	kb, err := kc.storage.LoadKnowledgeBase()
 	if err != nil {
 		return nil, err
 	}

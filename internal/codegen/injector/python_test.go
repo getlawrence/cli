@@ -65,23 +65,31 @@ if __name__ == '__main__':
 `)
 
 	modifications := injector.GenerateFrameworkModifications(flaskContent, operationsData)
-	if len(modifications) != 1 {
-		t.Errorf("Expected 1 modification, got %d", len(modifications))
+	if len(modifications) != 2 {
+		t.Errorf("Expected 2 modifications (import + framework), got %d", len(modifications))
 	}
 
-	mod := modifications[0]
-	if mod.Type != types.ModificationAddFramework {
-		t.Errorf("Expected ModificationAddFramework, got %s", mod.Type)
+	// Find the framework modification
+	var frameworkMod *types.CodeModification
+	for i := range modifications {
+		if modifications[i].Type == types.ModificationAddFramework {
+			frameworkMod = &modifications[i]
+			break
+		}
 	}
 
-	if mod.Framework != "flask" {
-		t.Errorf("Expected framework 'flask', got %s", mod.Framework)
+	if frameworkMod == nil {
+		t.Fatal("Expected to find ModificationAddFramework modification")
+	}
+
+	if frameworkMod.Framework != "flask" {
+		t.Errorf("Expected framework 'flask', got %s", frameworkMod.Framework)
 	}
 
 	// Verify the content contains Flask instrumentation
 	expectedContent := "from opentelemetry.instrumentation.flask import FlaskInstrumentor"
-	if !contains(mod.Content, expectedContent) {
-		t.Errorf("Expected content to contain '%s', got: %s", expectedContent, mod.Content)
+	if !contains(frameworkMod.Content, expectedContent) {
+		t.Errorf("Expected content to contain '%s', got: %s", expectedContent, frameworkMod.Content)
 	}
 }
 
@@ -109,8 +117,15 @@ if __name__ == '__main__':
 `)
 
 	modifications := injector.GenerateFrameworkModifications(flaskContent, operationsData)
-	if len(modifications) != 0 {
-		t.Errorf("Expected 0 modifications when Flask instrumentation not requested, got %d", len(modifications))
+	if len(modifications) != 1 {
+		t.Errorf("Expected 1 modification (import only) when Flask instrumentation not requested, got %d", len(modifications))
+	}
+
+	// Should only have import modification, no framework modification
+	for _, mod := range modifications {
+		if mod.Type == types.ModificationAddFramework {
+			t.Error("Expected no framework modification when Flask instrumentation not requested")
+		}
 	}
 }
 
@@ -178,34 +193,42 @@ if __name__ == '__main__':
 	// Generate modifications
 	modifications := injector.GenerateFrameworkModifications([]byte(inputContent), operationsData)
 
-	// Should have exactly 1 modification (the Flask instrumentation)
-	if len(modifications) != 1 {
-		t.Fatalf("Expected 1 modification, got %d", len(modifications))
+	// Should have exactly 2 modifications (import + Flask instrumentation)
+	if len(modifications) != 2 {
+		t.Fatalf("Expected 2 modifications (import + framework), got %d", len(modifications))
 	}
 
-	mod := modifications[0]
-	if mod.Type != types.ModificationAddFramework {
-		t.Errorf("Expected ModificationAddFramework, got %s", mod.Type)
+	// Find the framework modification
+	var frameworkMod *types.CodeModification
+	for i := range modifications {
+		if modifications[i].Type == types.ModificationAddFramework {
+			frameworkMod = &modifications[i]
+			break
+		}
 	}
 
-	if mod.Framework != "flask" {
-		t.Errorf("Expected framework 'flask', got %s", mod.Framework)
+	if frameworkMod == nil {
+		t.Fatal("Expected to find ModificationAddFramework modification")
+	}
+
+	if frameworkMod.Framework != "flask" {
+		t.Errorf("Expected framework 'flask', got %s", frameworkMod.Framework)
 	}
 
 	// Verify the content contains the correct Flask instrumentation
 	expectedInstrumentation := "from opentelemetry.instrumentation.flask import FlaskInstrumentor"
-	if !contains(mod.Content, expectedInstrumentation) {
-		t.Errorf("Expected content to contain '%s', got: %s", expectedInstrumentation, mod.Content)
+	if !contains(frameworkMod.Content, expectedInstrumentation) {
+		t.Errorf("Expected content to contain '%s', got: %s", expectedInstrumentation, frameworkMod.Content)
 	}
 
 	expectedInstrumentationCall := "FlaskInstrumentor().instrument_app(app)"
-	if !contains(mod.Content, expectedInstrumentationCall) {
-		t.Errorf("Expected content to contain '%s', got: %s", expectedInstrumentationCall, mod.Content)
+	if !contains(frameworkMod.Content, expectedInstrumentationCall) {
+		t.Errorf("Expected content to contain '%s', got: %s", expectedInstrumentationCall, frameworkMod.Content)
 	}
 
 	// Verify insertion point is correct (after Flask app creation)
-	if mod.LineNumber != 4 { // After app = Flask(__name__) at line 3
-		t.Errorf("Expected insertion at line 4, got %d", mod.LineNumber)
+	if frameworkMod.LineNumber != 4 { // After app = Flask(__name__) at line 3
+		t.Errorf("Expected insertion at line 4, got %d", frameworkMod.LineNumber)
 	}
 }
 

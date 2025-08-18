@@ -18,19 +18,19 @@ type DefaultProviderFactory struct {
 }
 
 // NewProviderFactory creates a new provider factory with default providers
-func NewProviderFactory() *DefaultProviderFactory {
+func NewProviderFactory(githubToken string, logger logger.Logger) *DefaultProviderFactory {
 	factory := &DefaultProviderFactory{
 		providers: make(map[types.ComponentLanguage]Provider),
 	}
 
-	// Register default providers
-	factory.registerDefaultProviders()
+	// Register default providers with token if provided
+	factory.registerDefaultProviders(githubToken, logger)
 
 	return factory
 }
 
 // registerDefaultProviders registers the built-in providers
-func (f *DefaultProviderFactory) registerDefaultProviders() {
+func (f *DefaultProviderFactory) registerDefaultProviders(githubToken string, logger logger.Logger) {
 	// JavaScript provider (existing functionality)
 	jsProvider := NewJavaScriptProvider()
 	f.RegisterProvider(jsProvider)
@@ -56,10 +56,10 @@ func (f *DefaultProviderFactory) registerDefaultProviders() {
 
 	for _, lang := range allLanguages {
 		// Create registry provider to get instrumentations and other components from the registry
-		registryProvider := NewGenericRegistryProvider(lang)
+		registryProvider := NewGenericRegistryProvider(lang, githubToken, logger)
 
 		// Create OTEL core provider for this language to get core packages
-		otelCoreProvider := NewOTELCoreProvider(lang)
+		otelCoreProvider := NewOTELCoreProvider(lang, logger)
 
 		// Create combined registry provider that includes both registry and core components
 		combinedRegistryProvider := NewCombinedRegistryProvider(registryProvider, otelCoreProvider)
@@ -454,10 +454,10 @@ type GenericLanguageProvider struct {
 }
 
 // NewGenericLanguageProvider creates a new generic language provider
-func NewGenericLanguageProvider(language types.ComponentLanguage) *GenericLanguageProvider {
+func NewGenericLanguageProvider(language types.ComponentLanguage, githubToken string, logger logger.Logger) *GenericLanguageProvider {
 	return &GenericLanguageProvider{
 		language:               language,
-		registryProvider:       NewGenericRegistryProvider(language),
+		registryProvider:       NewGenericRegistryProvider(language, githubToken, logger),
 		packageManagerProvider: NewGenericPackageManagerProvider(language),
 	}
 }
@@ -533,10 +533,10 @@ type GenericRegistryProvider struct {
 }
 
 // NewGenericRegistryProvider creates a new generic registry provider
-func NewGenericRegistryProvider(language types.ComponentLanguage) *GenericRegistryProvider {
+func NewGenericRegistryProvider(language types.ComponentLanguage, githubToken string, logger logger.Logger) *GenericRegistryProvider {
 	return &GenericRegistryProvider{
 		language: language,
-		client:   registry.NewClient(),
+		client:   registry.NewClient(githubToken, logger, registry.RegistryBaseURL),
 	}
 }
 

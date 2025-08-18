@@ -27,7 +27,7 @@ type DependencyWriter struct {
 // NewDependencyWriter creates a new dependency manager using the modular orchestrator
 func NewDependencyWriter(l logger.Logger) *DependencyWriter {
 	// Load knowledge base using the unified client
-	kb, err := client.NewKnowledgeClient("knowledge.db")
+	kb, err := client.NewKnowledgeClient("knowledge.db", l)
 	if err != nil {
 		l.Logf("Warning: could not load knowledge base: %v\n", err)
 		// This will cause a panic, but it's better to fail fast than have broken functionality

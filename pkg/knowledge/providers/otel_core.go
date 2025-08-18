@@ -20,20 +20,11 @@ type OTELCoreProvider struct {
 }
 
 // NewOTELCoreProvider creates a new OTEL core provider
-func NewOTELCoreProvider(language types.ComponentLanguage) *OTELCoreProvider {
+func NewOTELCoreProvider(language types.ComponentLanguage, logger logger.Logger) *OTELCoreProvider {
 	return &OTELCoreProvider{
 		language:       language,
 		registryClient: &http.Client{Timeout: 30 * time.Second},
-		logger:         &logger.StdoutLogger{}, // Default logger
-	}
-}
-
-// NewOTELCoreProviderWithLogger creates a new OTEL core provider with a custom logger
-func NewOTELCoreProviderWithLogger(language types.ComponentLanguage, l logger.Logger) *OTELCoreProvider {
-	return &OTELCoreProvider{
-		language:       language,
-		registryClient: &http.Client{Timeout: 30 * time.Second},
-		logger:         l,
+		logger:         logger,
 	}
 }
 

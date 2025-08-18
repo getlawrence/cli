@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/getlawrence/cli/internal/logger"
 	"github.com/getlawrence/cli/pkg/knowledge/types"
 )
 
@@ -14,7 +15,8 @@ func TestSQLiteStorage(t *testing.T) {
 	defer os.Remove(dbPath)
 
 	// Create new storage
-	storage, err := NewStorage(dbPath)
+	logger := &logger.StdoutLogger{}
+	storage, err := NewStorage(dbPath, logger)
 	if err != nil {
 		t.Fatalf("Failed to create storage: %v", err)
 	}
@@ -53,17 +55,27 @@ func TestSQLiteStorage(t *testing.T) {
 	}
 
 	// Test loading knowledge base
-	loadedKB, err := storage.LoadKnowledgeBase("test")
+	loadedKB, err := storage.LoadKnowledgeBase()
 	if err != nil {
 		t.Fatalf("Failed to load knowledge base: %v", err)
 	}
 
-	// Verify loaded data
-	if len(loadedKB.Components) != 1 {
-		t.Errorf("Expected 1 component, got %d", len(loadedKB.Components))
+	// Query for the component we just saved
+	query := Query{
+		Language: "go",
+		Type:     "API",
 	}
 
-	component := loadedKB.Components[0]
+	result := storage.QueryKnowledgeBase(loadedKB, query)
+	if result.Total != 1 {
+		t.Errorf("Expected 1 result from query, got %d", result.Total)
+	}
+
+	if len(result.Components) != 1 {
+		t.Errorf("Expected 1 component in result, got %d", len(result.Components))
+	}
+
+	component := result.Components[0]
 	if component.Name != "test-component" {
 		t.Errorf("Expected component name 'test-component', got '%s'", component.Name)
 	}
@@ -72,13 +84,8 @@ func TestSQLiteStorage(t *testing.T) {
 		t.Errorf("Expected component type API, got %s", component.Type)
 	}
 
-	// Test querying
-	query := Query{
-		Language: "go",
-		Type:     "API",
-	}
-
-	result := storage.QueryKnowledgeBase(loadedKB, query)
+	// Test querying (reuse the query from above)
+	result = storage.QueryKnowledgeBase(loadedKB, query)
 	if result.Total != 1 {
 		t.Errorf("Expected 1 result from query, got %d", result.Total)
 	}

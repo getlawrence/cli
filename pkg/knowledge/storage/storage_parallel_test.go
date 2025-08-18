@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/getlawrence/cli/internal/logger"
 	"github.com/getlawrence/cli/pkg/knowledge/types"
 )
 
@@ -15,7 +16,8 @@ func TestSaveKnowledgeBaseParallel(t *testing.T) {
 	defer os.Remove(dbPath)
 
 	// Create storage instance
-	storage, err := NewStorage(dbPath)
+	logger := &logger.StdoutLogger{}
+	storage, err := NewStorage(dbPath, logger)
 	if err != nil {
 		t.Fatalf("Failed to create storage: %v", err)
 	}
@@ -38,19 +40,30 @@ func TestSaveKnowledgeBaseParallel(t *testing.T) {
 	}
 
 	// Verify the data was saved correctly
-	loadedKB, err := storage.LoadKnowledgeBase("test")
+	loadedKB, err := storage.LoadKnowledgeBase()
 	if err != nil {
 		t.Fatalf("Failed to load knowledge base: %v", err)
 	}
 
-	if len(loadedKB.Components) != len(kb.Components) {
-		t.Errorf("Expected %d components, got %d", len(kb.Components), len(loadedKB.Components))
+	// Use query to count components
+	result := storage.QueryKnowledgeBase(loadedKB, Query{})
+	if result.Total != len(kb.Components) {
+		t.Errorf("Expected %d components, got %d", len(kb.Components), result.Total)
 	}
 
-	// Verify versions were saved
+	// Verify versions were saved by summing versions of returned components
 	totalVersions := 0
-	for _, component := range loadedKB.Components {
+	for _, component := range result.Components {
 		totalVersions += len(component.Versions)
+	}
+	// If not all components returned due to pagination default, fetch light list and count
+	if result.Total != result.Returned {
+		light := storage.GetComponentsLight(Query{Limit: result.Total})
+		totalVersions = 0
+		for _, c := range light.Components {
+			versions, _ := storage.LoadComponentVersions(c.Name)
+			totalVersions += len(versions)
+		}
 	}
 
 	expectedVersions := 0
@@ -72,7 +85,8 @@ func TestSaveKnowledgeBaseSequential(t *testing.T) {
 	defer os.Remove(dbPath)
 
 	// Create storage instance
-	storage, err := NewStorage(dbPath)
+	logger := &logger.StdoutLogger{}
+	storage, err := NewStorage(dbPath, logger)
 	if err != nil {
 		t.Fatalf("Failed to create storage: %v", err)
 	}
@@ -95,13 +109,14 @@ func TestSaveKnowledgeBaseSequential(t *testing.T) {
 	}
 
 	// Verify the data was saved correctly
-	loadedKB, err := storage.LoadKnowledgeBase("test")
+	loadedKB, err := storage.LoadKnowledgeBase()
 	if err != nil {
 		t.Fatalf("Failed to load knowledge base: %v", err)
 	}
 
-	if len(loadedKB.Components) != len(kb.Components) {
-		t.Errorf("Expected %d components, got %d", len(kb.Components), len(loadedKB.Components))
+	result := storage.QueryKnowledgeBase(loadedKB, Query{})
+	if result.Total != len(kb.Components) {
+		t.Errorf("Expected %d components, got %d", len(kb.Components), result.Total)
 	}
 
 	t.Logf("Sequential processing completed in %v for %d components", duration, len(kb.Components))
@@ -153,7 +168,8 @@ func BenchmarkSaveKnowledgeBaseParallel(b *testing.B) {
 	defer os.Remove(dbPath)
 
 	// Create storage instance
-	storage, err := NewStorage(dbPath)
+	logger := &logger.StdoutLogger{}
+	storage, err := NewStorage(dbPath, logger)
 	if err != nil {
 		b.Fatalf("Failed to create storage: %v", err)
 	}
@@ -185,7 +201,8 @@ func BenchmarkSaveKnowledgeBaseSequential(b *testing.B) {
 	defer os.Remove(dbPath)
 
 	// Create storage instance
-	storage, err := NewStorage(dbPath)
+	logger := &logger.StdoutLogger{}
+	storage, err := NewStorage(dbPath, logger)
 	if err != nil {
 		b.Fatalf("Failed to create storage: %v", err)
 	}

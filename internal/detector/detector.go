@@ -66,7 +66,7 @@ type CodebaseAnalyzer struct {
 // NewCodebaseAnalyzer creates a new analysis engine
 func NewCodebaseAnalyzer(detectors []IssueDetector, languages map[string]Language, logger logger.Logger) *CodebaseAnalyzer {
 	// Try to initialize the knowledge service, but don't fail if it's not available
-	knowledgeService, err := NewKnowledgeBasedInstrumentationService()
+	knowledgeService, err := NewKnowledgeBasedInstrumentationService(logger)
 	if err != nil {
 		// Log warning but continue without knowledge service
 		logger.Logf("Warning: Failed to initialize knowledge service: %v\n", err)

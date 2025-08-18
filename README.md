@@ -214,7 +214,7 @@ Examples:
 
 ```bash
 Flags for update command:
-  -o, --output string         Output file path (default: pkg/knowledge/otel_packages.json)
+  -o, --output string         Output file path (default: knowledge.db)
   -f, --force                Force update even if recent data exists
   -w, --workers int          Number of parallel workers (0 = auto-detect based on CPU cores)
   -r, --rate-limit int       Rate limit for API requests per second per worker (default: 100)

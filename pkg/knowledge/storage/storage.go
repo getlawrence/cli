@@ -19,13 +19,8 @@ type Storage struct {
 	logger logger.Logger
 }
 
-// NewStorage creates a new storage instance with SQLite database
-func NewStorage(dbPath string) (*Storage, error) {
-	return NewStorageWithLogger(dbPath, &logger.StdoutLogger{})
-}
-
 // NewStorageWithLogger creates a new storage instance with a custom logger
-func NewStorageWithLogger(dbPath string, l logger.Logger) (*Storage, error) {
+func NewStorage(dbPath string, logger logger.Logger) (*Storage, error) {
 	// Handle empty path by creating an in-memory database
 	if dbPath == "" {
 		dbPath = ":memory:"
@@ -37,12 +32,12 @@ func NewStorageWithLogger(dbPath string, l logger.Logger) (*Storage, error) {
 	}
 
 	// Initialize the database schema
-	if err := initDatabase(db, l); err != nil {
+	if err := initDatabase(db, logger); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("failed to initialize database: %w", err)
 	}
 
-	return &Storage{db: db, logger: l}, nil
+	return &Storage{db: db, logger: logger}, nil
 }
 
 // Close closes the database connection
@@ -377,6 +372,7 @@ func initDatabase(db *sql.DB, l logger.Logger) error {
 		npm_url TEXT,
 		github_url TEXT,
 		changelog_url TEXT,
+		changelog TEXT,
 		core_version TEXT,
 		experimental_version TEXT,
 		compatible TEXT, -- JSON array
@@ -601,9 +597,9 @@ func (s *Storage) insertVersion(tx *sql.Tx, componentID int64, version *types.Ve
 		INSERT INTO versions (
 			component_id, name, release_date, dependencies, min_runtime_version,
 			max_runtime_version, status, deprecated, breaking_changes, metadata,
-			registry_url, npm_url, github_url, changelog_url, core_version,
+			registry_url, npm_url, github_url, changelog_url, changelog, core_version,
 			experimental_version, compatible
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 
 	_, err := tx.Exec(query,
@@ -611,7 +607,7 @@ func (s *Storage) insertVersion(tx *sql.Tx, componentID int64, version *types.Ve
 		version.MinRuntimeVersion, version.MaxRuntimeVersion, string(version.Status),
 		version.Deprecated, string(breakingJSON), string(metadataJSON),
 		version.RegistryURL, version.NPMURL, version.GitHubURL, version.ChangelogURL,
-		version.CoreVersion, version.ExperimentalVersion, string(compatibleJSON),
+		version.Changelog, version.CoreVersion, version.ExperimentalVersion, string(compatibleJSON),
 	)
 
 	return err
@@ -622,7 +618,7 @@ func (s *Storage) loadVersions(componentID int64) ([]types.Version, error) {
 	query := `
 		SELECT name, release_date, dependencies, min_runtime_version, max_runtime_version,
 		       status, deprecated, breaking_changes, metadata, registry_url, npm_url,
-		       github_url, changelog_url, core_version, experimental_version, compatible
+		       github_url, changelog_url, changelog, core_version, experimental_version, compatible
 		FROM versions
 		WHERE component_id = ?
 		ORDER BY release_date DESC
@@ -643,7 +639,7 @@ func (s *Storage) loadVersions(componentID int64) ([]types.Version, error) {
 			&version.Name, &version.ReleaseDate, &depsJSON, &version.MinRuntimeVersion,
 			&version.MaxRuntimeVersion, &version.Status, &version.Deprecated,
 			&breakingJSON, &metadataJSON, &version.RegistryURL, &version.NPMURL,
-			&version.GitHubURL, &version.ChangelogURL, &version.CoreVersion,
+			&version.GitHubURL, &version.ChangelogURL, &version.Changelog, &version.CoreVersion,
 			&version.ExperimentalVersion, &compatibleJSON,
 		)
 		if err != nil {
@@ -950,7 +946,7 @@ func (s *Storage) scanComponentsWithVersions(rows *sql.Rows, loadVersions bool) 
 
 // LoadKnowledgeBase loads the knowledge base metadata from the SQLite database without loading all components
 // Components are loaded on-demand through query methods
-func (s *Storage) LoadKnowledgeBase(filename string) (*types.KnowledgeBase, error) {
+func (s *Storage) LoadKnowledgeBase() (*types.KnowledgeBase, error) {
 	// Calculate statistics using SQL aggregation instead of loading all components
 	stats, err := s.calculateStatistics()
 	if err != nil {
@@ -1111,7 +1107,7 @@ func (s *Storage) GetLatestVersions(kb *types.KnowledgeBase) map[string]types.Ve
 	query := `
 		SELECT c.name, v.name, v.release_date, v.dependencies, v.min_runtime_version,
 		       v.max_runtime_version, v.status, v.deprecated, v.breaking_changes, v.metadata,
-		       v.registry_url, v.npm_url, v.github_url, v.changelog_url, v.core_version,
+		       v.registry_url, v.npm_url, v.github_url, v.changelog_url, v.changelog, v.core_version,
 		       v.experimental_version, v.compatible
 		FROM components c
 		INNER JOIN (
@@ -1139,7 +1135,7 @@ func (s *Storage) GetLatestVersions(kb *types.KnowledgeBase) map[string]types.Ve
 			&componentName, &version.Name, &version.ReleaseDate, &depsJSON,
 			&version.MinRuntimeVersion, &version.MaxRuntimeVersion, &version.Status,
 			&version.Deprecated, &breakingJSON, &metadataJSON, &version.RegistryURL,
-			&version.NPMURL, &version.GitHubURL, &version.ChangelogURL,
+			&version.NPMURL, &version.GitHubURL, &version.ChangelogURL, &version.Changelog,
 			&version.CoreVersion, &version.ExperimentalVersion, &compatibleJSON,
 		)
 		if err != nil {

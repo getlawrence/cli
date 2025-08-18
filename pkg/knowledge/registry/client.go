@@ -1,7 +1,7 @@
 package registry
 
 import (
-	"encoding/json"
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -9,12 +9,12 @@ import (
 	"time"
 
 	"github.com/getlawrence/cli/internal/logger"
+	"github.com/google/go-github/v74/github"
 	"gopkg.in/yaml.v3"
 )
 
 const (
 	// RegistryBaseURL is the base URL for the OpenTelemetry Registry API
-
 	RegistryBaseURL = "https://raw.githubusercontent.com/open-telemetry/opentelemetry.io/main/data/registry"
 	// RegistryAPIPath is the path for the registry API
 	RegistryAPIPath = ""
@@ -22,40 +22,26 @@ const (
 
 // Client represents a client for the OpenTelemetry Registry API
 type Client struct {
-	baseURL    string
-	httpClient *http.Client
-	logger     logger.Logger
+	baseURL      string
+	httpClient   *http.Client
+	logger       logger.Logger
+	githubClient *github.Client // Use official GitHub client
 }
 
-// NewClient creates a new registry client
-func NewClient() *Client {
-	return &Client{
-		baseURL: RegistryBaseURL,
-		httpClient: &http.Client{
-			Timeout: 30 * time.Second,
-		},
-		logger: &logger.StdoutLogger{}, // Default logger
+// NewClient creates a new registry client with all parameters explicitly declared
+func NewClient(githubToken string, logger logger.Logger, baseURL string) *Client {
+	var githubClient *github.Client
+	if githubToken != "" {
+		githubClient = github.NewClient(nil).WithAuthToken(githubToken)
+	} else {
+		githubClient = github.NewClient(nil)
 	}
-}
 
-// NewClientWithLogger creates a new registry client with a custom logger
-func NewClientWithLogger(l logger.Logger) *Client {
 	return &Client{
-		baseURL: RegistryBaseURL,
-		httpClient: &http.Client{
-			Timeout: 30 * time.Second,
-		},
-		logger: l,
-	}
-}
-
-// NewClientWithBaseURL creates a new registry client with a custom base URL
-func NewClientWithBaseURL(baseURL string) *Client {
-	return &Client{
-		baseURL: baseURL,
-		httpClient: &http.Client{
-			Timeout: 30 * time.Second,
-		},
+		baseURL:      baseURL,
+		httpClient:   &http.Client{Timeout: 30 * time.Second},
+		logger:       logger,
+		githubClient: githubClient,
 	}
 }
 
@@ -121,6 +107,11 @@ type RegistryYAML struct {
 
 // GetComponentsByLanguage fetches components by language from the registry
 func (c *Client) GetComponentsByLanguage(language string) ([]RegistryComponent, error) {
+	// Check if logger is initialized to prevent panic
+	if c.logger == nil {
+		return nil, fmt.Errorf("logger is not initialized")
+	}
+
 	// Map language to GitHub language identifier
 	langMap := map[string]string{
 		"javascript": "js",
@@ -138,39 +129,61 @@ func (c *Client) GetComponentsByLanguage(language string) ([]RegistryComponent, 
 		return nil, fmt.Errorf("unsupported language: %s", language)
 	}
 
-	// Fetch the list of files from GitHub API
-	url := "https://api.github.com/repos/open-telemetry/opentelemetry.io/contents/data/registry"
-	resp, err := c.httpClient.Get(url)
+	// Check if githubClient is initialized to prevent panic
+	if c.githubClient == nil {
+		return nil, fmt.Errorf("GitHub client is not initialized")
+	}
+
+	// Fetch the list of files from GitHub API using the official client
+	ctx := context.Background()
+	var rawContents interface{}
+	var err error
+	rawContents, _, _, err = c.githubClient.Repositories.GetContents(ctx, "open-telemetry", "opentelemetry.io", "data/registry", nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch registry index: %w", err)
 	}
-	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("GitHub API returned status %d: %s", resp.StatusCode, string(body))
-	}
-
-	var contents []GitHubContent
-	if err := json.NewDecoder(resp.Body).Decode(&contents); err != nil {
-		return nil, fmt.Errorf("failed to decode GitHub response: %w", err)
+	if rawContents == nil {
+		return []RegistryComponent{}, nil
 	}
 
 	var components []RegistryComponent
 
+	// GetContents returns interface{} - we need to type assert it
+	var contents []*github.RepositoryContent
+	switch v := rawContents.(type) {
+	case []*github.RepositoryContent:
+		contents = v
+	case *github.RepositoryContent:
+		contents = []*github.RepositoryContent{v}
+	default:
+		return nil, fmt.Errorf("unexpected content type from GitHub API: %T", rawContents)
+	}
+
 	// Filter for files that match the language and are YAML files
 	for _, content := range contents {
-		if content.Type == "file" && strings.HasSuffix(content.Name, ".yml") {
+		// Check if content is nil (GitHub API can return nil elements)
+		if content == nil {
+			continue
+		}
+
+		if content.Type != nil && *content.Type == "file" && content.Name != nil && strings.HasSuffix(*content.Name, ".yml") {
 			// Check if the filename contains the language identifier
-			if strings.Contains(content.Name, "-"+githubLang+"-") ||
-				strings.Contains(content.Name, githubLang+"-") ||
-				strings.HasPrefix(content.Name, githubLang+"-") {
+			if strings.Contains(*content.Name, "-"+githubLang+"-") ||
+				strings.Contains(*content.Name, githubLang+"-") ||
+				strings.HasPrefix(*content.Name, githubLang+"-") {
+
+				// Check if DownloadURL is available
+				if content.DownloadURL == nil {
+					c.logger.Logf("Warning: DownloadURL is nil for %s, skipping", *content.Name)
+					continue
+				}
 
 				// Fetch and parse the YAML file
-				component, err := c.fetchComponentFromYAML(content.DownloadURL)
+				component, err := c.fetchComponentFromYAML(*content.DownloadURL)
 				if err != nil {
 					// Log error but continue with other files
-					c.logger.Logf("Warning: failed to parse %s: %v\n", content.Name, err)
+					c.logger.Logf("Warning: failed to parse %s: %v\n", *content.Name, err)
 					continue
 				}
 
@@ -186,7 +199,15 @@ func (c *Client) GetComponentsByLanguage(language string) ([]RegistryComponent, 
 
 // fetchComponentFromYAML fetches and parses a single YAML file
 func (c *Client) fetchComponentFromYAML(downloadURL string) (*RegistryComponent, error) {
-	resp, err := c.httpClient.Get(downloadURL)
+	req, err := http.NewRequest("GET", downloadURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	// Set User-Agent to avoid being blocked
+	req.Header.Set("User-Agent", "Lawrence-CLI/1.0")
+
+	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch YAML file: %w", err)
 	}

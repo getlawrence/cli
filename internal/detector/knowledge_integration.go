@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/getlawrence/cli/internal/domain"
+	"github.com/getlawrence/cli/internal/logger"
 	"github.com/getlawrence/cli/pkg/knowledge/storage"
 	"github.com/getlawrence/cli/pkg/knowledge/types"
 )
@@ -16,8 +17,8 @@ type KnowledgeBasedInstrumentationService struct {
 }
 
 // NewKnowledgeBasedInstrumentationService creates a new knowledge-based instrumentation service
-func NewKnowledgeBasedInstrumentationService() (*KnowledgeBasedInstrumentationService, error) {
-	storageClient, err := storage.NewStorage("knowledge.db")
+func NewKnowledgeBasedInstrumentationService(logger logger.Logger) (*KnowledgeBasedInstrumentationService, error) {
+	storageClient, err := storage.NewStorage("knowledge.db", logger)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create knowledge storage: %w", err)
 	}
@@ -86,7 +87,7 @@ func (s *KnowledgeBasedInstrumentationService) GetRecommendedInstrumentations(ct
 	}
 
 	// Load knowledge base and query
-	kb, err := s.storage.LoadKnowledgeBase("")
+	kb, err := s.storage.LoadKnowledgeBase()
 	if err != nil {
 		return nil, fmt.Errorf("failed to load knowledge base: %w", err)
 	}

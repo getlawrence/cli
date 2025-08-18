@@ -4,45 +4,100 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/getlawrence/cli/internal/logger"
 	"github.com/getlawrence/cli/pkg/knowledge/providers"
 	"github.com/getlawrence/cli/pkg/knowledge/types"
+	"github.com/getlawrence/cli/pkg/knowledge/utils"
 )
+
+/*
+GitHub API Optimization
+
+This pipeline implements an optimization to reduce GitHub API calls when fetching
+changelog information for multiple components from the same repository.
+
+Instead of making individual API calls for each component/version combination,
+the pipeline:
+
+1. Groups components by their repository URL
+2. Makes one API call per unique repository to fetch all releases
+3. Caches the releases in memory
+4. Filters the cached releases client-side when processing individual components
+
+For example, if 50 packages come from the same repository (like js-contrib),
+this reduces GitHub API calls from 50 to 1, significantly improving performance
+and reducing the risk of hitting rate limits.
+
+The optimization is transparent to the rest of the system - if a repository
+isn't cached, it falls back to individual API calls.
+*/
+
+// RepositoryReleasesCache caches GitHub releases for repositories to avoid duplicate API calls
+type RepositoryReleasesCache struct {
+	releases map[string][]providers.GitHubRelease
+	mu       sync.RWMutex
+}
+
+// NewRepositoryReleasesCache creates a new repository releases cache
+func NewRepositoryReleasesCache() *RepositoryReleasesCache {
+	return &RepositoryReleasesCache{
+		releases: make(map[string][]providers.GitHubRelease),
+	}
+}
+
+// Get retrieves cached releases for a repository
+func (c *RepositoryReleasesCache) Get(repositoryURL string) ([]providers.GitHubRelease, bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	releases, exists := c.releases[repositoryURL]
+	return releases, exists
+}
+
+// Set stores releases for a repository in the cache
+func (c *RepositoryReleasesCache) Set(repositoryURL string, releases []providers.GitHubRelease) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.releases[repositoryURL] = releases
+}
 
 // Pipeline represents the knowledge base update pipeline
 type Pipeline struct {
 	providerFactory providers.ProviderFactory
-	rateLimiter     *RateLimiter
+	rateLimiter     *utils.RateLimiter
+	githubClient    *providers.GitHubClient
 	logger          logger.Logger
+	releasesCache   *RepositoryReleasesCache
 }
 
-// NewPipeline creates a new pipeline instance
-func NewPipeline() *Pipeline {
-	return &Pipeline{
-		providerFactory: providers.NewProviderFactory(),
-		rateLimiter:     NewRateLimiter(100, time.Second), // 100 requests per second
-		logger:          &logger.StdoutLogger{},           // Default logger
-	}
-}
-
-// NewPipelineWithProviderFactory creates a new pipeline with a custom provider factory
-func NewPipelineWithProviderFactory(providerFactory providers.ProviderFactory) *Pipeline {
+// NewPipelineWithLoggerAndToken creates a new pipeline with a custom logger and GitHub token
+func NewPipeline(providerFactory providers.ProviderFactory, logger logger.Logger, githubToken string) *Pipeline {
 	return &Pipeline{
 		providerFactory: providerFactory,
-		rateLimiter:     NewRateLimiter(100, time.Second),
-		logger:          &logger.StdoutLogger{}, // Default logger
+		rateLimiter:     utils.NewRateLimiter(100, time.Second),
+		githubClient:    providers.NewGitHubClient(githubToken),
+		logger:          logger,
+		releasesCache:   NewRepositoryReleasesCache(),
 	}
 }
 
-// NewPipelineWithLogger creates a new pipeline with a custom logger
-func NewPipelineWithLogger(l logger.Logger) *Pipeline {
-	return &Pipeline{
-		providerFactory: providers.NewProviderFactory(),
-		rateLimiter:     NewRateLimiter(100, time.Second),
-		logger:          l,
+// GetCacheStats returns statistics about the repository releases cache
+func (p *Pipeline) GetCacheStats() map[string]interface{} {
+	p.releasesCache.mu.RLock()
+	defer p.releasesCache.mu.RUnlock()
+
+	stats := make(map[string]interface{})
+	stats["cached_repositories"] = len(p.releasesCache.releases)
+
+	totalReleases := 0
+	for _, releases := range p.releasesCache.releases {
+		totalReleases += len(releases)
 	}
+	stats["total_cached_releases"] = totalReleases
+
+	return stats
 }
 
 // UpdateKnowledgeBase updates the knowledge base with fresh data for the specified language
@@ -98,6 +153,11 @@ func (p *Pipeline) UpdateKnowledgeBase(language types.ComponentLanguage) (*types
 		},
 	}
 
+	// Step 6: Log optimization results
+	cacheStats := p.GetCacheStats()
+	p.logger.Logf("GitHub API optimization results: cached %d repositories with %d total releases\n",
+		cacheStats["cached_repositories"], cacheStats["total_cached_releases"])
+
 	p.logger.Log("Knowledge base update completed successfully")
 	return kb, nil
 }
@@ -106,6 +166,17 @@ func (p *Pipeline) UpdateKnowledgeBase(language types.ComponentLanguage) (*types
 func (p *Pipeline) enrichComponentsWithPackageManager(registryComponents []providers.RegistryComponent, packageManagerProvider providers.PackageManagerProvider) ([]EnrichedComponent, error) {
 	var enriched []EnrichedComponent
 
+	// Step 1: Group components by repository to optimize GitHub API calls
+	p.logger.Log("Grouping components by repository for efficient GitHub API usage...")
+	repositoryGroups := p.groupComponentsByRepository(registryComponents)
+
+	// Step 2: Fetch GitHub releases for each unique repository
+	p.logger.Log("Fetching GitHub releases for repositories...")
+	if err := p.fetchRepositoryReleases(repositoryGroups); err != nil {
+		p.logger.Logf("Warning: Failed to fetch some repository releases: %v\n", err)
+	}
+
+	// Step 3: Process each component with package manager data and cached GitHub data
 	for i, rc := range registryComponents {
 		// Skip components with empty names
 		if rc.Name == "" || strings.TrimSpace(rc.Name) == "" {
@@ -133,6 +204,76 @@ func (p *Pipeline) enrichComponentsWithPackageManager(registryComponents []provi
 	}
 
 	return enriched, nil
+}
+
+// groupComponentsByRepository groups components by their repository URL
+func (p *Pipeline) groupComponentsByRepository(components []providers.RegistryComponent) map[string][]providers.RegistryComponent {
+	groups := make(map[string][]providers.RegistryComponent)
+
+	for _, component := range components {
+		if component.Repository != "" && strings.Contains(component.Repository, "github.com") {
+			groups[component.Repository] = append(groups[component.Repository], component)
+		}
+	}
+
+	return groups
+}
+
+// GroupComponentsByRepository groups components by their repository URL
+func (p *Pipeline) GroupComponentsByRepository(components []providers.RegistryComponent) map[string][]providers.RegistryComponent {
+	groups := make(map[string][]providers.RegistryComponent)
+
+	for _, component := range components {
+		if component.Repository != "" && strings.Contains(component.Repository, "github.com") {
+			groups[component.Repository] = append(groups[component.Repository], component)
+		}
+	}
+
+	return groups
+}
+
+// fetchRepositoryReleases fetches all releases for each unique repository
+func (p *Pipeline) fetchRepositoryReleases(repositoryGroups map[string][]providers.RegistryComponent) error {
+	if p.githubClient == nil {
+		return fmt.Errorf("GitHub client not initialized")
+	}
+
+	ctx := context.Background()
+
+	totalComponents := 0
+	for _, components := range repositoryGroups {
+		totalComponents += len(components)
+	}
+
+	p.logger.Logf("Found %d unique repositories for %d total components\n", len(repositoryGroups), totalComponents)
+	p.logger.Logf("This optimization will reduce GitHub API calls from %d to %d\n", totalComponents, len(repositoryGroups))
+
+	for repositoryURL := range repositoryGroups {
+		p.logger.Logf("Fetching releases for repository: %s\n", repositoryURL)
+
+		// Extract owner and repo from repository URL
+		owner, repo, err := p.githubClient.ExtractOwnerAndRepo(repositoryURL)
+		if err != nil {
+			p.logger.Logf("Warning: Failed to extract owner/repo from %s: %v\n", repositoryURL, err)
+			continue
+		}
+
+		// Fetch all releases for this repository
+		releases, err := p.githubClient.FetchReleases(ctx, owner, repo)
+		if err != nil {
+			p.logger.Logf("Warning: Failed to fetch releases for %s: %v\n", repositoryURL, err)
+			continue
+		}
+
+		// Cache the releases
+		p.releasesCache.Set(repositoryURL, releases)
+		p.logger.Logf("Cached %d releases for repository: %s\n", len(releases), repositoryURL)
+
+		// Rate limiting between repository requests
+		p.rateLimiter.Wait()
+	}
+
+	return nil
 }
 
 // fetchPackageManagerData fetches package metadata from the package manager
@@ -463,6 +604,18 @@ func (p *Pipeline) extractVersions(ec EnrichedComponent) []types.Version {
 				version.MinRuntimeVersion = engines
 			}
 
+			p.logger.Logf("Fetching changelog for %s version %s\n", ec.Name, versionStr)
+			// Fetch changelog from GitHub if repository is available
+			if ec.Repository != "" && strings.Contains(ec.Repository, "github.com") {
+				if changelog, err := p.fetchChangelogFromGitHub(ec.Repository, versionStr); err == nil && changelog.Found {
+					version.Changelog = changelog.Notes
+					// Update release date if GitHub has more accurate information
+					if !changelog.ReleaseDate.IsZero() {
+						version.ReleaseDate = changelog.ReleaseDate
+					}
+				}
+			}
+
 			versions = append(versions, version)
 		}
 	}
@@ -535,6 +688,91 @@ func (p *Pipeline) extractBreakingChanges(ec EnrichedComponent, version string) 
 	// For now, return empty - could be enhanced with LLM analysis or static rules
 
 	return breakingChanges
+}
+
+// fetchChangelogFromGitHub fetches changelog information from GitHub releases using cached data
+func (p *Pipeline) fetchChangelogFromGitHub(repositoryURL, version string) (*providers.ReleaseNotes, error) {
+	if p.githubClient == nil {
+		return nil, fmt.Errorf("GitHub client not initialized")
+	}
+
+	// Check if we have cached releases for this repository
+	cachedReleases, exists := p.releasesCache.Get(repositoryURL)
+	if !exists {
+		// Fallback to individual API call if not cached
+		p.logger.Logf("Warning: No cached releases for %s, falling back to individual API call\n", repositoryURL)
+		ctx := context.Background()
+		return p.githubClient.GetReleaseNotes(ctx, repositoryURL, version)
+	}
+
+	// Find the matching release from cached data
+	var matchingRelease *providers.GitHubRelease
+	for _, release := range cachedReleases {
+		if p.matchesVersion(release.TagName, version) {
+			matchingRelease = &release
+			break
+		}
+	}
+
+	if matchingRelease == nil {
+		return &providers.ReleaseNotes{
+			Version:     version,
+			ReleaseDate: time.Time{},
+			Notes:       "",
+			URL:         "",
+			Found:       false,
+		}, nil
+	}
+
+	return &providers.ReleaseNotes{
+		Version:     matchingRelease.TagName,
+		ReleaseDate: matchingRelease.PublishedAt,
+		Notes:       matchingRelease.Body,
+		URL:         matchingRelease.HTMLURL,
+		Found:       true,
+	}, nil
+}
+
+// matchesVersion checks if a GitHub tag matches the requested version
+func (p *Pipeline) matchesVersion(tagName, version string) bool {
+	// Remove 'v' prefix if present
+	tag := strings.TrimPrefix(tagName, "v")
+	ver := strings.TrimPrefix(version, "v")
+
+	// Direct match
+	if tag == ver {
+		return true
+	}
+
+	// Handle cases where GitHub tag might have additional prefixes/suffixes
+	if strings.Contains(tag, ver) || strings.Contains(ver, tag) {
+		return true
+	}
+
+	// Handle semantic versioning patterns
+	// For example: tag "v1.0.0" should match version "1.0.0"
+	// Also handle cases like "v1.0.0-beta.1" matching "1.0.0"
+
+	// Split by dots and compare major.minor.patch
+	tagParts := strings.Split(tag, ".")
+	verParts := strings.Split(ver, ".")
+
+	if len(tagParts) >= 3 && len(verParts) >= 3 {
+		// Compare major.minor.patch
+		if tagParts[0] == verParts[0] && tagParts[1] == verParts[1] && tagParts[2] == verParts[2] {
+			return true
+		}
+	}
+
+	// Handle pre-release versions (e.g., "1.0.0-beta" should match "1.0.0")
+	if len(verParts) >= 3 {
+		baseVersion := strings.Join(verParts[:3], ".")
+		if strings.HasPrefix(tag, baseVersion) {
+			return true
+		}
+	}
+
+	return false
 }
 
 // convertDependencies converts package manager dependencies to knowledge base format
