@@ -49,12 +49,6 @@ func NewPipelineWithLogger(l logger.Logger) *Pipeline {
 func (p *Pipeline) UpdateKnowledgeBase(language types.ComponentLanguage) (*types.KnowledgeBase, error) {
 	p.logger.Logf("Starting knowledge base update for language: %s\n", language)
 
-	// Get the provider for the specified language (for future use)
-	_, err := p.providerFactory.GetProvider(language)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get provider for language %s: %w", language, err)
-	}
-
 	// Get registry and package manager providers
 	registryProvider, err := p.providerFactory.GetRegistryProvider(language)
 	if err != nil {
@@ -113,6 +107,12 @@ func (p *Pipeline) enrichComponentsWithPackageManager(registryComponents []provi
 	var enriched []EnrichedComponent
 
 	for i, rc := range registryComponents {
+		// Skip components with empty names
+		if rc.Name == "" || strings.TrimSpace(rc.Name) == "" {
+			p.logger.Logf("Skipping component %d/%d: empty name\n", i+1, len(registryComponents))
+			continue
+		}
+
 		p.logger.Logf("Processing component %d/%d: %s\n", i+1, len(registryComponents), rc.Name)
 
 		enrichedComponent := EnrichedComponent{
@@ -138,9 +138,10 @@ func (p *Pipeline) enrichComponentsWithPackageManager(registryComponents []provi
 // fetchPackageManagerData fetches package metadata from the package manager
 func (p *Pipeline) fetchPackageManagerData(componentName string, packageManagerProvider providers.PackageManagerProvider) (*providers.PackageMetadata, error) {
 	// Extract package name from component name
-	packageName := p.extractPackageName(componentName, packageManagerProvider.GetPackageManagerType())
+	packageManagerType := packageManagerProvider.GetPackageManagerType()
+	packageName := p.extractPackageName(componentName, packageManagerType)
 	if packageName == "" {
-		return nil, fmt.Errorf("could not extract package name from %s", componentName)
+		return nil, fmt.Errorf("could not extract package name from '%s' for package manager type '%s'", componentName, packageManagerType)
 	}
 
 	return packageManagerProvider.GetPackage(context.Background(), packageName)
@@ -148,32 +149,16 @@ func (p *Pipeline) fetchPackageManagerData(componentName string, packageManagerP
 
 // extractPackageName extracts the package name from a component name based on package manager type
 func (p *Pipeline) extractPackageName(componentName, packageManagerType string) string {
-	switch packageManagerType {
-	case "npm":
-		// Handle different naming patterns for npm
-		if strings.HasPrefix(componentName, "@opentelemetry/") {
-			return componentName
-		}
-		if strings.Contains(componentName, "opentelemetry") {
-			return componentName
-		}
-	case "pypi":
-		// Handle different naming patterns for PyPI
-		if strings.HasPrefix(componentName, "opentelemetry-") {
-			return componentName
-		}
-		if strings.Contains(componentName, "opentelemetry") {
-			return componentName
-		}
-	case "go":
-		// Handle Go module paths
-		if componentName != "" {
-			// Go module paths are used directly as package names
-			return componentName
-		}
+	// Handle empty or invalid component names
+	if componentName == "" || strings.TrimSpace(componentName) == "" {
+		return ""
 	}
 
-	return ""
+	// Clean the component name
+	componentName = strings.TrimSpace(componentName)
+
+	// Return the component name as-is - it's already in the correct format for its package manager
+	return componentName
 }
 
 // convertToComponents converts enriched components to the knowledge base format
