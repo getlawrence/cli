@@ -18,19 +18,19 @@ type DefaultProviderFactory struct {
 }
 
 // NewProviderFactory creates a new provider factory with default providers
-func NewProviderFactory(githubToken string, logger logger.Logger) *DefaultProviderFactory {
+func NewProviderFactory(path string, logger logger.Logger) *DefaultProviderFactory {
 	factory := &DefaultProviderFactory{
 		providers: make(map[types.ComponentLanguage]Provider),
 	}
 
 	// Register default providers with token if provided
-	factory.registerDefaultProviders(githubToken, logger)
+	factory.registerDefaultProviders(path, logger)
 
 	return factory
 }
 
 // registerDefaultProviders registers the built-in providers
-func (f *DefaultProviderFactory) registerDefaultProviders(githubToken string, logger logger.Logger) {
+func (f *DefaultProviderFactory) registerDefaultProviders(path string, logger logger.Logger) {
 	// JavaScript provider (existing functionality)
 	jsProvider := NewJavaScriptProvider()
 	f.RegisterProvider(jsProvider)
@@ -56,7 +56,7 @@ func (f *DefaultProviderFactory) registerDefaultProviders(githubToken string, lo
 
 	for _, lang := range allLanguages {
 		// Create registry provider to get instrumentations and other components from the registry
-		registryProvider := NewGenericRegistryProvider(lang, githubToken, logger)
+		registryProvider := NewGenericRegistryProvider(lang, path, logger)
 
 		// Create OTEL core provider for this language to get core packages
 		otelCoreProvider := NewOTELCoreProvider(lang, logger)
@@ -533,10 +533,10 @@ type GenericRegistryProvider struct {
 }
 
 // NewGenericRegistryProvider creates a new generic registry provider
-func NewGenericRegistryProvider(language types.ComponentLanguage, githubToken string, logger logger.Logger) *GenericRegistryProvider {
+func NewGenericRegistryProvider(language types.ComponentLanguage, path string, logger logger.Logger) *GenericRegistryProvider {
 	return &GenericRegistryProvider{
 		language: language,
-		client:   registry.NewClient(githubToken, logger, registry.RegistryBaseURL),
+		client:   registry.NewClient(path, logger),
 	}
 }
 

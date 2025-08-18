@@ -1,48 +1,238 @@
 package registry
 
 import (
-	"context"
 	"fmt"
 	"io"
-	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/getlawrence/cli/internal/logger"
-	"github.com/google/go-github/v74/github"
 	"gopkg.in/yaml.v3"
 )
 
-const (
-	// RegistryBaseURL is the base URL for the OpenTelemetry Registry API
-	RegistryBaseURL = "https://raw.githubusercontent.com/open-telemetry/opentelemetry.io/main/data/registry"
-	// RegistryAPIPath is the path for the registry API
-	RegistryAPIPath = ""
-)
-
-// Client represents a client for the OpenTelemetry Registry API
+// LocalClient represents a client that works with a local copy of the OpenTelemetry registry
 type Client struct {
-	baseURL      string
-	httpClient   *http.Client
+	registryPath string
 	logger       logger.Logger
-	githubClient *github.Client // Use official GitHub client
+	cache        map[string][]RegistryComponent // language -> components cache
 }
 
-// NewClient creates a new registry client with all parameters explicitly declared
-func NewClient(githubToken string, logger logger.Logger, baseURL string) *Client {
-	var githubClient *github.Client
-	if githubToken != "" {
-		githubClient = github.NewClient(nil).WithAuthToken(githubToken)
-	} else {
-		githubClient = github.NewClient(nil)
+// NewLocalClient creates a new local registry client
+func NewClient(registryPath string, logger logger.Logger) *Client {
+	return &Client{
+		registryPath: registryPath,
+		logger:       logger,
+		cache:        make(map[string][]RegistryComponent),
+	}
+}
+
+// LocalClient uses the existing RegistryComponent and RegistryYAML types from client.go
+
+// GetComponentsByLanguage fetches components by language from the local registry
+func (c *Client) GetComponentsByLanguage(language string) ([]RegistryComponent, error) {
+	// Check cache first
+	if components, exists := c.cache[language]; exists {
+		return components, nil
 	}
 
-	return &Client{
-		baseURL:      baseURL,
-		httpClient:   &http.Client{Timeout: 30 * time.Second},
-		logger:       logger,
-		githubClient: githubClient,
+	// Map language to directory name
+	langMap := map[string]string{
+		"javascript": "js",
+		"js":         "js",
+		"go":         "go",
+		"python":     "python",
+		"java":       "java",
+		"csharp":     "dotnet",
+		"php":        "php",
+		"ruby":       "ruby",
 	}
+
+	githubLang := langMap[language]
+	if githubLang == "" {
+		return nil, fmt.Errorf("unsupported language: %s", language)
+	}
+
+	// Build the path to the language-specific registry directory
+	langPath := filepath.Join(c.registryPath, "data", "registry")
+
+	// Check if the registry path exists
+	if _, err := os.Stat(langPath); os.IsNotExist(err) {
+		return nil, fmt.Errorf("registry path does not exist: %s. Please run 'lawrence registry sync' first", langPath)
+	}
+
+	var components []RegistryComponent
+
+	// Walk through all YAML files in the registry directory
+	err := filepath.Walk(langPath, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		// Skip directories
+		if info.IsDir() {
+			return nil
+		}
+
+		// Only process YAML files
+		if !strings.HasSuffix(strings.ToLower(info.Name()), ".yml") && !strings.HasSuffix(strings.ToLower(info.Name()), ".yaml") {
+			return nil
+		}
+
+		// Check if the filename contains the language identifier
+		if strings.Contains(info.Name(), "-"+githubLang+"-") ||
+			strings.Contains(info.Name(), githubLang+"-") ||
+			strings.HasPrefix(info.Name(), githubLang+"-") {
+
+			// Parse the YAML file
+			component, err := c.parseComponentFromFile(path)
+			if err != nil {
+				c.logger.Logf("Warning: failed to parse %s: %v", info.Name(), err)
+				return nil // Continue with other files
+			}
+
+			if component != nil {
+				components = append(components, *component)
+			}
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to walk registry directory: %w", err)
+	}
+
+	// Cache the results
+	c.cache[language] = components
+
+	return components, nil
+}
+
+// parseComponentFromFile parses a single YAML file and returns a RegistryComponent
+func (c *Client) parseComponentFromFile(filePath string) (*RegistryComponent, error) {
+	// Read the file
+	file, err := os.Open(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open file: %w", err)
+	}
+	defer file.Close()
+
+	// Read file content
+	content, err := io.ReadAll(file)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read file: %w", err)
+	}
+
+	// Parse YAML
+	var yamlData RegistryYAML
+	if err := yaml.Unmarshal(content, &yamlData); err != nil {
+		return nil, fmt.Errorf("failed to parse YAML: %w", err)
+	}
+
+	// Convert to RegistryComponent
+	component := &RegistryComponent{
+		Name:        yamlData.Package.Name,
+		Type:        yamlData.RegistryType,
+		Language:    yamlData.Language,
+		Description: yamlData.Description,
+		Repository:  yamlData.URLs.Repo,
+		RegistryURL: filePath, // Use local file path
+		Homepage:    yamlData.URLs.Repo,
+		Tags:        yamlData.Tags,
+		License:     yamlData.License,
+		LastUpdated: time.Now(), // Could parse createdAt if needed
+		Metadata: map[string]interface{}{
+			"title":        yamlData.Title,
+			"isFirstParty": yamlData.IsFirstParty,
+			"package":      yamlData.Package,
+			"createdAt":    yamlData.CreatedAt,
+			"sourceFile":   filePath,
+		},
+	}
+
+	return component, nil
+}
+
+// GetComponentByName fetches a specific component by name from all languages
+func (c *Client) GetComponentByName(name string) (*RegistryComponent, error) {
+	// Check all supported languages
+	languages := []string{"javascript", "go", "python", "java", "csharp", "php", "ruby"}
+
+	for _, lang := range languages {
+		components, err := c.GetComponentsByLanguage(lang)
+		if err != nil {
+			continue // Skip languages with errors
+		}
+
+		for _, component := range components {
+			if component.Name == name {
+				return &component, nil
+			}
+		}
+	}
+
+	return nil, fmt.Errorf("component not found: %s", name)
+}
+
+// GetAllComponents fetches all components from all languages
+func (c *Client) GetAllComponents() ([]RegistryComponent, error) {
+	var allComponents []RegistryComponent
+	languages := []string{"javascript", "go", "python", "java", "csharp", "php", "ruby"}
+
+	for _, lang := range languages {
+		components, err := c.GetComponentsByLanguage(lang)
+		if err != nil {
+			c.logger.Logf("Warning: failed to get components for %s: %v", lang, err)
+			continue
+		}
+		allComponents = append(allComponents, components...)
+	}
+
+	return allComponents, nil
+}
+
+// GetSupportedLanguages returns the list of supported languages
+func (c *Client) GetSupportedLanguages() []string {
+	return []string{"javascript", "go", "python", "java", "csharp", "php", "ruby"}
+}
+
+// GetRegistryStats returns statistics about the local registry
+func (c *Client) GetRegistryStats() (map[string]interface{}, error) {
+	stats := make(map[string]interface{})
+
+	// Count total files
+	totalFiles := 0
+	err := filepath.Walk(filepath.Join(c.registryPath, "data", "registry"), func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if !info.IsDir() && (strings.HasSuffix(strings.ToLower(info.Name()), ".yml") || strings.HasSuffix(strings.ToLower(info.Name()), ".yaml")) {
+			totalFiles++
+		}
+		return nil
+	})
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to count registry files: %w", err)
+	}
+
+	stats["totalFiles"] = totalFiles
+	stats["registryPath"] = c.registryPath
+	stats["lastUpdated"] = time.Now()
+
+	// Count by language
+	langStats := make(map[string]int)
+	for _, lang := range c.GetSupportedLanguages() {
+		components, err := c.GetComponentsByLanguage(lang)
+		if err == nil {
+			langStats[lang] = len(components)
+		}
+	}
+	stats["byLanguage"] = langStats
+
+	return stats, nil
 }
 
 // RegistryComponent represents a component from the registry
@@ -67,11 +257,6 @@ type RegistryResponse struct {
 	Total      int                 `json:"total"`
 	Page       int                 `json:"page"`
 	PerPage    int                 `json:"per_page"`
-}
-
-// GetJavaScriptComponents fetches all JavaScript components from the registry
-func (c *Client) GetJavaScriptComponents() ([]RegistryComponent, error) {
-	return c.GetComponentsByLanguage("javascript")
 }
 
 // GitHubContent represents a file or directory in the GitHub repository
@@ -103,157 +288,4 @@ type RegistryYAML struct {
 		Name     string `yaml:"name"`
 		Version  string `yaml:"version"`
 	} `yaml:"package"`
-}
-
-// GetComponentsByLanguage fetches components by language from the registry
-func (c *Client) GetComponentsByLanguage(language string) ([]RegistryComponent, error) {
-	// Check if logger is initialized to prevent panic
-	if c.logger == nil {
-		return nil, fmt.Errorf("logger is not initialized")
-	}
-
-	// Map language to GitHub language identifier
-	langMap := map[string]string{
-		"javascript": "js",
-		"js":         "js",
-		"go":         "go",
-		"python":     "python",
-		"java":       "java",
-		"csharp":     "dotnet",
-		"php":        "php",
-		"ruby":       "ruby",
-	}
-
-	githubLang := langMap[language]
-	if githubLang == "" {
-		return nil, fmt.Errorf("unsupported language: %s", language)
-	}
-
-	// Check if githubClient is initialized to prevent panic
-	if c.githubClient == nil {
-		return nil, fmt.Errorf("GitHub client is not initialized")
-	}
-
-	// Fetch the list of files from GitHub API using the official client
-	ctx := context.Background()
-	var rawContents interface{}
-	var err error
-	rawContents, _, _, err = c.githubClient.Repositories.GetContents(ctx, "open-telemetry", "opentelemetry.io", "data/registry", nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch registry index: %w", err)
-	}
-
-	if rawContents == nil {
-		return []RegistryComponent{}, nil
-	}
-
-	var components []RegistryComponent
-
-	// GetContents returns interface{} - we need to type assert it
-	var contents []*github.RepositoryContent
-	switch v := rawContents.(type) {
-	case []*github.RepositoryContent:
-		contents = v
-	case *github.RepositoryContent:
-		contents = []*github.RepositoryContent{v}
-	default:
-		return nil, fmt.Errorf("unexpected content type from GitHub API: %T", rawContents)
-	}
-
-	// Filter for files that match the language and are YAML files
-	for _, content := range contents {
-		// Check if content is nil (GitHub API can return nil elements)
-		if content == nil {
-			continue
-		}
-
-		if content.Type != nil && *content.Type == "file" && content.Name != nil && strings.HasSuffix(*content.Name, ".yml") {
-			// Check if the filename contains the language identifier
-			if strings.Contains(*content.Name, "-"+githubLang+"-") ||
-				strings.Contains(*content.Name, githubLang+"-") ||
-				strings.HasPrefix(*content.Name, githubLang+"-") {
-
-				// Check if DownloadURL is available
-				if content.DownloadURL == nil {
-					c.logger.Logf("Warning: DownloadURL is nil for %s, skipping", *content.Name)
-					continue
-				}
-
-				// Fetch and parse the YAML file
-				component, err := c.fetchComponentFromYAML(*content.DownloadURL)
-				if err != nil {
-					// Log error but continue with other files
-					c.logger.Logf("Warning: failed to parse %s: %v\n", *content.Name, err)
-					continue
-				}
-
-				if component != nil {
-					components = append(components, *component)
-				}
-			}
-		}
-	}
-
-	return components, nil
-}
-
-// fetchComponentFromYAML fetches and parses a single YAML file
-func (c *Client) fetchComponentFromYAML(downloadURL string) (*RegistryComponent, error) {
-	req, err := http.NewRequest("GET", downloadURL, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
-
-	// Set User-Agent to avoid being blocked
-	req.Header.Set("User-Agent", "Lawrence-CLI/1.0")
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch YAML file: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("failed to fetch YAML file, status: %d", resp.StatusCode)
-	}
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read YAML file: %w", err)
-	}
-
-	var yamlData RegistryYAML
-	if err := yaml.Unmarshal(body, &yamlData); err != nil {
-		return nil, fmt.Errorf("failed to parse YAML: %w", err)
-	}
-
-	// Convert to RegistryComponent
-	component := &RegistryComponent{
-		Name:        yamlData.Package.Name,
-		Type:        yamlData.RegistryType,
-		Language:    yamlData.Language,
-		Description: yamlData.Description,
-		Repository:  yamlData.URLs.Repo,
-		RegistryURL: downloadURL,
-		Homepage:    yamlData.URLs.Repo,
-		Tags:        yamlData.Tags,
-		License:     yamlData.License,
-		LastUpdated: time.Now(), // We could parse createdAt if needed
-		Metadata: map[string]interface{}{
-			"title":        yamlData.Title,
-			"isFirstParty": yamlData.IsFirstParty,
-			"package":      yamlData.Package,
-			"createdAt":    yamlData.CreatedAt,
-		},
-	}
-
-	return component, nil
-}
-
-// GetComponentByName fetches a specific component by name
-func (c *Client) GetComponentByName(name string) (*RegistryComponent, error) {
-	// For now, this would need to be implemented to search through all components
-	// and find the one with the matching name. For now, return nil to avoid errors.
-	// This could be enhanced to cache components or implement a more efficient search.
-	return nil, nil
 }

@@ -86,7 +86,7 @@ type GoRegistryProvider struct {
 // NewGoRegistryProvider creates a new Go registry provider
 func NewGoRegistryProvider() *GoRegistryProvider {
 	return &GoRegistryProvider{
-		registryClient: registry.NewClient("", &logger.StdoutLogger{}, registry.RegistryBaseURL),
+		registryClient: registry.NewClient("", &logger.StdoutLogger{}),
 	}
 }
 

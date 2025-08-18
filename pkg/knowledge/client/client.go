@@ -175,7 +175,7 @@ func (kc *KnowledgeClient) GetPrerequisites(language string) ([]PrerequisiteRule
 
 // GetComponentByName returns a component by name
 func (kc *KnowledgeClient) GetComponentByName(name string) (*types.Component, error) {
-	return kc.storage.GetComponentByName(nil, name), nil
+	return kc.storage.GetComponentByName(name), nil
 }
 
 // GetComponentsByLanguage returns components for a specific language with pagination
@@ -235,15 +235,6 @@ func (kc *KnowledgeClient) QueryComponents(query ComponentQuery) (*ComponentResu
 		Total:      result.Total,
 		HasMore:    result.HasMore,
 	}, nil
-}
-
-// GetStatistics returns knowledge base statistics
-func (kc *KnowledgeClient) GetStatistics() (*types.Statistics, error) {
-	kb, err := kc.storage.LoadKnowledgeBase()
-	if err != nil {
-		return nil, err
-	}
-	return &kb.Statistics, nil
 }
 
 // ComponentQuery represents a flexible query for components

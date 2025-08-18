@@ -36,7 +36,7 @@ func (s *KnowledgeBasedInstrumentationService) Close() error {
 // GetInstrumentation finds instrumentation information using the knowledge base
 func (s *KnowledgeBasedInstrumentationService) GetInstrumentation(ctx context.Context, pkg domain.Package) (*domain.InstrumentationInfo, error) {
 	// Try to find the package in the knowledge base
-	component := s.storage.GetComponentByName(nil, pkg.Name)
+	component := s.storage.GetComponentByName(pkg.Name)
 	if component == nil {
 		// Package not found in knowledge base, return nil (no instrumentation available)
 		return nil, nil
@@ -86,13 +86,7 @@ func (s *KnowledgeBasedInstrumentationService) GetRecommendedInstrumentations(ct
 		Name:     pkg.Name, // Partial match
 	}
 
-	// Load knowledge base and query
-	kb, err := s.storage.LoadKnowledgeBase()
-	if err != nil {
-		return nil, fmt.Errorf("failed to load knowledge base: %w", err)
-	}
-
-	result := s.storage.QueryKnowledgeBase(kb, query)
+	result := s.storage.QueryKnowledgeBase(query)
 
 	// Convert to domain.InstrumentationInfo
 	for _, component := range result.Components {
@@ -113,7 +107,7 @@ func (s *KnowledgeBasedInstrumentationService) GetRecommendedInstrumentations(ct
 
 // GetCompatibleVersions returns compatible versions for a given package
 func (s *KnowledgeBasedInstrumentationService) GetCompatibleVersions(ctx context.Context, pkg domain.Package) ([]types.CompatibleComponent, error) {
-	component := s.storage.GetComponentByName(nil, pkg.Name)
+	component := s.storage.GetComponentByName(pkg.Name)
 	if component == nil {
 		return nil, nil
 	}
@@ -130,7 +124,7 @@ func (s *KnowledgeBasedInstrumentationService) GetCompatibleVersions(ctx context
 
 // GetBreakingChanges returns breaking changes for a given package
 func (s *KnowledgeBasedInstrumentationService) GetBreakingChanges(ctx context.Context, pkg domain.Package) ([]types.BreakingChange, error) {
-	component := s.storage.GetComponentByName(nil, pkg.Name)
+	component := s.storage.GetComponentByName(pkg.Name)
 	if component == nil {
 		return nil, nil
 	}
@@ -145,7 +139,7 @@ func (s *KnowledgeBasedInstrumentationService) GetBreakingChanges(ctx context.Co
 
 // GetLatestVersion returns the latest stable version of a package
 func (s *KnowledgeBasedInstrumentationService) GetLatestVersion(ctx context.Context, pkg domain.Package) (*types.Version, error) {
-	component := s.storage.GetComponentByName(nil, pkg.Name)
+	component := s.storage.GetComponentByName(pkg.Name)
 	if component == nil {
 		return nil, nil
 	}

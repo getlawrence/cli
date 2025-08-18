@@ -92,7 +92,7 @@ type PythonRegistryProvider struct {
 // NewPythonRegistryProvider creates a new Python registry provider
 func NewPythonRegistryProvider() *PythonRegistryProvider {
 	return &PythonRegistryProvider{
-		client: registry.NewClient("", &logger.StdoutLogger{}, registry.RegistryBaseURL),
+		client: registry.NewClient("", &logger.StdoutLogger{}),
 	}
 }
 

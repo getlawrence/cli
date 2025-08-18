@@ -9,6 +9,7 @@ import (
 
 	"github.com/getlawrence/cli/internal/logger"
 	"github.com/getlawrence/cli/pkg/knowledge/providers"
+	"github.com/getlawrence/cli/pkg/knowledge/storage"
 	"github.com/getlawrence/cli/pkg/knowledge/types"
 	"github.com/getlawrence/cli/pkg/knowledge/utils"
 )
@@ -70,16 +71,18 @@ type Pipeline struct {
 	githubClient    *providers.GitHubClient
 	logger          logger.Logger
 	releasesCache   *RepositoryReleasesCache
+	storageClient   *storage.Storage
 }
 
 // NewPipelineWithLoggerAndToken creates a new pipeline with a custom logger and GitHub token
-func NewPipeline(providerFactory providers.ProviderFactory, logger logger.Logger, githubToken string) *Pipeline {
+func NewPipeline(providerFactory providers.ProviderFactory, logger logger.Logger, githubToken string, storageClient *storage.Storage) *Pipeline {
 	return &Pipeline{
 		providerFactory: providerFactory,
 		rateLimiter:     utils.NewRateLimiter(100, time.Second),
 		githubClient:    providers.NewGitHubClient(githubToken),
 		logger:          logger,
 		releasesCache:   NewRepositoryReleasesCache(),
+		storageClient:   storageClient,
 	}
 }
 
@@ -101,25 +104,25 @@ func (p *Pipeline) GetCacheStats() map[string]interface{} {
 }
 
 // UpdateKnowledgeBase updates the knowledge base with fresh data for the specified language
-func (p *Pipeline) UpdateKnowledgeBase(language types.ComponentLanguage) (*types.KnowledgeBase, error) {
+func (p *Pipeline) UpdateKnowledgeBase(language types.ComponentLanguage) error {
 	p.logger.Logf("Starting knowledge base update for language: %s\n", language)
 
 	// Get registry and package manager providers
 	registryProvider, err := p.providerFactory.GetRegistryProvider(language)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get registry provider for language %s: %w", language, err)
+		return fmt.Errorf("failed to get registry provider for language %s: %w", language, err)
 	}
 
 	packageManagerProvider, err := p.providerFactory.GetPackageManagerProvider(language)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get package manager provider for language %s: %w", language, err)
+		return fmt.Errorf("failed to get package manager provider for language %s: %w", language, err)
 	}
 
 	// Step 1: Fetch components from registry
 	p.logger.Logf("Fetching components from %s registry...\n", registryProvider.GetName())
 	registryComponents, err := registryProvider.DiscoverComponents(context.Background(), string(language))
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch registry components: %w", err)
+		return fmt.Errorf("failed to fetch registry components: %w", err)
 	}
 	p.logger.Logf("Found %d components in registry\n", len(registryComponents))
 
@@ -127,39 +130,17 @@ func (p *Pipeline) UpdateKnowledgeBase(language types.ComponentLanguage) (*types
 	p.logger.Logf("Enriching components with %s metadata...\n", packageManagerProvider.GetName())
 	enrichedComponents, err := p.enrichComponentsWithPackageManager(registryComponents, packageManagerProvider)
 	if err != nil {
-		return nil, fmt.Errorf("failed to enrich components: %w", err)
+		return fmt.Errorf("failed to enrich components: %w", err)
 	}
 
 	// Step 3: Convert to knowledge base format
 	p.logger.Log("Converting to knowledge base format...")
 	components := p.convertToComponents(enrichedComponents, language)
 
-	// Step 4: Generate statistics
-	p.logger.Log("Generating statistics...")
-	statistics := p.generateStatistics(components, language)
-
-	// Step 5: Create knowledge base
-	kb := &types.KnowledgeBase{
-		SchemaVersion: "1.0.0",
-		GeneratedAt:   time.Now(),
-		Components:    components,
-		Statistics:    statistics,
-		Metadata: map[string]interface{}{
-			"source":           fmt.Sprintf("%s + %s", registryProvider.GetRegistryType(), packageManagerProvider.GetPackageManagerType()),
-			"language":         string(language),
-			"registry":         registryProvider.GetName(),
-			"package_manager":  packageManagerProvider.GetName(),
-			"update_timestamp": time.Now().Unix(),
-		},
-	}
-
-	// Step 6: Log optimization results
-	cacheStats := p.GetCacheStats()
-	p.logger.Logf("GitHub API optimization results: cached %d repositories with %d total releases\n",
-		cacheStats["cached_repositories"], cacheStats["total_cached_releases"])
+	p.storageClient.SaveComponents(components, "knowledge.db")
 
 	p.logger.Log("Knowledge base update completed successfully")
-	return kb, nil
+	return nil
 }
 
 // enrichComponentsWithPackageManager enriches registry components with package manager metadata
@@ -212,11 +193,31 @@ func (p *Pipeline) groupComponentsByRepository(components []providers.RegistryCo
 
 	for _, component := range components {
 		if component.Repository != "" && strings.Contains(component.Repository, "github.com") {
-			groups[component.Repository] = append(groups[component.Repository], component)
+			baseRepo := extractBaseRepository(component.Repository)
+			p.logger.Logf("Grouping component %s by repository %s\n", component.Name, baseRepo)
+			groups[baseRepo] = append(groups[baseRepo], component)
 		}
 	}
 
 	return groups
+}
+
+// extractBaseRepository extracts the base repository URL from a GitHub URL
+// Input: https://github.com/Azure/azure-sdk-for-js/tree/main/sdk/monitor/monitor-opentelemetry-exporter
+// Output: github.com/Azure/azure-sdk-for-js
+func extractBaseRepository(fullURL string) string {
+	// Remove protocol if present
+	url := strings.TrimPrefix(fullURL, "https://")
+	url = strings.TrimPrefix(url, "http://")
+
+	// Split by "/" and take the first two parts (github.com/owner/repo)
+	parts := strings.Split(url, "/")
+	if len(parts) >= 3 && parts[0] == "github.com" {
+		return strings.Join(parts[:3], "/")
+	}
+
+	// Fallback to original URL if we can't parse it
+	return fullURL
 }
 
 // GroupComponentsByRepository groups components by their repository URL
@@ -696,13 +697,15 @@ func (p *Pipeline) fetchChangelogFromGitHub(repositoryURL, version string) (*pro
 		return nil, fmt.Errorf("GitHub client not initialized")
 	}
 
+	baseRepo := extractBaseRepository(repositoryURL)
+
 	// Check if we have cached releases for this repository
-	cachedReleases, exists := p.releasesCache.Get(repositoryURL)
+	cachedReleases, exists := p.releasesCache.Get(baseRepo)
 	if !exists {
 		// Fallback to individual API call if not cached
-		p.logger.Logf("Warning: No cached releases for %s, falling back to individual API call\n", repositoryURL)
+		p.logger.Logf("Warning: No cached releases for %s, falling back to individual API call\n", baseRepo)
 		ctx := context.Background()
-		return p.githubClient.GetReleaseNotes(ctx, repositoryURL, version)
+		return p.githubClient.GetReleaseNotes(ctx, baseRepo, version)
 	}
 
 	// Find the matching release from cached data
@@ -801,49 +804,6 @@ func (p *Pipeline) determineVersionStatus(version string, distTags map[string]st
 	}
 
 	return types.VersionStatusStable
-}
-
-// generateStatistics generates statistics for the knowledge base
-func (p *Pipeline) generateStatistics(components []types.Component, language types.ComponentLanguage) types.Statistics {
-	stats := types.Statistics{
-		TotalComponents: len(components),
-		ByLanguage:      make(map[string]int),
-		ByType:          make(map[string]int),
-		ByCategory:      make(map[string]int),
-		ByStatus:        make(map[string]int),
-		BySupportLevel:  make(map[string]int),
-		LastUpdate:      time.Now(),
-		Source:          fmt.Sprintf("OpenTelemetry Registry + %s", language),
-	}
-
-	// Count by language
-	stats.ByLanguage[string(language)] = len(components)
-
-	// Count by type, category, status, and support level
-	for _, component := range components {
-		typeStr := string(component.Type)
-		stats.ByType[typeStr]++
-
-		if component.Category != "" {
-			categoryStr := string(component.Category)
-			stats.ByCategory[categoryStr]++
-		}
-
-		if component.Status != "" {
-			statusStr := string(component.Status)
-			stats.ByStatus[statusStr]++
-		}
-
-		if component.SupportLevel != "" {
-			supportStr := string(component.SupportLevel)
-			stats.BySupportLevel[supportStr]++
-		}
-
-		// Count total versions
-		stats.TotalVersions += len(component.Versions)
-	}
-
-	return stats
 }
 
 // EnrichedComponent represents a component enriched with package manager data

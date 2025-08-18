@@ -34,145 +34,141 @@ func createTestKnowledgeClientForOrchestrator(t *testing.T) *client.KnowledgeCli
 	}
 
 	// Create test knowledge base with required components
-	kb := &kbtypes.KnowledgeBase{
-		SchemaVersion: "1.0.0",
-		GeneratedAt:   time.Now(),
-		Components: []kbtypes.Component{
-			// Go core packages
-			{
-				Name:         "go.opentelemetry.io/otel",
-				Type:         kbtypes.ComponentTypeAPI,
-				Category:     kbtypes.ComponentCategoryAPI,
-				Status:       kbtypes.ComponentStatusStable,
-				SupportLevel: kbtypes.SupportLevelOfficial,
-				Language:     kbtypes.ComponentLanguageGo,
-				Description:  "OpenTelemetry API for Go",
-				Repository:   "https://github.com/open-telemetry/opentelemetry-go",
-				LastUpdated:  time.Now(),
-				Versions: []kbtypes.Version{
-					{
-						Name:        "1.0.0",
-						ReleaseDate: time.Now(),
-						Status:      kbtypes.VersionStatusLatest,
-					},
+	components := []kbtypes.Component{
+		// Go core packages
+		{
+			Name:         "go.opentelemetry.io/otel",
+			Type:         kbtypes.ComponentTypeAPI,
+			Category:     kbtypes.ComponentCategoryAPI,
+			Status:       kbtypes.ComponentStatusStable,
+			SupportLevel: kbtypes.SupportLevelOfficial,
+			Language:     kbtypes.ComponentLanguageGo,
+			Description:  "OpenTelemetry API for Go",
+			Repository:   "https://github.com/open-telemetry/opentelemetry-go",
+			LastUpdated:  time.Now(),
+			Versions: []kbtypes.Version{
+				{
+					Name:        "1.0.0",
+					ReleaseDate: time.Now(),
+					Status:      kbtypes.VersionStatusLatest,
 				},
 			},
-			{
-				Name:         "go.opentelemetry.io/otel/sdk",
-				Type:         kbtypes.ComponentTypeSDK,
-				Category:     kbtypes.ComponentCategoryCore,
-				Status:       kbtypes.ComponentStatusStable,
-				SupportLevel: kbtypes.SupportLevelOfficial,
-				Language:     kbtypes.ComponentLanguageGo,
-				Description:  "OpenTelemetry SDK for Go",
-				Repository:   "https://github.com/open-telemetry/opentelemetry-go",
-				LastUpdated:  time.Now(),
-				Versions: []kbtypes.Version{
-					{
-						Name:        "1.0.0",
-						ReleaseDate: time.Now(),
-						Status:      kbtypes.VersionStatusLatest,
-					},
+		},
+		{
+			Name:         "go.opentelemetry.io/otel/sdk",
+			Type:         kbtypes.ComponentTypeSDK,
+			Category:     kbtypes.ComponentCategoryCore,
+			Status:       kbtypes.ComponentStatusStable,
+			SupportLevel: kbtypes.SupportLevelOfficial,
+			Language:     kbtypes.ComponentLanguageGo,
+			Description:  "OpenTelemetry SDK for Go",
+			Repository:   "https://github.com/open-telemetry/opentelemetry-go",
+			LastUpdated:  time.Now(),
+			Versions: []kbtypes.Version{
+				{
+					Name:        "1.0.0",
+					ReleaseDate: time.Now(),
+					Status:      kbtypes.VersionStatusLatest,
 				},
 			},
-			// Go instrumentation
-			{
-				Name:         "go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp",
-				Type:         kbtypes.ComponentTypeInstrumentation,
-				Category:     kbtypes.ComponentCategoryContrib,
-				Status:       kbtypes.ComponentStatusStable,
-				SupportLevel: kbtypes.SupportLevelOfficial,
-				Language:     kbtypes.ComponentLanguageGo,
-				Description:  "HTTP instrumentation for Go",
-				Repository:   "https://github.com/open-telemetry/opentelemetry-go-contrib",
-				LastUpdated:  time.Now(),
-				Versions: []kbtypes.Version{
-					{
-						Name:        "1.0.0",
-						ReleaseDate: time.Now(),
-						Status:      kbtypes.VersionStatusLatest,
-					},
+		},
+		// Go instrumentation
+		{
+			Name:         "go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp",
+			Type:         kbtypes.ComponentTypeInstrumentation,
+			Category:     kbtypes.ComponentCategoryContrib,
+			Status:       kbtypes.ComponentStatusStable,
+			SupportLevel: kbtypes.SupportLevelOfficial,
+			Language:     kbtypes.ComponentLanguageGo,
+			Description:  "HTTP instrumentation for Go",
+			Repository:   "https://github.com/open-telemetry/opentelemetry-go-contrib",
+			LastUpdated:  time.Now(),
+			Versions: []kbtypes.Version{
+				{
+					Name:        "1.0.0",
+					ReleaseDate: time.Now(),
+					Status:      kbtypes.VersionStatusLatest,
 				},
 			},
-			// JavaScript core packages
-			{
-				Name:         "@opentelemetry/api",
-				Type:         kbtypes.ComponentTypeAPI,
-				Category:     kbtypes.ComponentCategoryAPI,
-				Status:       kbtypes.ComponentStatusStable,
-				SupportLevel: kbtypes.SupportLevelOfficial,
-				Language:     kbtypes.ComponentLanguageJavaScript,
-				Description:  "OpenTelemetry API for JavaScript",
-				Repository:   "https://github.com/open-telemetry/opentelemetry-js",
-				LastUpdated:  time.Now(),
-				Versions: []kbtypes.Version{
-					{
-						Name:        "1.0.0",
-						ReleaseDate: time.Now(),
-						Status:      kbtypes.VersionStatusLatest,
-					},
+		},
+		// JavaScript core packages
+		{
+			Name:         "@opentelemetry/api",
+			Type:         kbtypes.ComponentTypeAPI,
+			Category:     kbtypes.ComponentCategoryAPI,
+			Status:       kbtypes.ComponentStatusStable,
+			SupportLevel: kbtypes.SupportLevelOfficial,
+			Language:     kbtypes.ComponentLanguageJavaScript,
+			Description:  "OpenTelemetry API for JavaScript",
+			Repository:   "https://github.com/open-telemetry/opentelemetry-js",
+			LastUpdated:  time.Now(),
+			Versions: []kbtypes.Version{
+				{
+					Name:        "1.0.0",
+					ReleaseDate: time.Now(),
+					Status:      kbtypes.VersionStatusLatest,
 				},
 			},
-			{
-				Name:         "@opentelemetry/sdk-node",
-				Type:         kbtypes.ComponentTypeSDK,
-				Category:     kbtypes.ComponentCategoryCore,
-				Status:       kbtypes.ComponentStatusStable,
-				SupportLevel: kbtypes.SupportLevelOfficial,
-				Language:     kbtypes.ComponentLanguageJavaScript,
-				Description:  "OpenTelemetry SDK for Node.js",
-				Repository:   "https://github.com/open-telemetry/opentelemetry-js",
-				LastUpdated:  time.Now(),
-				Versions: []kbtypes.Version{
-					{
-						Name:        "1.0.0",
-						ReleaseDate: time.Now(),
-						Status:      kbtypes.VersionStatusLatest,
-					},
+		},
+		{
+			Name:         "@opentelemetry/sdk-node",
+			Type:         kbtypes.ComponentTypeSDK,
+			Category:     kbtypes.ComponentCategoryCore,
+			Status:       kbtypes.ComponentStatusStable,
+			SupportLevel: kbtypes.SupportLevelOfficial,
+			Language:     kbtypes.ComponentLanguageJavaScript,
+			Description:  "OpenTelemetry SDK for Node.js",
+			Repository:   "https://github.com/open-telemetry/opentelemetry-js",
+			LastUpdated:  time.Now(),
+			Versions: []kbtypes.Version{
+				{
+					Name:        "1.0.0",
+					ReleaseDate: time.Now(),
+					Status:      kbtypes.VersionStatusLatest,
 				},
 			},
-			// JavaScript instrumentations
-			{
-				Name:         "@opentelemetry/instrumentation-express",
-				Type:         kbtypes.ComponentTypeInstrumentation,
-				Category:     kbtypes.ComponentCategoryContrib,
-				Status:       kbtypes.ComponentStatusStable,
-				SupportLevel: kbtypes.SupportLevelOfficial,
-				Language:     kbtypes.ComponentLanguageJavaScript,
-				Description:  "Express instrumentation for JavaScript",
-				Repository:   "https://github.com/open-telemetry/opentelemetry-js-contrib",
-				LastUpdated:  time.Now(),
-				Versions: []kbtypes.Version{
-					{
-						Name:        "1.0.0",
-						ReleaseDate: time.Now(),
-						Status:      kbtypes.VersionStatusLatest,
-					},
+		},
+		// JavaScript instrumentations
+		{
+			Name:         "@opentelemetry/instrumentation-express",
+			Type:         kbtypes.ComponentTypeInstrumentation,
+			Category:     kbtypes.ComponentCategoryContrib,
+			Status:       kbtypes.ComponentStatusStable,
+			SupportLevel: kbtypes.SupportLevelOfficial,
+			Language:     kbtypes.ComponentLanguageJavaScript,
+			Description:  "Express instrumentation for JavaScript",
+			Repository:   "https://github.com/open-telemetry/opentelemetry-js-contrib",
+			LastUpdated:  time.Now(),
+			Versions: []kbtypes.Version{
+				{
+					Name:        "1.0.0",
+					ReleaseDate: time.Now(),
+					Status:      kbtypes.VersionStatusLatest,
 				},
 			},
-			{
-				Name:         "@opentelemetry/instrumentation-http",
-				Type:         kbtypes.ComponentTypeInstrumentation,
-				Category:     kbtypes.ComponentCategoryContrib,
-				Status:       kbtypes.ComponentStatusStable,
-				SupportLevel: kbtypes.SupportLevelOfficial,
-				Language:     kbtypes.ComponentLanguageJavaScript,
-				Description:  "HTTP instrumentation for JavaScript",
-				Repository:   "https://github.com/open-telemetry/opentelemetry-js-contrib",
-				LastUpdated:  time.Now(),
-				Versions: []kbtypes.Version{
-					{
-						Name:        "1.0.0",
-						ReleaseDate: time.Now(),
-						Status:      kbtypes.VersionStatusLatest,
-					},
+		},
+		{
+			Name:         "@opentelemetry/instrumentation-http",
+			Type:         kbtypes.ComponentTypeInstrumentation,
+			Category:     kbtypes.ComponentCategoryContrib,
+			Status:       kbtypes.ComponentStatusStable,
+			SupportLevel: kbtypes.SupportLevelOfficial,
+			Language:     kbtypes.ComponentLanguageJavaScript,
+			Description:  "HTTP instrumentation for JavaScript",
+			Repository:   "https://github.com/open-telemetry/opentelemetry-js-contrib",
+			LastUpdated:  time.Now(),
+			Versions: []kbtypes.Version{
+				{
+					Name:        "1.0.0",
+					ReleaseDate: time.Now(),
+					Status:      kbtypes.VersionStatusLatest,
 				},
 			},
 		},
 	}
 
 	// Save the test knowledge base
-	err = store.SaveKnowledgeBase(kb, "test")
+	err = store.SaveKnowledgeBase(components, "test")
 	if err != nil {
 		t.Fatalf("Failed to save test knowledge base: %v", err)
 	}

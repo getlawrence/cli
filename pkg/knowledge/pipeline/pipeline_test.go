@@ -6,13 +6,18 @@ import (
 
 	"github.com/getlawrence/cli/internal/logger"
 	"github.com/getlawrence/cli/pkg/knowledge/providers"
+	"github.com/getlawrence/cli/pkg/knowledge/storage"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestGroupComponentsByRepository(t *testing.T) {
 	logger := &logger.StdoutLogger{}
 	providerFactory := providers.NewProviderFactory("", logger)
-	pipeline := NewPipeline(providerFactory, logger, "")
+	storageClient, err := storage.NewStorage("knowledge.db", logger)
+	if err != nil {
+		t.Fatalf("failed to create storage client: %v", err)
+	}
+	pipeline := NewPipeline(providerFactory, logger, "", storageClient)
 
 	components := []providers.RegistryComponent{
 		{
@@ -43,13 +48,13 @@ func TestGroupComponentsByRepository(t *testing.T) {
 	assert.Equal(t, 3, len(groups))
 
 	// js-contrib should have 3 packages
-	assert.Equal(t, 3, len(groups["https://github.com/open-telemetry/opentelemetry-js-contrib"]))
+	assert.Equal(t, 3, len(groups["github.com/open-telemetry/opentelemetry-js-contrib"]))
 
 	// js should have 1 package
-	assert.Equal(t, 1, len(groups["https://github.com/open-telemetry/opentelemetry-js"]))
+	assert.Equal(t, 1, len(groups["github.com/open-telemetry/opentelemetry-js"]))
 
 	// go should have 1 package
-	assert.Equal(t, 1, len(groups["https://github.com/open-telemetry/opentelemetry-go"]))
+	assert.Equal(t, 1, len(groups["github.com/open-telemetry/opentelemetry-go"]))
 }
 
 func TestRepositoryReleasesCache(t *testing.T) {
@@ -91,7 +96,11 @@ func TestRepositoryReleasesCache(t *testing.T) {
 func TestMatchesVersion(t *testing.T) {
 	logger := &logger.StdoutLogger{}
 	providerFactory := providers.NewProviderFactory("", logger)
-	pipeline := NewPipeline(providerFactory, logger, "")
+	storageClient, err := storage.NewStorage("knowledge.db", logger)
+	if err != nil {
+		t.Fatalf("failed to create storage client: %v", err)
+	}
+	pipeline := NewPipeline(providerFactory, logger, "", storageClient)
 
 	// Test exact matches
 	assert.True(t, pipeline.matchesVersion("v1.0.0", "1.0.0"))
@@ -110,7 +119,11 @@ func TestMatchesVersion(t *testing.T) {
 func TestGetCacheStats(t *testing.T) {
 	logger := &logger.StdoutLogger{}
 	providerFactory := providers.NewProviderFactory("", logger)
-	pipeline := NewPipeline(providerFactory, logger, "")
+	storageClient, err := storage.NewStorage("knowledge.db", logger)
+	if err != nil {
+		t.Fatalf("failed to create storage client: %v", err)
+	}
+	pipeline := NewPipeline(providerFactory, logger, "", storageClient)
 
 	// Initially should be empty
 	stats := pipeline.GetCacheStats()

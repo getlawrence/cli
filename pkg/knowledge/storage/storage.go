@@ -45,15 +45,19 @@ func (s *Storage) Close() error {
 	return s.db.Close()
 }
 
+func (s *Storage) SaveComponents(components []types.Component, filename string) error {
+	return s.SaveKnowledgeBase(components, filename)
+}
+
 // SaveKnowledgeBase saves the knowledge base to the SQLite database using parallel processing
-func (s *Storage) SaveKnowledgeBase(kb *types.KnowledgeBase, filename string) error {
+func (s *Storage) SaveKnowledgeBase(components []types.Component, filename string) error {
 	startTime := time.Now()
 
 	// For small datasets, use sequential processing
-	if len(kb.Components) < 10 {
-		err := s.saveKnowledgeBaseSequential(kb)
+	if len(components) < 10 {
+		err := s.saveKnowledgeBaseSequential(components)
 		if err == nil {
-			s.logger.Logf("Sequential processing completed in %v for %d components\n", time.Since(startTime), len(kb.Components))
+			s.logger.Logf("Sequential processing completed in %v for %d components\n", time.Since(startTime), len(components))
 		}
 		return err
 	}
@@ -74,16 +78,16 @@ func (s *Storage) SaveKnowledgeBase(kb *types.KnowledgeBase, filename string) er
 	}
 
 	// Use parallel processing for better performance
-	err = s.saveKnowledgeBaseParallel(tx, kb)
+	err = s.saveKnowledgeBaseParallel(tx, components)
 	if err == nil {
 		s.logger.Logf("Parallel processing completed in %v for %d components using %d workers\n",
-			time.Since(startTime), len(kb.Components), runtime.NumCPU())
+			time.Since(startTime), len(components), runtime.NumCPU())
 	}
 	return err
 }
 
 // saveKnowledgeBaseSequential is the original sequential implementation for small datasets
-func (s *Storage) saveKnowledgeBaseSequential(kb *types.KnowledgeBase) error {
+func (s *Storage) saveKnowledgeBaseSequential(components []types.Component) error {
 	// Start a transaction for better performance
 	tx, err := s.db.Begin()
 	if err != nil {
@@ -100,7 +104,7 @@ func (s *Storage) saveKnowledgeBaseSequential(kb *types.KnowledgeBase) error {
 	}
 
 	// Insert components sequentially
-	for _, component := range kb.Components {
+	for _, component := range components {
 		componentID, err := s.insertComponent(tx, &component)
 		if err != nil {
 			return fmt.Errorf("failed to insert component %s: %w", component.Name, err)
@@ -123,14 +127,14 @@ func (s *Storage) saveKnowledgeBaseSequential(kb *types.KnowledgeBase) error {
 }
 
 // saveKnowledgeBaseParallel processes components and versions in parallel using channels
-func (s *Storage) saveKnowledgeBaseParallel(tx *sql.Tx, kb *types.KnowledgeBase) error {
+func (s *Storage) saveKnowledgeBaseParallel(tx *sql.Tx, components []types.Component) error {
 	// Determine optimal number of workers based on available CPU cores and dataset size
 	numWorkers := runtime.NumCPU()
 	if numWorkers > 8 {
 		numWorkers = 8 // Cap at 8 to avoid overwhelming the database
 	}
-	if len(kb.Components) < numWorkers {
-		numWorkers = len(kb.Components) // Don't create more workers than components
+	if len(components) < numWorkers {
+		numWorkers = len(components) // Don't create more workers than components
 	}
 
 	// Ensure we have at least one worker
@@ -161,7 +165,7 @@ func (s *Storage) saveKnowledgeBaseParallel(tx *sql.Tx, kb *types.KnowledgeBase)
 	// Send components to workers
 	go func() {
 		defer close(componentChan)
-		for _, component := range kb.Components {
+		for _, component := range components {
 			select {
 			case componentChan <- &component:
 			case <-stopChan:
@@ -944,26 +948,6 @@ func (s *Storage) scanComponentsWithVersions(rows *sql.Rows, loadVersions bool) 
 	return components
 }
 
-// LoadKnowledgeBase loads the knowledge base metadata from the SQLite database without loading all components
-// Components are loaded on-demand through query methods
-func (s *Storage) LoadKnowledgeBase() (*types.KnowledgeBase, error) {
-	// Calculate statistics using SQL aggregation instead of loading all components
-	stats, err := s.calculateStatistics()
-	if err != nil {
-		return nil, fmt.Errorf("failed to calculate statistics: %w", err)
-	}
-
-	// Create knowledge base with empty components slice - components loaded on-demand
-	kb := &types.KnowledgeBase{
-		SchemaVersion: "1.0.0",
-		GeneratedAt:   time.Now(),
-		Components:    []types.Component{}, // Empty - use query methods to load specific components
-		Statistics:    stats,
-	}
-
-	return kb, nil
-}
-
 // Query represents a query against the knowledge base
 type Query struct {
 	Language     string
@@ -993,7 +977,7 @@ type QueryResult struct {
 }
 
 // QueryKnowledgeBase queries the knowledge base based on criteria using SQLite with pagination support
-func (s *Storage) QueryKnowledgeBase(kb *types.KnowledgeBase, query Query) *QueryResult {
+func (s *Storage) QueryKnowledgeBase(query Query) *QueryResult {
 	// First, get the total count without pagination
 	totalCount := s.getQueryTotalCount(query)
 
@@ -1061,7 +1045,7 @@ func (s *Storage) QueryKnowledgeBase(kb *types.KnowledgeBase, query Query) *Quer
 }
 
 // GetComponentsByType returns all components of a specific type
-func (s *Storage) GetComponentsByType(kb *types.KnowledgeBase, componentType types.ComponentType) []types.Component {
+func (s *Storage) GetComponentsByType(componentType types.ComponentType) []types.Component {
 	query := `
 		SELECT id, name, type, category, status, support_level, language, description,
 		       repository, registry_url, homepage, tags, maintainers, license,
@@ -1082,7 +1066,7 @@ func (s *Storage) GetComponentsByType(kb *types.KnowledgeBase, componentType typ
 }
 
 // GetComponentsByLanguage returns all components for a specific language
-func (s *Storage) GetComponentsByLanguage(kb *types.KnowledgeBase, language types.ComponentLanguage) []types.Component {
+func (s *Storage) GetComponentsByLanguage(language types.ComponentLanguage) []types.Component {
 	query := `
 		SELECT id, name, type, category, status, support_level, language, description,
 		       repository, registry_url, homepage, tags, maintainers, license,
@@ -1103,7 +1087,7 @@ func (s *Storage) GetComponentsByLanguage(kb *types.KnowledgeBase, language type
 }
 
 // GetLatestVersions returns the latest version of each component
-func (s *Storage) GetLatestVersions(kb *types.KnowledgeBase) map[string]types.Version {
+func (s *Storage) GetLatestVersions() map[string]types.Version {
 	query := `
 		SELECT c.name, v.name, v.release_date, v.dependencies, v.min_runtime_version,
 		       v.max_runtime_version, v.status, v.deprecated, v.breaking_changes, v.metadata,
@@ -1155,7 +1139,7 @@ func (s *Storage) GetLatestVersions(kb *types.KnowledgeBase) map[string]types.Ve
 }
 
 // GetComponentByName returns a component by name
-func (s *Storage) GetComponentByName(kb *types.KnowledgeBase, name string) *types.Component {
+func (s *Storage) GetComponentByName(name string) *types.Component {
 	query := `
 		SELECT id, name, type, category, status, support_level, language, description,
 		       repository, registry_url, homepage, tags, maintainers, license,
@@ -1198,7 +1182,7 @@ func (s *Storage) GetComponentByName(kb *types.KnowledgeBase, name string) *type
 }
 
 // GetComponentsByCategory returns all components of a specific category
-func (s *Storage) GetComponentsByCategory(kb *types.KnowledgeBase, category types.ComponentCategory) []types.Component {
+func (s *Storage) GetComponentsByCategory(category types.ComponentCategory) []types.Component {
 	query := `
 		SELECT id, name, type, category, status, support_level, language, description,
 		       repository, registry_url, homepage, tags, maintainers, license,
@@ -1219,7 +1203,7 @@ func (s *Storage) GetComponentsByCategory(kb *types.KnowledgeBase, category type
 }
 
 // GetComponentsByStatus returns all components with a specific status
-func (s *Storage) GetComponentsByStatus(kb *types.KnowledgeBase, status types.ComponentStatus) []types.Component {
+func (s *Storage) GetComponentsByStatus(status types.ComponentStatus) []types.Component {
 	query := `
 		SELECT id, name, type, category, status, support_level, language, description,
 		       repository, registry_url, homepage, tags, maintainers, license,
@@ -1240,7 +1224,7 @@ func (s *Storage) GetComponentsByStatus(kb *types.KnowledgeBase, status types.Co
 }
 
 // GetComponentsBySupportLevel returns all components with a specific support level
-func (s *Storage) GetComponentsBySupportLevel(kb *types.KnowledgeBase, supportLevel types.SupportLevel) []types.Component {
+func (s *Storage) GetComponentsBySupportLevel(supportLevel types.SupportLevel) []types.Component {
 	query := `
 		SELECT id, name, type, category, status, support_level, language, description,
 		       repository, registry_url, homepage, tags, maintainers, license,
@@ -1261,7 +1245,7 @@ func (s *Storage) GetComponentsBySupportLevel(kb *types.KnowledgeBase, supportLe
 }
 
 // GetInstrumentationsByFramework returns all instrumentations for a specific framework
-func (s *Storage) GetInstrumentationsByFramework(kb *types.KnowledgeBase, framework string) []types.Component {
+func (s *Storage) GetInstrumentationsByFramework(framework string) []types.Component {
 	query := `
 		SELECT id, name, type, category, status, support_level, language, description,
 		       repository, registry_url, homepage, tags, maintainers, license,
@@ -1282,7 +1266,7 @@ func (s *Storage) GetInstrumentationsByFramework(kb *types.KnowledgeBase, framew
 }
 
 // GetCompatibleVersions returns compatible versions for a given component and version
-func (s *Storage) GetCompatibleVersions(kb *types.KnowledgeBase, componentName, version string) []types.CompatibleComponent {
+func (s *Storage) GetCompatibleVersions(componentName, version string) []types.CompatibleComponent {
 	query := `
 		SELECT v.compatible
 		FROM components c
@@ -1305,7 +1289,7 @@ func (s *Storage) GetCompatibleVersions(kb *types.KnowledgeBase, componentName, 
 }
 
 // GetBreakingChanges returns breaking changes for a given component
-func (s *Storage) GetBreakingChanges(kb *types.KnowledgeBase, componentName string) []types.BreakingChange {
+func (s *Storage) GetBreakingChanges(componentName string) []types.BreakingChange {
 	query := `
 		SELECT v.breaking_changes
 		FROM components c

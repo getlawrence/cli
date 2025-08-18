@@ -149,15 +149,6 @@ type Component struct {
 	MigrationGuideURL      string                  `json:"migration_guide_url,omitempty"`
 }
 
-// KnowledgeBase represents the complete knowledge base
-type KnowledgeBase struct {
-	SchemaVersion string                 `json:"schema_version"`
-	GeneratedAt   time.Time              `json:"generated_at"`
-	Components    []Component            `json:"components"`
-	Metadata      map[string]interface{} `json:"metadata,omitempty"`
-	Statistics    Statistics             `json:"statistics"`
-}
-
 // Statistics provides summary information about the knowledge base
 type Statistics struct {
 	TotalComponents int                    `json:"total_components"`

@@ -23,32 +23,21 @@ func TestSaveKnowledgeBaseParallel(t *testing.T) {
 	}
 	defer storage.Close()
 
-	// Create test data with multiple components and versions
-	kb := &types.KnowledgeBase{
-		SchemaVersion: "1.0.0",
-		GeneratedAt:   time.Now(),
-		Components:    createTestComponents(100), // 100 components with multiple versions each
-	}
+	components := createTestComponents(100)
 
 	// Test parallel processing
 	startTime := time.Now()
-	err = storage.SaveKnowledgeBase(kb, "test")
+	err = storage.SaveKnowledgeBase(components, "test")
 	duration := time.Since(startTime)
 
 	if err != nil {
 		t.Fatalf("Failed to save knowledge base: %v", err)
 	}
 
-	// Verify the data was saved correctly
-	loadedKB, err := storage.LoadKnowledgeBase()
-	if err != nil {
-		t.Fatalf("Failed to load knowledge base: %v", err)
-	}
-
 	// Use query to count components
-	result := storage.QueryKnowledgeBase(loadedKB, Query{})
-	if result.Total != len(kb.Components) {
-		t.Errorf("Expected %d components, got %d", len(kb.Components), result.Total)
+	result := storage.QueryKnowledgeBase(Query{})
+	if result.Total != len(components) {
+		t.Errorf("Expected %d components, got %d", len(components), result.Total)
 	}
 
 	// Verify versions were saved by summing versions of returned components
@@ -67,7 +56,7 @@ func TestSaveKnowledgeBaseParallel(t *testing.T) {
 	}
 
 	expectedVersions := 0
-	for _, component := range kb.Components {
+	for _, component := range components {
 		expectedVersions += len(component.Versions)
 	}
 
@@ -76,7 +65,7 @@ func TestSaveKnowledgeBaseParallel(t *testing.T) {
 	}
 
 	t.Logf("Parallel processing completed in %v for %d components with %d total versions",
-		duration, len(kb.Components), totalVersions)
+		duration, len(components), totalVersions)
 }
 
 func TestSaveKnowledgeBaseSequential(t *testing.T) {
@@ -93,15 +82,11 @@ func TestSaveKnowledgeBaseSequential(t *testing.T) {
 	defer storage.Close()
 
 	// Create test data with few components (should trigger sequential processing)
-	kb := &types.KnowledgeBase{
-		SchemaVersion: "1.0.0",
-		GeneratedAt:   time.Now(),
-		Components:    createTestComponents(5), // 5 components (below threshold)
-	}
+	components := createTestComponents(5)
 
 	// Test sequential processing
 	startTime := time.Now()
-	err = storage.SaveKnowledgeBase(kb, "test")
+	err = storage.SaveKnowledgeBase(components, "test")
 	duration := time.Since(startTime)
 
 	if err != nil {
@@ -109,17 +94,12 @@ func TestSaveKnowledgeBaseSequential(t *testing.T) {
 	}
 
 	// Verify the data was saved correctly
-	loadedKB, err := storage.LoadKnowledgeBase()
-	if err != nil {
-		t.Fatalf("Failed to load knowledge base: %v", err)
+	result := storage.QueryKnowledgeBase(Query{})
+	if result.Total != len(components) {
+		t.Errorf("Expected %d components, got %d", len(components), result.Total)
 	}
 
-	result := storage.QueryKnowledgeBase(loadedKB, Query{})
-	if result.Total != len(kb.Components) {
-		t.Errorf("Expected %d components, got %d", len(kb.Components), result.Total)
-	}
-
-	t.Logf("Sequential processing completed in %v for %d components", duration, len(kb.Components))
+	t.Logf("Sequential processing completed in %v for %d components", duration, len(components))
 }
 
 // createTestComponents creates test components with versions for testing
@@ -176,11 +156,7 @@ func BenchmarkSaveKnowledgeBaseParallel(b *testing.B) {
 	defer storage.Close()
 
 	// Create test data
-	kb := &types.KnowledgeBase{
-		SchemaVersion: "1.0.0",
-		GeneratedAt:   time.Now(),
-		Components:    createTestComponents(100), // 100 components
-	}
+	components := createTestComponents(100)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -188,7 +164,7 @@ func BenchmarkSaveKnowledgeBaseParallel(b *testing.B) {
 		storage.db.Exec("DELETE FROM versions")
 		storage.db.Exec("DELETE FROM components")
 
-		err := storage.SaveKnowledgeBase(kb, "benchmark")
+		err := storage.SaveKnowledgeBase(components, "benchmark")
 		if err != nil {
 			b.Fatalf("Failed to save knowledge base: %v", err)
 		}
@@ -209,11 +185,7 @@ func BenchmarkSaveKnowledgeBaseSequential(b *testing.B) {
 	defer storage.Close()
 
 	// Create test data with few components to trigger sequential processing
-	kb := &types.KnowledgeBase{
-		SchemaVersion: "1.0.0",
-		GeneratedAt:   time.Now(),
-		Components:    createTestComponents(5), // 5 components (below threshold)
-	}
+	components := createTestComponents(5)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -221,7 +193,7 @@ func BenchmarkSaveKnowledgeBaseSequential(b *testing.B) {
 		storage.db.Exec("DELETE FROM versions")
 		storage.db.Exec("DELETE FROM components")
 
-		err := storage.SaveKnowledgeBase(kb, "benchmark")
+		err := storage.SaveKnowledgeBase(components, "benchmark")
 		if err != nil {
 			b.Fatalf("Failed to save knowledge base: %v", err)
 		}

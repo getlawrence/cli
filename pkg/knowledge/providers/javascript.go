@@ -20,7 +20,7 @@ type JavaScriptProvider struct {
 // NewJavaScriptProvider creates a new JavaScript provider
 func NewJavaScriptProvider() *JavaScriptProvider {
 	return &JavaScriptProvider{
-		registryClient: registry.NewClient("", &logger.StdoutLogger{}, registry.RegistryBaseURL),
+		registryClient: registry.NewClient("", &logger.StdoutLogger{}),
 	}
 }
 
