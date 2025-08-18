@@ -43,13 +43,7 @@ func (h *PHPInjector) GetConfig() *types.LanguageConfig { return h.config }
 
 // GetRequiredImports returns the list of imports needed for OTEL in PHP
 func (h *PHPInjector) GetRequiredImports() []string {
-	return []string{
-		"OpenTelemetry\\API\\Trace\\TracerInterface",
-		"OpenTelemetry\\SDK\\Trace\\TracerProvider",
-		"OpenTelemetry\\SDK\\Trace\\ExporterFactory",
-		"OpenTelemetry\\SDK\\Trace\\SpanProcessor",
-		"OpenTelemetry\\SDK\\Trace\\BatchSpanProcessor",
-	}
+	return []string{}
 }
 
 // GetFrameworkImports returns framework-specific imports based on detected frameworks

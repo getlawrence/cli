@@ -617,59 +617,6 @@ func (s *Storage) insertVersion(tx *sql.Tx, componentID int64, version *types.Ve
 	return err
 }
 
-// loadComponents loads all components from the database
-func (s *Storage) loadComponents() ([]types.Component, error) {
-	query := `
-		SELECT id, name, type, category, status, support_level, language, description,
-		       repository, registry_url, homepage, tags, maintainers, license,
-		       last_updated, instrumentation_targets, documentation_url,
-		       examples_url, migration_guide_url
-		FROM components
-		ORDER BY name
-	`
-
-	rows, err := s.db.Query(query)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var components []types.Component
-	for rows.Next() {
-		var component types.Component
-		var id int64
-		var tagsJSON, maintainersJSON, targetsJSON string
-
-		err := rows.Scan(
-			&id, &component.Name, &component.Type, &component.Category,
-			&component.Status, &component.SupportLevel, &component.Language,
-			&component.Description, &component.Repository, &component.RegistryURL,
-			&component.Homepage, &tagsJSON, &maintainersJSON, &component.License,
-			&component.LastUpdated, &targetsJSON, &component.DocumentationURL,
-			&component.ExamplesURL, &component.MigrationGuideURL,
-		)
-		if err != nil {
-			return nil, err
-		}
-
-		// Parse JSON fields
-		json.Unmarshal([]byte(tagsJSON), &component.Tags)
-		json.Unmarshal([]byte(maintainersJSON), &component.Maintainers)
-		json.Unmarshal([]byte(targetsJSON), &component.InstrumentationTargets)
-
-		// Load versions for this component
-		versions, err := s.loadVersions(id)
-		if err != nil {
-			return nil, err
-		}
-		component.Versions = versions
-
-		components = append(components, component)
-	}
-
-	return components, nil
-}
-
 // loadVersions loads all versions for a component
 func (s *Storage) loadVersions(componentID int64) ([]types.Version, error) {
 	query := `

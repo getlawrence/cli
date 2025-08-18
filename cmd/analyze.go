@@ -74,13 +74,6 @@ func runAnalyze(cmd *cobra.Command, args []string) error {
 	// Create analysis engine
 	codebaseAnalyzer := detector.NewCodebaseAnalyzer([]detector.IssueDetector{
 		issues.NewMissingOTelDetector(),
-		// Add knowledge-based detector if available
-		func() detector.IssueDetector {
-			if detector, err := issues.NewKnowledgeBasedDetector(); err == nil {
-				return detector
-			}
-			return nil
-		}(),
 	}, map[string]detector.Language{
 		"go":         languages.NewGoDetector(),
 		"python":     languages.NewPythonDetector(),
