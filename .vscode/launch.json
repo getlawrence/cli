@@ -36,30 +36,30 @@
             "env": {"GO111MODULE": "on"}
         },
         {
-            "name": "Codegen (dry-run)",
+            "name": "gen (dry-run)",
             "type": "go",
             "request": "launch",
             "mode": "debug",
             "program": "${workspaceFolder}",
-            "args": ["codegen", "${workspaceFolder}/examples", "--dry-run"],
+            "args": ["gen", "${workspaceFolder}/examples", "--dry-run"],
             "env": {"GO111MODULE": "on"}
         },
         {
-            "name": "Codegen (live)",
+            "name": "gen (live)",
             "type": "go",
             "request": "launch",
             "mode": "debug",
             "program": "${workspaceFolder}",
-            "args": ["codegen", "${workspaceFolder}/examples"],
+            "args": ["gen", "${workspaceFolder}/examples"],
             "env": {"GO111MODULE": "on"}
         },
         {
-            "name": "Codegen specific project",
+            "name": "gen specific project",
             "type": "go",
             "request": "launch",
             "mode": "debug",
             "program": "${workspaceFolder}",
-            "args": ["codegen", "${workspaceFolder}/examples/${input:projectName}", "--dry-run"],
+            "args": ["gen", "${workspaceFolder}/examples/${input:projectName}", "--dry-run"],
             "env": {"GO111MODULE": "on"}
         }
     ],

@@ -15,8 +15,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var codegenCmd = &cobra.Command{
-	Use:   "codegen",
+var genCmd = &cobra.Command{
+	Use:   "gen",
 	Short: "Generate OTEL instrumentation code using AI agents or templates",
 	Long: `Analyze your codebase and generate OpenTelemetry instrumentation 
 using AI agents or template-based code generation.
@@ -36,7 +36,7 @@ This command will:
 1. Detect available coding agents and generation strategies
 2. Analyze your codebase for instrumentation opportunities  
 3. Generate code using your chosen strategy (AI or template-based)`,
-	RunE: runCodegen,
+	RunE: runGen,
 }
 
 var (
@@ -54,34 +54,34 @@ var (
 )
 
 func init() {
-	rootCmd.AddCommand(codegenCmd)
+	rootCmd.AddCommand(genCmd)
 
-	codegenCmd.Flags().StringVarP(&language, "language", "l", "",
+	genCmd.Flags().StringVarP(&language, "language", "l", "",
 		"Target language (go, javascript, python, java, dotnet, ruby, php)")
-	codegenCmd.Flags().StringVarP(&agentType, "agent", "a", "",
+	genCmd.Flags().StringVarP(&agentType, "agent", "a", "",
 		"Preferred coding agent (gemini, claude, openai, github)")
-	codegenCmd.Flags().BoolVar(&listAgents, "list-agents", false,
+	genCmd.Flags().BoolVar(&listAgents, "list-agents", false,
 		"List available coding agents")
-	codegenCmd.Flags().BoolVar(&listTemplates, "list-templates", false,
+	genCmd.Flags().BoolVar(&listTemplates, "list-templates", false,
 		"List available templates")
-	codegenCmd.Flags().BoolVar(&listStrategies, "list-strategies", false,
+	genCmd.Flags().BoolVar(&listStrategies, "list-strategies", false,
 		"List available generation strategies")
-	codegenCmd.Flags().StringVarP(&generationMode, "mode", "", "",
+	genCmd.Flags().StringVarP(&generationMode, "mode", "", "",
 		"Generation mode (agent, template). Defaults to agent if agents available, otherwise template")
-	codegenCmd.Flags().StringVarP(&outputDir, "output", "o", "",
+	genCmd.Flags().StringVarP(&outputDir, "output", "o", "",
 		"Output directory for generated files (template mode only)")
-	codegenCmd.Flags().BoolVar(&dryRun, "dry-run", false,
+	genCmd.Flags().BoolVar(&dryRun, "dry-run", false,
 		"Show what would be generated without writing files (template mode only)")
 	// AI mode flags
-	codegenCmd.Flags().BoolVar(&showPrompt, "show-prompt", false,
+	genCmd.Flags().BoolVar(&showPrompt, "show-prompt", false,
 		"Print the generated agent prompt before execution (AI mode only)")
-	codegenCmd.Flags().StringVar(&savePrompt, "save-prompt", "",
+	genCmd.Flags().StringVar(&savePrompt, "save-prompt", "",
 		"Save the generated agent prompt to the given file path (AI mode only)")
 	// Advanced config
-	codegenCmd.Flags().StringVarP(&configPath, "config", "c", "", "Path to advanced OpenTelemetry config YAML")
+	genCmd.Flags().StringVarP(&configPath, "config", "c", "", "Path to advanced OpenTelemetry config YAML")
 }
 
-func runCodegen(cmd *cobra.Command, args []string) error {
+func runGen(cmd *cobra.Command, args []string) error {
 	ctx := cmd.Context()
 
 	targetPath := "."

@@ -32,6 +32,7 @@ We recommend:
 - 🔧 **Extensible**: Add custom detectors and language support
 - 📊 **Multiple Output Formats**: Text, JSON output options
 - 🎯 **AI & Template Code Generation**: Generate instrumentation using AI agents or built-in templates
+- 🧠 **Knowledge Base Management**: Discover, update, and query OpenTelemetry components across languages
 
 ## Installation
 
@@ -135,12 +136,12 @@ Global Flags:
       --version               Show version information
 ```
 
-### `codegen`
+### `gen`
 
 Analyze a codebase and generate OpenTelemetry instrumentation using AI or templates.
 
 ```bash
-lawrence codegen [path] --mode template --dry-run
+lawrence gen [path] --mode template --dry-run
 
 Flags:
   -l, --language string       Target language (go, javascript, python, java, dotnet, ruby, php)
@@ -181,7 +182,56 @@ exporters:
 Use it with:
 
 ```bash
-lawrence codegen --mode template --config ./otel.yaml
+lawrence gen --mode template --config ./otel.yaml
+```
+
+### `knowledge`
+
+Manage the OpenTelemetry knowledge base for discovering and querying components across languages.
+
+```bash
+lawrence knowledge [command] [flags]
+
+Commands:
+  update [language]           Update knowledge base for specific language or all languages
+  query [query]               Query knowledge base for components
+  info                        Show knowledge base information
+  providers                   List available providers
+
+Examples:
+  lawrence knowledge update                    # Update all supported languages
+  lawrence knowledge update go                # Update Go language only
+  lawrence knowledge update --force           # Force update even if recent data exists
+  lawrence knowledge update --workers 4      # Use specific number of parallel workers
+  lawrence knowledge query --language javascript --type Instrumentation
+  lawrence knowledge query --name express
+  lawrence knowledge query --status stable
+  lawrence knowledge info                     # Show database statistics and metadata
+  lawrence knowledge providers                # List supported languages and providers
+```
+
+#### Knowledge Base Update Flags
+
+```bash
+Flags for update command:
+  -o, --output string         Output file path (default: pkg/knowledge/otel_packages.json)
+  -f, --force                Force update even if recent data exists
+  -w, --workers int          Number of parallel workers (0 = auto-detect based on CPU cores)
+  -r, --rate-limit int       Rate limit for API requests per second per worker (default: 100)
+```
+
+#### Knowledge Base Query Flags
+
+```bash
+Flags for query command:
+  -l, --language string      Filter by language
+  -t, --type string          Filter by component type
+  -c, --category string      Filter by component category
+  -s, --status string        Filter by component status
+      --support-level string Filter by support level
+  -n, --name string          Filter by component name (partial match)
+      --version string       Filter by version
+      --framework string     Filter by framework
 ```
 
 ## Supported Languages
@@ -255,6 +305,36 @@ $ lawrence analyze --output json
   },
   "issues": [...]
 }
+```
+
+### Knowledge Base Management
+
+```bash
+# Update knowledge base for all languages
+$ lawrence knowledge update
+🔄 Updating OpenTelemetry knowledge base...
+📦 Processing Go packages...
+📦 Processing Python packages...
+📦 Processing JavaScript packages...
+✅ Knowledge base updated successfully
+
+# Query for Express.js instrumentation
+$ lawrence knowledge query --name express --language javascript
+🔍 Query Results for "express" in JavaScript:
+  • @opentelemetry/instrumentation-express (v0.33.0)
+    Status: Stable
+    Type: Instrumentation
+    Support Level: Official
+    Category: EXPERIMENTAL
+
+# Show knowledge base statistics
+$ lawrence knowledge info
+📊 Knowledge Base Information
+============================
+Database: knowledge.db
+Total Components: 1,247
+Languages: 7
+Last Updated: 2024-01-15 10:30:00 UTC
 ```
 
 ## License
