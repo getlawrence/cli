@@ -138,17 +138,16 @@ func (p *Pipeline) enrichComponentsWithPackageManager(registryComponents []provi
 // fetchPackageManagerData fetches package metadata from the package manager
 func (p *Pipeline) fetchPackageManagerData(componentName string, packageManagerProvider providers.PackageManagerProvider) (*providers.PackageMetadata, error) {
 	// Extract package name from component name
-	packageManagerType := packageManagerProvider.GetPackageManagerType()
-	packageName := p.extractPackageName(componentName, packageManagerType)
+	packageName := p.extractPackageName(componentName)
 	if packageName == "" {
-		return nil, fmt.Errorf("could not extract package name from '%s' for package manager type '%s'", componentName, packageManagerType)
+		return nil, fmt.Errorf("could not extract package name from '%s'", componentName)
 	}
 
 	return packageManagerProvider.GetPackage(context.Background(), packageName)
 }
 
 // extractPackageName extracts the package name from a component name based on package manager type
-func (p *Pipeline) extractPackageName(componentName, packageManagerType string) string {
+func (p *Pipeline) extractPackageName(componentName string) string {
 	// Handle empty or invalid component names
 	if componentName == "" || strings.TrimSpace(componentName) == "" {
 		return ""
