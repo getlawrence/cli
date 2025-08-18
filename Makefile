@@ -89,6 +89,20 @@ install: build ## Install the binary to GOPATH/bin
 uninstall: ## Remove the binary from GOPATH/bin
 	rm -f $(GOPATH)/bin/$(BINARY_NAME)
 
+# Knowledge base commands
+generate-kb: build ## Generate knowledge base from local registry
+	@echo "Generating knowledge base..."
+	@if [ ! -d ".registry" ]; then \
+		echo "Local registry not found. Running 'lawrence registry sync' first..."; \
+		./$(BINARY_NAME) registry sync; \
+	fi
+	./$(BINARY_NAME) knowledge update --output pkg/knowledge/storage/knowledge.db --force
+	@echo "Knowledge base generated at pkg/knowledge/storage/knowledge.db"
+
+update-embedded-kb: generate-kb ## Update the embedded knowledge database
+	@echo "Knowledge base ready for embedding in binary"
+	@echo "Run 'make build' to create binary with embedded database"
+
 # Cross compilation
 cross-compile: ## Build for multiple platforms
 	GOOS=linux GOARCH=amd64 $(GOBUILD) $(LDFLAGS) -o $(BINARY_NAME)-linux-amd64 .

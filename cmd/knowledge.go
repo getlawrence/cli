@@ -26,6 +26,13 @@ across multiple languages and package managers.`,
 	RunE: runKnowledge,
 }
 
+var statusCmd = &cobra.Command{
+	Use:   "status",
+	Short: "Show status of the knowledge base",
+	Long:  `Show information about the current knowledge base including whether embedded or external database is being used.`,
+	RunE:  runStatus,
+}
+
 var updateCmd = &cobra.Command{
 	Use:   "update [language]",
 	Short: "Update the knowledge base for a specific language or all languages",
@@ -42,6 +49,7 @@ Examples:
 }
 
 func init() {
+	knowledgeCmd.AddCommand(statusCmd)
 	knowledgeCmd.AddCommand(updateCmd)
 
 	// Add flags for update command
@@ -55,6 +63,47 @@ func init() {
 
 func runKnowledge(cmd *cobra.Command, args []string) error {
 	return cmd.Help()
+}
+
+func runStatus(cmd *cobra.Command, args []string) error {
+	cmdLogger := logger.NewUILogger()
+
+	// Check if embedded database is available
+	if storage.HasEmbeddedDatabase() {
+		cmdLogger.Logf("✓ Embedded knowledge database is available\n")
+	} else {
+		cmdLogger.Logf("✗ No embedded knowledge database found\n")
+	}
+
+	// Check for local knowledge.db file
+	if _, err := os.Stat("knowledge.db"); err == nil {
+		info, _ := os.Stat("knowledge.db")
+		cmdLogger.Logf("✓ Local knowledge.db found (modified: %s)\n", info.ModTime().Format("2006-01-02 15:04:05"))
+	} else {
+		cmdLogger.Logf("✗ No local knowledge.db file found\n")
+	}
+
+	// Test storage connection and show component count
+	storageClient, err := storage.NewStorageWithEmbedded("", cmdLogger)
+	if err != nil {
+		return fmt.Errorf("failed to create storage client: %w", err)
+	}
+	defer storageClient.Close()
+
+	// Get component and version counts
+	componentCount, err := storageClient.GetComponentCount()
+	if err != nil {
+		cmdLogger.Logf("✗ Failed to get component count: %v\n", err)
+	} else {
+		versionCount, err := storageClient.GetVersionCount()
+		if err != nil {
+			cmdLogger.Logf("✓ Knowledge base contains %d components\n", componentCount)
+		} else {
+			cmdLogger.Logf("✓ Knowledge base contains %d components with %d versions\n", componentCount, versionCount)
+		}
+	}
+
+	return nil
 }
 
 func runUpdate(cmd *cobra.Command, args []string) error {
@@ -135,6 +184,7 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create storage client: %w", err)
 	}
+	defer storageClient.Close()
 
 	providerFactory := providers.NewProviderFactory(absRegistryPath, cmdLogger)
 	pipeline := pipeline.NewPipeline(providerFactory, cmdLogger, githubToken, storageClient)

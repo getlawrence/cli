@@ -18,7 +18,7 @@ type KnowledgeBasedInstrumentationService struct {
 
 // NewKnowledgeBasedInstrumentationService creates a new knowledge-based instrumentation service
 func NewKnowledgeBasedInstrumentationService(logger logger.Logger) (*KnowledgeBasedInstrumentationService, error) {
-	storageClient, err := storage.NewStorage("knowledge.db", logger)
+	storageClient, err := storage.NewStorageWithEmbedded("knowledge.db", logger)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create knowledge storage: %w", err)
 	}
