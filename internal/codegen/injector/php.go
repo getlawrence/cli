@@ -43,13 +43,7 @@ func (h *PHPInjector) GetConfig() *types.LanguageConfig { return h.config }
 
 // GetRequiredImports returns the list of imports needed for OTEL in PHP
 func (h *PHPInjector) GetRequiredImports() []string {
-	return []string{
-		"OpenTelemetry\\API\\Trace\\TracerInterface",
-		"OpenTelemetry\\SDK\\Trace\\TracerProvider",
-		"OpenTelemetry\\SDK\\Trace\\ExporterFactory",
-		"OpenTelemetry\\SDK\\Trace\\SpanProcessor",
-		"OpenTelemetry\\SDK\\Trace\\BatchSpanProcessor",
-	}
+	return []string{}
 }
 
 // GetFrameworkImports returns framework-specific imports based on detected frameworks
@@ -139,8 +133,31 @@ func (h *PHPInjector) FallbackAnalyzeEntryPoints(content []byte, analysis *types
 
 // GenerateImportModifications generates modifications to fix import statements
 func (h *PHPInjector) GenerateImportModifications(content []byte, analysis *types.FileAnalysis) []types.CodeModification {
-	// No special import handling needed for PHP
-	return []types.CodeModification{}
+	var modifications []types.CodeModification
+
+	// Check if we need to add the otel.php import
+	contentStr := string(content)
+	hasOtelImport := strings.Contains(contentStr, "require_once './otel.php'") ||
+		strings.Contains(contentStr, "require_once './otel.php';")
+
+	if !hasOtelImport {
+		// Find the best place to add the import (after opening tag)
+		insertLine := determinePHPTopInsertionLine(contentStr)
+
+		// Add the otel.php import
+		modifications = append(modifications, types.CodeModification{
+			Type:        types.ModificationAddImport,
+			Language:    "PHP",
+			FilePath:    "", // Will be set by caller
+			LineNumber:  uint32(insertLine),
+			Column:      1,
+			InsertAfter: true,
+			Content:     "require_once './otel.php';",
+			Context:     "",
+		})
+	}
+
+	return modifications
 }
 
 // determinePHPTopInsertionLine returns the line number right after opening tag and any declare(strict_types)

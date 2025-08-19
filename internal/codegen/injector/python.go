@@ -54,9 +54,9 @@ func NewPythonInjector() *PythonInjector {
 				(block) @function_start
 			`,
 			},
-			ImportTemplate: `from opentelemetry import %s`,
+			ImportTemplate:         `from opentelemetry import %s`,
 			InitializationTemplate: `init_tracer()`,
-			CleanupTemplate: `tp.shutdown()`,
+			CleanupTemplate:        `tp.shutdown()`,
 			FrameworkTemplates: map[string]string{
 				"flask": `
 # Instrument Flask application
@@ -432,7 +432,7 @@ func (h *PythonInjector) GenerateFrameworkModifications(content []byte, operatio
 	analysis := &types.FileAnalysis{
 		ExistingImports: make(map[string]bool),
 	}
-	
+
 	// Check if there's an 'import otel' statement that needs replacement
 	lines := strings.Split(string(content), "\n")
 	for _, line := range lines {
@@ -442,7 +442,7 @@ func (h *PythonInjector) GenerateFrameworkModifications(content []byte, operatio
 			break
 		}
 	}
-	
+
 	importMods := h.GenerateImportModifications(content, analysis)
 	modifications = append(modifications, importMods...)
 
@@ -455,6 +455,9 @@ func (h *PythonInjector) GenerateFrameworkModifications(content []byte, operatio
 		// Find the best place to inject Flask instrumentation
 		insertionPoint := h.findFlaskInstrumentationPoint(content)
 		if insertionPoint.LineNumber > 0 {
+			// Create the complete Flask instrumentation content including import
+			flaskContent := "from opentelemetry.instrumentation.flask import FlaskInstrumentor\n\n" + h.config.FrameworkTemplates["flask"]
+
 			modifications = append(modifications, types.CodeModification{
 				Type:        types.ModificationAddFramework,
 				Language:    "Python",
@@ -462,7 +465,7 @@ func (h *PythonInjector) GenerateFrameworkModifications(content []byte, operatio
 				LineNumber:  insertionPoint.LineNumber,
 				Column:      insertionPoint.Column,
 				InsertAfter: true,
-				Content:     h.config.FrameworkTemplates["flask"],
+				Content:     flaskContent,
 				Framework:   "flask",
 			})
 		}

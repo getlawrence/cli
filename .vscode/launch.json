@@ -1,7 +1,4 @@
 {
-    // Use IntelliSense to learn about possible attributes.
-    // Hover to view descriptions of existing attributes.
-    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
     "configurations": [
         {
@@ -12,33 +9,66 @@
             "program": "${file}"
         },
         {
-            "name": "Launch analyze",
+            "name": "Analyze C#",
             "type": "go",
             "request": "launch",
             "mode": "debug",
             "program": "${workspaceFolder}",
-            "args": [
-                "analyze",
-                "${workspaceFolder}/examples/csharp",
-            ],
-            "env": {
-                "GO111MODULE": "on"
-            }
+            "args": ["analyze", "${workspaceFolder}/examples/csharp"],
+            "env": {"GO111MODULE": "on"}
         },
         {
-            "name": "Launch codegen",
+            "name": "Analyze JS",
             "type": "go",
             "request": "launch",
             "mode": "debug",
             "program": "${workspaceFolder}",
-            "args": [
-                "codegen",
-                "--path",
-                "${workspaceFolder}/examples/go-sample",
-            ],
-            "env": {
-                "GO111MODULE": "on"
-            }
+            "args": ["analyze", "${workspaceFolder}/examples/js"],
+            "env": {"GO111MODULE": "on"}
+        },
+        {
+            "name": "Analyze Python",
+            "type": "go",
+            "request": "launch",
+            "mode": "debug",
+            "program": "${workspaceFolder}",
+            "args": ["analyze", "${workspaceFolder}/examples/python"],
+            "env": {"GO111MODULE": "on"}
+        },
+        {
+            "name": "gen (dry-run)",
+            "type": "go",
+            "request": "launch",
+            "mode": "debug",
+            "program": "${workspaceFolder}",
+            "args": ["gen", "${workspaceFolder}/examples", "--dry-run"],
+            "env": {"GO111MODULE": "on"}
+        },
+        {
+            "name": "gen (live)",
+            "type": "go",
+            "request": "launch",
+            "mode": "debug",
+            "program": "${workspaceFolder}",
+            "args": ["gen", "${workspaceFolder}/examples"],
+            "env": {"GO111MODULE": "on"}
+        },
+        {
+            "name": "gen specific project",
+            "type": "go",
+            "request": "launch",
+            "mode": "debug",
+            "program": "${workspaceFolder}",
+            "args": ["gen", "${workspaceFolder}/examples/${input:projectName}", "--dry-run"],
+            "env": {"GO111MODULE": "on"}
+        }
+    ],
+    "inputs": [
+        {
+            "id": "projectName",
+            "description": "Enter project name (js, python, csharp, etc.)",
+            "default": "js",
+            "type": "promptString"
         }
     ]
 }

@@ -4,24 +4,34 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/getlawrence/cli/internal/codegen/dependency/knowledge"
 	"github.com/getlawrence/cli/internal/codegen/dependency/matcher"
 	"github.com/getlawrence/cli/internal/codegen/dependency/registry"
 	"github.com/getlawrence/cli/internal/codegen/dependency/types"
+	"github.com/getlawrence/cli/pkg/knowledge/client"
 )
 
 // Orchestrator coordinates scanning -> matching -> installing
 type Orchestrator struct {
 	registry *registry.Registry
 	matcher  matcher.Matcher
-	kb       *knowledge.KnowledgeBase
+	kb       *client.KnowledgeClient
 }
 
 // New creates a new orchestrator
-func New(registry *registry.Registry, kb *knowledge.KnowledgeBase) *Orchestrator {
+func New(registry *registry.Registry, kb *client.KnowledgeClient) *Orchestrator {
+	// Use knowledge-enhanced matcher if knowledge client is available
+	var matcherInstance matcher.Matcher
+	if kb != nil {
+		// Use knowledge-enhanced matcher
+		matcherInstance = matcher.NewKnowledgeEnhancedMatcher(kb)
+	} else {
+		// Fallback to basic matcher
+		matcherInstance = matcher.NewPlanMatcher()
+	}
+
 	return &Orchestrator{
 		registry: registry,
-		matcher:  matcher.NewPlanMatcher(),
+		matcher:  matcherInstance,
 		kb:       kb,
 	}
 }

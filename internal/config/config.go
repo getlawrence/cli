@@ -12,6 +12,11 @@ import (
 // OTELConfig represents advanced OpenTelemetry configuration that can be
 // provided via a YAML file and applied across languages.
 type OTELConfig struct {
+	// GitHub configuration for API authentication
+	GitHub struct {
+		Token string `json:"token" yaml:"token"` // GitHub personal access token
+	} `json:"github" yaml:"github"`
+
 	// Service metadata
 	ServiceName    string            `json:"service_name" yaml:"service_name"`
 	ServiceVersion string            `json:"service_version" yaml:"service_version"`

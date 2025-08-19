@@ -60,14 +60,24 @@ type CodebaseAnalyzer struct {
 	detectors         []IssueDetector
 	languageDetectors map[string]Language
 	codeInjector      *injector.CodeInjector
+	knowledgeService  *KnowledgeBasedInstrumentationService
 }
 
 // NewCodebaseAnalyzer creates a new analysis engine
 func NewCodebaseAnalyzer(detectors []IssueDetector, languages map[string]Language, logger logger.Logger) *CodebaseAnalyzer {
+	// Try to initialize the knowledge service, but don't fail if it's not available
+	knowledgeService, err := NewKnowledgeBasedInstrumentationService(logger)
+	if err != nil {
+		// Log warning but continue without knowledge service
+		logger.Logf("Warning: Failed to initialize knowledge service: %v\n", err)
+		knowledgeService = nil
+	}
+
 	return &CodebaseAnalyzer{
 		detectors:         detectors,
 		languageDetectors: languages,
 		codeInjector:      injector.NewCodeInjector(logger),
+		knowledgeService:  knowledgeService,
 	}
 }
 
@@ -172,6 +182,12 @@ func (ca *CodebaseAnalyzer) collectLibrariesAndPackagesForDirectory(ctx context.
 
 // populateInstrumentationsForDirectory populates instrumentations for a specific directory
 func (ca *CodebaseAnalyzer) populateInstrumentationsForDirectory(ctx context.Context, dirAnalysis *DirectoryAnalysis) error {
+	// Use knowledge-based service if available, otherwise fall back to old registry service
+	if ca.knowledgeService != nil {
+		return ca.populateInstrumentationsWithKnowledge(ctx, dirAnalysis)
+	}
+
+	// Fallback to old registry service
 	instrumentationService := NewInstrumentationRegistryService()
 	seenInstrumentations := make(map[string]bool)
 
@@ -186,6 +202,44 @@ func (ca *CodebaseAnalyzer) populateInstrumentationsForDirectory(ctx context.Con
 			if !seenInstrumentations[key] {
 				seenInstrumentations[key] = true
 				dirAnalysis.AvailableInstrumentations = append(dirAnalysis.AvailableInstrumentations, *instrumentation)
+			}
+		}
+	}
+
+	return nil
+}
+
+// populateInstrumentationsWithKnowledge populates instrumentations using the knowledge base
+func (ca *CodebaseAnalyzer) populateInstrumentationsWithKnowledge(ctx context.Context, dirAnalysis *DirectoryAnalysis) error {
+	seenInstrumentations := make(map[string]bool)
+
+	for _, pkg := range dirAnalysis.Packages {
+		// Get instrumentation information from knowledge base
+		instrumentation, err := ca.knowledgeService.GetInstrumentation(ctx, pkg)
+		if err != nil {
+			// Log error but continue - instrumentation lookup is optional
+			continue
+		}
+
+		if instrumentation != nil {
+			key := fmt.Sprintf("%s-%s", instrumentation.Language, instrumentation.Package.Name)
+			if !seenInstrumentations[key] {
+				seenInstrumentations[key] = true
+				dirAnalysis.AvailableInstrumentations = append(dirAnalysis.AvailableInstrumentations, *instrumentation)
+			}
+		}
+
+		// Also get recommended instrumentations
+		recommendations, err := ca.knowledgeService.GetRecommendedInstrumentations(ctx, pkg)
+		if err == nil && len(recommendations) > 0 {
+			for _, rec := range recommendations {
+				key := fmt.Sprintf("rec-%s-%s", rec.Language, rec.Package.Name)
+				if !seenInstrumentations[key] {
+					seenInstrumentations[key] = true
+					// Mark as recommended
+					rec.Title = "[RECOMMENDED] " + rec.Title
+					dirAnalysis.AvailableInstrumentations = append(dirAnalysis.AvailableInstrumentations, rec)
+				}
 			}
 		}
 	}

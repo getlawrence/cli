@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/getlawrence/cli/internal/codegen/dependency"
 	dependencyTypes "github.com/getlawrence/cli/internal/codegen/dependency/types"
 	"github.com/getlawrence/cli/internal/codegen/types"
 	"github.com/getlawrence/cli/internal/domain"
@@ -18,6 +19,7 @@ type DependencyManager interface {
 	AddDependencies(ctx context.Context, projectPath, language string, operationsData *types.OperationsData, req types.GenerationRequest) error
 	ValidateProjectStructure(projectPath, language string) error
 	GetRequiredDependencies(language string, operationsData *types.OperationsData) ([]dependencyTypes.Dependency, error)
+	GetEnhancedDependencies(language string, operationsData *types.OperationsData) ([]dependency.EnhancedDependency, error)
 }
 
 type EntryPointInjector interface {
@@ -61,8 +63,22 @@ func (s *OrchestratedTemplateStrategy) GenerateCode(ctx context.Context, opportu
 					projectPath = filepath.Join(req.CodebasePath, dir)
 				}
 				if req.Config.DryRun {
-					if deps, err := s.deps.GetRequiredDependencies(normalized, ops); err == nil && len(deps) > 0 {
-						s.logger.Logf("Would add %d %s dependencies\n", len(deps), normalized)
+					// Try to get enhanced dependencies with versions first
+					if enhancedDeps, err := s.deps.GetEnhancedDependencies(normalized, ops); err == nil && len(enhancedDeps) > 0 {
+						s.logger.Logf("Would add %d %s dependencies:\n", len(enhancedDeps), normalized)
+						for _, dep := range enhancedDeps {
+							version := ""
+							if dep.Metadata != nil && dep.Metadata.LatestVersion != "" {
+								version = "@" + dep.Metadata.LatestVersion
+							}
+							s.logger.Logf("  - %s%s\n", dep.Dependency.ImportPath, version)
+						}
+					} else if deps, err := s.deps.GetRequiredDependencies(normalized, ops); err == nil && len(deps) > 0 {
+						// Fallback to basic dependencies
+						s.logger.Logf("Would add %d %s dependencies:\n", len(deps), normalized)
+						for _, dep := range deps {
+							s.logger.Logf("  - %s\n", dep.ImportPath)
+						}
 					}
 				} else {
 					if err := s.deps.ValidateProjectStructure(projectPath, normalized); err != nil {

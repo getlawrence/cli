@@ -41,7 +41,7 @@ func TestExamplesStackCodegenAndOTEL(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 	t.Logf("Running codegen for examples: %s", examplesDir)
-	args := []string{"codegen", examplesDir, "--mode", "template"}
+	args := []string{"gen", examplesDir, "--mode", "template"}
 	if err := runAndStreamOutput(t, ctx, repoRoot, binaryPath, args...); err != nil {
 		t.Fatalf("codegen failed: %v", err)
 	}

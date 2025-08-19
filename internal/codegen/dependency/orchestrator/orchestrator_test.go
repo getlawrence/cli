@@ -7,46 +7,190 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/getlawrence/cli/internal/codegen/dependency/commander"
-	"github.com/getlawrence/cli/internal/codegen/dependency/knowledge"
 	"github.com/getlawrence/cli/internal/codegen/dependency/registry"
 	"github.com/getlawrence/cli/internal/codegen/dependency/types"
+	"github.com/getlawrence/cli/internal/logger"
+	"github.com/getlawrence/cli/pkg/knowledge/client"
+	"github.com/getlawrence/cli/pkg/knowledge/storage"
+	kbtypes "github.com/getlawrence/cli/pkg/knowledge/types"
 )
 
-func TestOrchestrator(t *testing.T) {
-	ctx := context.Background()
+func createTestKnowledgeClientForOrchestrator(t *testing.T) *client.KnowledgeClient {
+	// Create a temporary database file
+	dbPath := "test_orchestrator.db"
+	t.Cleanup(func() {
+		os.Remove(dbPath)
+		os.Remove(dbPath + "-journal")
+	})
 
-	// Create test knowledge base
-	kb := &knowledge.KnowledgeBase{
-		Languages: map[string]knowledge.LanguagePackages{
-			"go": {
-				Core: []string{
-					"go.opentelemetry.io/otel",
-					"go.opentelemetry.io/otel/sdk",
-				},
-				Instrumentations: map[string]string{
-					"http": "go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp",
+	// Create new storage
+	logger := &logger.StdoutLogger{}
+	store, err := storage.NewStorage(dbPath, logger)
+	if err != nil {
+		t.Fatalf("Failed to create storage: %v", err)
+	}
+
+	// Create test knowledge base with required components
+	components := []kbtypes.Component{
+		// Go core packages
+		{
+			Name:         "go.opentelemetry.io/otel",
+			Type:         kbtypes.ComponentTypeAPI,
+			Category:     kbtypes.ComponentCategoryAPI,
+			Status:       kbtypes.ComponentStatusStable,
+			SupportLevel: kbtypes.SupportLevelOfficial,
+			Language:     kbtypes.ComponentLanguageGo,
+			Description:  "OpenTelemetry API for Go",
+			Repository:   "https://github.com/open-telemetry/opentelemetry-go",
+			LastUpdated:  time.Now(),
+			Versions: []kbtypes.Version{
+				{
+					Name:        "1.0.0",
+					ReleaseDate: time.Now(),
+					Status:      kbtypes.VersionStatusLatest,
 				},
 			},
-			"javascript": {
-				Core: []string{
-					"@opentelemetry/api",
-					"@opentelemetry/sdk-node",
+		},
+		{
+			Name:         "go.opentelemetry.io/otel/sdk",
+			Type:         kbtypes.ComponentTypeSDK,
+			Category:     kbtypes.ComponentCategoryCore,
+			Status:       kbtypes.ComponentStatusStable,
+			SupportLevel: kbtypes.SupportLevelOfficial,
+			Language:     kbtypes.ComponentLanguageGo,
+			Description:  "OpenTelemetry SDK for Go",
+			Repository:   "https://github.com/open-telemetry/opentelemetry-go",
+			LastUpdated:  time.Now(),
+			Versions: []kbtypes.Version{
+				{
+					Name:        "1.0.0",
+					ReleaseDate: time.Now(),
+					Status:      kbtypes.VersionStatusLatest,
 				},
-				Instrumentations: map[string]string{
-					"express": "@opentelemetry/instrumentation-express",
-					"http":    "@opentelemetry/instrumentation-http",
+			},
+		},
+		// Go instrumentation
+		{
+			Name:         "go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp",
+			Type:         kbtypes.ComponentTypeInstrumentation,
+			Category:     kbtypes.ComponentCategoryContrib,
+			Status:       kbtypes.ComponentStatusStable,
+			SupportLevel: kbtypes.SupportLevelOfficial,
+			Language:     kbtypes.ComponentLanguageGo,
+			Description:  "HTTP instrumentation for Go",
+			Repository:   "https://github.com/open-telemetry/opentelemetry-go-contrib",
+			LastUpdated:  time.Now(),
+			Versions: []kbtypes.Version{
+				{
+					Name:        "1.0.0",
+					ReleaseDate: time.Now(),
+					Status:      kbtypes.VersionStatusLatest,
 				},
-				Prerequisites: []knowledge.PrerequisiteRule{
-					{
-						If:       []string{"express"},
-						Requires: []string{"http"},
-					},
+			},
+		},
+		// JavaScript core packages
+		{
+			Name:         "@opentelemetry/api",
+			Type:         kbtypes.ComponentTypeAPI,
+			Category:     kbtypes.ComponentCategoryAPI,
+			Status:       kbtypes.ComponentStatusStable,
+			SupportLevel: kbtypes.SupportLevelOfficial,
+			Language:     kbtypes.ComponentLanguageJavaScript,
+			Description:  "OpenTelemetry API for JavaScript",
+			Repository:   "https://github.com/open-telemetry/opentelemetry-js",
+			LastUpdated:  time.Now(),
+			Versions: []kbtypes.Version{
+				{
+					Name:        "1.0.0",
+					ReleaseDate: time.Now(),
+					Status:      kbtypes.VersionStatusLatest,
+				},
+			},
+		},
+		{
+			Name:         "@opentelemetry/sdk-node",
+			Type:         kbtypes.ComponentTypeSDK,
+			Category:     kbtypes.ComponentCategoryCore,
+			Status:       kbtypes.ComponentStatusStable,
+			SupportLevel: kbtypes.SupportLevelOfficial,
+			Language:     kbtypes.ComponentLanguageJavaScript,
+			Description:  "OpenTelemetry SDK for Node.js",
+			Repository:   "https://github.com/open-telemetry/opentelemetry-js",
+			LastUpdated:  time.Now(),
+			Versions: []kbtypes.Version{
+				{
+					Name:        "1.0.0",
+					ReleaseDate: time.Now(),
+					Status:      kbtypes.VersionStatusLatest,
+				},
+			},
+		},
+		// JavaScript instrumentations
+		{
+			Name:         "@opentelemetry/instrumentation-express",
+			Type:         kbtypes.ComponentTypeInstrumentation,
+			Category:     kbtypes.ComponentCategoryContrib,
+			Status:       kbtypes.ComponentStatusStable,
+			SupportLevel: kbtypes.SupportLevelOfficial,
+			Language:     kbtypes.ComponentLanguageJavaScript,
+			Description:  "Express instrumentation for JavaScript",
+			Repository:   "https://github.com/open-telemetry/opentelemetry-js-contrib",
+			LastUpdated:  time.Now(),
+			Versions: []kbtypes.Version{
+				{
+					Name:        "1.0.0",
+					ReleaseDate: time.Now(),
+					Status:      kbtypes.VersionStatusLatest,
+				},
+			},
+		},
+		{
+			Name:         "@opentelemetry/instrumentation-http",
+			Type:         kbtypes.ComponentTypeInstrumentation,
+			Category:     kbtypes.ComponentCategoryContrib,
+			Status:       kbtypes.ComponentStatusStable,
+			SupportLevel: kbtypes.SupportLevelOfficial,
+			Language:     kbtypes.ComponentLanguageJavaScript,
+			Description:  "HTTP instrumentation for JavaScript",
+			Repository:   "https://github.com/open-telemetry/opentelemetry-js-contrib",
+			LastUpdated:  time.Now(),
+			Versions: []kbtypes.Version{
+				{
+					Name:        "1.0.0",
+					ReleaseDate: time.Now(),
+					Status:      kbtypes.VersionStatusLatest,
 				},
 			},
 		},
 	}
+
+	// Save the test knowledge base
+	err = store.SaveKnowledgeBase(components, "test")
+	if err != nil {
+		t.Fatalf("Failed to save test knowledge base: %v", err)
+	}
+
+	// Create and return the knowledge client
+	kc, err := client.NewKnowledgeClient(dbPath, logger)
+	if err != nil {
+		t.Fatalf("Failed to create knowledge client: %v", err)
+	}
+
+	t.Cleanup(func() {
+		kc.Close()
+	})
+
+	return kc
+}
+
+func TestOrchestrator(t *testing.T) {
+	ctx := context.Background()
+
+	// Create test knowledge client
+	kb := createTestKnowledgeClientForOrchestrator(t)
 
 	t.Run("successful installation flow", func(t *testing.T) {
 		// Create mock commander
@@ -172,8 +316,8 @@ func TestOrchestrator(t *testing.T) {
 		}
 
 		expectedPackages := map[string]bool{
-			"@opentelemetry/instrumentation-express": true,
-			"@opentelemetry/instrumentation-http":    true,
+			"@opentelemetry/instrumentation-express@1.0.0": true,
+			"@opentelemetry/instrumentation-http@1.0.0":    true,
 		}
 		for _, pkg := range installed {
 			if !expectedPackages[pkg] {

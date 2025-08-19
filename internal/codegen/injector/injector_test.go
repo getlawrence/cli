@@ -77,8 +77,8 @@ if __name__ == '__main__':
     }
 }
 `,
-			expectInitSub:   "GlobalOpenTelemetry.get()",
-			expectImportSub: "import io.opentelemetry.api.GlobalOpenTelemetry;",
+			expectInitSub:   "telemetry.Otel.start()",
+			expectImportSub: "import telemetry.Otel;",
 		},
 		{
 			name:     "CSharp",
