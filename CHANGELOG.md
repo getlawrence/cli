@@ -19,6 +19,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Security
 - TBD
 
+## [v0.1.0-beta.3] - 2025-08-19
+
+### Added
+- Enhanced knowledge base management with embedded SQLite database
+- GitHub token support for API authentication
+- Improved GitHub API calls with repository release caching
+- Updated command flags for knowledge base management
+
+### Changed
+- Migrated from local registry to SQLite database for knowledge storage
+- Optimized knowledge base initialization and management
+- Streamlined code generation with improved dependency resolution
+- Removed knowledge-based detection functionality for simpler architecture
+
+### Fixed
+- Improved stability and performance of dependency management
+- Better error handling in knowledge base operations
+- Enhanced PHP OpenTelemetry integration
+
 ## [v0.1.0-beta.2] - 2025-01-21
 
 ### Added
