@@ -73,7 +73,8 @@ func runAnalyze(cmd *cobra.Command, args []string) error {
 	}
 
 	// Create storage client for knowledge base
-	storageClient, err := storage.NewStorageWithEmbedded("knowledge.db", uiLogger)
+	config := cmd.Context().Value(ConfigKey).(*AppConfig)
+	storageClient, err := storage.NewStorageWithEmbedded("knowledge.db", config.EmbeddedDB, uiLogger)
 	if err != nil {
 		return fmt.Errorf("failed to create knowledge storage: %w", err)
 	}

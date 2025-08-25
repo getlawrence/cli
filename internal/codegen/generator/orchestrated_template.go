@@ -387,46 +387,6 @@ func (s *OrchestratedTemplateStrategy) determineProjectPath(dir, codebasePath st
 	return codebasePath
 }
 
-func (s *OrchestratedTemplateStrategy) addFallbackLanguageOpportunities(root string, dirOpps map[string][]domain.Opportunity) {
-	entries, err := s.oppProcessor.explorer.ReadDir(root)
-	if err != nil {
-		return
-	}
-
-	langByDir := map[string]string{
-		"python": "python", "php": "php", "ruby": "ruby",
-		"go": "go", "js": "javascript", "javascript": "javascript",
-		"csharp": "dotnet", "dotnet": "dotnet", "java": "java",
-	}
-
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			continue
-		}
-
-		name := strings.ToLower(entry.Name())
-		expectedLang, ok := langByDir[name]
-		if !ok {
-			continue
-		}
-
-		if _, exists := dirOpps[name]; exists {
-			continue
-		}
-
-		subdir := filepath.Join(root, name)
-		if detectedLang, found := s.langDetector.DetectProjectLanguage(subdir); found && detectedLang == expectedLang {
-			opp := domain.Opportunity{
-				Type:     domain.OpportunityInstallOTEL,
-				Language: expectedLang,
-				FilePath: name,
-				FullPath: subdir,
-			}
-			dirOpps[name] = []domain.Opportunity{opp}
-		}
-	}
-}
-
 // NormalizeLanguage normalizes language names to standard form
 func NormalizeLanguage(language string) string {
 	switch strings.ToLower(language) {

@@ -108,8 +108,6 @@ func hitURL(url string, timeout time.Duration) error {
 	return nil
 }
 
-
-
 // runAndStreamOutput executes a command and streams its stdout/stderr to the test logs.
 func runAndStreamOutput(t *testing.T, ctx context.Context, dir string, name string, args ...string) error {
 	t.Helper()

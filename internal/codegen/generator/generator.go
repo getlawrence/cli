@@ -15,7 +15,7 @@ import (
 	"github.com/getlawrence/cli/internal/domain"
 	"github.com/getlawrence/cli/internal/logger"
 	"github.com/getlawrence/cli/internal/templates"
-	"github.com/getlawrence/cli/pkg/knowledge/client"
+	"github.com/getlawrence/cli/pkg/knowledge"
 )
 
 // Generator extends the detector system for code generation
@@ -29,7 +29,7 @@ type Generator struct {
 }
 
 // NewGenerator creates a new code generator
-func NewGenerator(codebaseAnalyzer *detector.CodebaseAnalyzer, logger logger.Logger, kb *client.KnowledgeClient) (*Generator, error) {
+func NewGenerator(codebaseAnalyzer *detector.CodebaseAnalyzer, logger logger.Logger, kb *knowledge.Knowledge) (*Generator, error) {
 	templateEngine, err := templates.NewTemplateEngine()
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize template engine: %w", err)

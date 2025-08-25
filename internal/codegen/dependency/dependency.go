@@ -11,19 +11,19 @@ import (
 	"github.com/getlawrence/cli/internal/codegen/dependency/types"
 	generatorTypes "github.com/getlawrence/cli/internal/codegen/types"
 	"github.com/getlawrence/cli/internal/logger"
-	"github.com/getlawrence/cli/pkg/knowledge/client"
+	"github.com/getlawrence/cli/pkg/knowledge"
 	kbtypes "github.com/getlawrence/cli/pkg/knowledge/types"
 )
 
 // DependencyWriter handles adding dependencies to projects using the new modular system
 type DependencyWriter struct {
 	orchestrator *orchestrator.Orchestrator
-	kb           *client.KnowledgeClient
+	kb           *knowledge.Knowledge
 	logger       logger.Logger
 }
 
 // NewDependencyWriter creates a new dependency manager using the modular orchestrator
-func NewDependencyWriter(l logger.Logger, kb *client.KnowledgeClient) *DependencyWriter {
+func NewDependencyWriter(l logger.Logger, kb *knowledge.Knowledge) *DependencyWriter {
 	// Create registry and orchestrator
 	commander := commander.NewReal()
 	reg := registry.New(commander)

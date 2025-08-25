@@ -7,12 +7,12 @@ import (
 
 	"github.com/getlawrence/cli/internal/codegen/generator"
 	"github.com/getlawrence/cli/internal/codegen/types"
-	"github.com/getlawrence/cli/internal/config"
+	internalconfig "github.com/getlawrence/cli/internal/config"
 	"github.com/getlawrence/cli/internal/detector"
 	"github.com/getlawrence/cli/internal/detector/issues"
 	"github.com/getlawrence/cli/internal/detector/languages"
 	"github.com/getlawrence/cli/internal/logger"
-	"github.com/getlawrence/cli/pkg/knowledge/client"
+	"github.com/getlawrence/cli/pkg/knowledge"
 	"github.com/getlawrence/cli/pkg/knowledge/storage"
 	"github.com/spf13/cobra"
 )
@@ -100,7 +100,8 @@ func runGen(cmd *cobra.Command, args []string) error {
 	ui := logger.NewUILogger()
 
 	// Create storage client for knowledge base
-	storageClient, err := storage.NewStorageWithEmbedded("knowledge.db", ui)
+	config := cmd.Context().Value(ConfigKey).(*AppConfig)
+	storageClient, err := storage.NewStorageWithEmbedded("knowledge.db", config.EmbeddedDB, ui)
 	if err != nil {
 		return fmt.Errorf("failed to create knowledge storage: %w", err)
 	}
@@ -119,7 +120,7 @@ func runGen(cmd *cobra.Command, args []string) error {
 		"php":        languages.NewPHPDetector(),
 	}, storageClient, ui)
 
-	kb := client.NewKnowledgeClient(storageClient, ui)
+	kb := knowledge.NewKnowledge(*storageClient, ui)
 	codeGenerator, err := generator.NewGenerator(codebaseAnalyzer, ui, kb)
 	if err != nil {
 		return err
@@ -161,7 +162,7 @@ func runGen(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return fmt.Errorf("failed to read config file: %w", err)
 		}
-		parsed, err := config.LoadOTELConfig(content)
+		parsed, err := internalconfig.LoadOTELConfig(content)
 		if err != nil {
 			return err
 		}

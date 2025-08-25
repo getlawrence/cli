@@ -4,18 +4,18 @@ import (
 	"strings"
 
 	"github.com/getlawrence/cli/internal/codegen/dependency/types"
-	"github.com/getlawrence/cli/pkg/knowledge/client"
+	"github.com/getlawrence/cli/pkg/knowledge"
 	kbtypes "github.com/getlawrence/cli/pkg/knowledge/types"
 )
 
 // KnowledgeEnhancedMatcher extends the base matcher with knowledge base version resolution
 type KnowledgeEnhancedMatcher struct {
 	*PlanMatcher
-	knowledgeClient *client.KnowledgeClient
+	knowledgeClient *knowledge.Knowledge
 }
 
 // NewKnowledgeEnhancedMatcher creates a new knowledge-enhanced matcher
-func NewKnowledgeEnhancedMatcher(knowledgeClient *client.KnowledgeClient) Matcher {
+func NewKnowledgeEnhancedMatcher(knowledgeClient *knowledge.Knowledge) Matcher {
 	return &KnowledgeEnhancedMatcher{
 		PlanMatcher:     &PlanMatcher{},
 		knowledgeClient: knowledgeClient,
@@ -23,7 +23,7 @@ func NewKnowledgeEnhancedMatcher(knowledgeClient *client.KnowledgeClient) Matche
 }
 
 // Match computes missing dependencies with specific versions from the knowledge base
-func (m *KnowledgeEnhancedMatcher) Match(existingDeps []string, plan types.InstallPlan, kb *client.KnowledgeClient) []string {
+func (m *KnowledgeEnhancedMatcher) Match(existingDeps []string, plan types.InstallPlan, kb *knowledge.Knowledge) []string {
 	// First get the basic missing packages
 	basicMissing := m.PlanMatcher.Match(existingDeps, plan, kb)
 	if len(basicMissing) == 0 {

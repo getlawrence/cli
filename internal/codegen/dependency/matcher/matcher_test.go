@@ -10,12 +10,12 @@ import (
 
 	"github.com/getlawrence/cli/internal/codegen/dependency/types"
 	"github.com/getlawrence/cli/internal/logger"
-	"github.com/getlawrence/cli/pkg/knowledge/client"
+	"github.com/getlawrence/cli/pkg/knowledge"
 	"github.com/getlawrence/cli/pkg/knowledge/storage"
 	kbtypes "github.com/getlawrence/cli/pkg/knowledge/types"
 )
 
-func createTestKnowledgeClient(t *testing.T) *client.KnowledgeClient {
+func createTestKnowledgeClient(t *testing.T) *knowledge.Knowledge {
 	// Create a temporary database file
 	dbPath := "test_matcher.db"
 	t.Cleanup(func() {
@@ -208,7 +208,7 @@ func createTestKnowledgeClient(t *testing.T) *client.KnowledgeClient {
 	}
 
 	// Create and return the knowledge client
-	kc := client.NewKnowledgeClient(store, logger)
+	kc := knowledge.NewKnowledge(*store, logger)
 
 	t.Cleanup(func() {
 		kc.Close()
@@ -565,11 +565,11 @@ func TestKnowledgeEnhancedMatcher(t *testing.T) {
 // Mock types for testing
 type MockKnowledgeEnhancedMatcher struct {
 	*PlanMatcher
-	kb                   *client.KnowledgeClient
+	kb                   *knowledge.Knowledge
 	preVersionedPackages map[string]string
 }
 
-func (m *MockKnowledgeEnhancedMatcher) Match(existingDeps []string, plan types.InstallPlan, kb *client.KnowledgeClient) []string {
+func (m *MockKnowledgeEnhancedMatcher) Match(existingDeps []string, plan types.InstallPlan, kb *knowledge.Knowledge) []string {
 	// First get the basic missing packages
 	basicMissing := m.PlanMatcher.Match(existingDeps, plan, kb)
 	if len(basicMissing) == 0 {
@@ -649,8 +649,8 @@ func (m *MockKnowledgeClient) GetComponentPackage(language, compType, name strin
 	return "", nil
 }
 
-func (m *MockKnowledgeClient) GetPrerequisites(language string) ([]client.PrerequisiteRule, error) {
-	return []client.PrerequisiteRule{}, nil
+func (m *MockKnowledgeClient) GetPrerequisites(language string) ([]knowledge.PrerequisiteRule, error) {
+	return []knowledge.PrerequisiteRule{}, nil
 }
 
 func (m *MockKnowledgeClient) Close() error {
@@ -658,16 +658,16 @@ func (m *MockKnowledgeClient) Close() error {
 }
 
 // Additional methods to satisfy the interface
-func (m *MockKnowledgeClient) GetComponentsByLanguage(language string, limit, offset int) (*client.ComponentResult, error) {
-	return &client.ComponentResult{}, nil
+func (m *MockKnowledgeClient) GetComponentsByLanguage(language string, limit, offset int) (*knowledge.ComponentResult, error) {
+	return &knowledge.ComponentResult{}, nil
 }
 
-func (m *MockKnowledgeClient) GetComponentsByType(componentType string, limit, offset int) (*client.ComponentResult, error) {
-	return &client.ComponentResult{}, nil
+func (m *MockKnowledgeClient) GetComponentsByType(componentType string, limit, offset int) (*knowledge.ComponentResult, error) {
+	return &knowledge.ComponentResult{}, nil
 }
 
-func (m *MockKnowledgeClient) QueryComponents(query client.ComponentQuery) (*client.ComponentResult, error) {
-	return &client.ComponentResult{}, nil
+func (m *MockKnowledgeClient) QueryComponents(query knowledge.ComponentQuery) (*knowledge.ComponentResult, error) {
+	return &knowledge.ComponentResult{}, nil
 }
 
 type MockInstaller struct {

@@ -4,12 +4,12 @@ import (
 	"strings"
 
 	"github.com/getlawrence/cli/internal/codegen/dependency/types"
-	"github.com/getlawrence/cli/pkg/knowledge/client"
+	"github.com/getlawrence/cli/pkg/knowledge"
 )
 
 // Matcher computes required dependencies based on plan and existing deps
 type Matcher interface {
-	Match(existingDeps []string, plan types.InstallPlan, kb *client.KnowledgeClient) []string
+	Match(existingDeps []string, plan types.InstallPlan, kb *knowledge.Knowledge) []string
 }
 
 // PlanMatcher implements Matcher using InstallPlan and prerequisites
@@ -21,7 +21,7 @@ func NewPlanMatcher() Matcher {
 }
 
 // Match computes missing dependencies based on the install plan
-func (m *PlanMatcher) Match(existingDeps []string, plan types.InstallPlan, kb *client.KnowledgeClient) []string {
+func (m *PlanMatcher) Match(existingDeps []string, plan types.InstallPlan, kb *knowledge.Knowledge) []string {
 	// Build set of existing dependencies (normalized)
 	existing := make(map[string]bool)
 	for _, dep := range existingDeps {
@@ -72,7 +72,7 @@ func (m *PlanMatcher) Match(existingDeps []string, plan types.InstallPlan, kb *c
 }
 
 // expandPrerequisites applies prerequisite rules to expand instrumentation list
-func (m *PlanMatcher) expandPrerequisites(instrumentations []string, rules []client.PrerequisiteRule) []string {
+func (m *PlanMatcher) expandPrerequisites(instrumentations []string, rules []knowledge.PrerequisiteRule) []string {
 	// Build set of current instrumentations
 	instSet := make(map[string]bool)
 	for _, inst := range instrumentations {

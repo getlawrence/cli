@@ -68,8 +68,11 @@ func runKnowledge(cmd *cobra.Command, args []string) error {
 func runStatus(cmd *cobra.Command, args []string) error {
 	cmdLogger := logger.NewUILogger()
 
+	// Get config from context
+	config := cmd.Context().Value(ConfigKey).(*AppConfig)
+
 	// Check if embedded database is available
-	if storage.HasEmbeddedDatabase() {
+	if storage.HasEmbeddedDatabase(config.EmbeddedDB) {
 		cmdLogger.Logf("✓ Embedded knowledge database is available\n")
 	} else {
 		cmdLogger.Logf("✗ No embedded knowledge database found\n")
@@ -84,7 +87,7 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	}
 
 	// Test storage connection and show component count
-	storageClient, err := storage.NewStorageWithEmbedded("", cmdLogger)
+	storageClient, err := storage.NewStorageWithEmbedded("knowledge.db", config.EmbeddedDB, cmdLogger)
 	if err != nil {
 		return fmt.Errorf("failed to create storage client: %w", err)
 	}

@@ -13,12 +13,12 @@ import (
 	"github.com/getlawrence/cli/internal/codegen/dependency/registry"
 	"github.com/getlawrence/cli/internal/codegen/dependency/types"
 	"github.com/getlawrence/cli/internal/logger"
-	"github.com/getlawrence/cli/pkg/knowledge/client"
+	"github.com/getlawrence/cli/pkg/knowledge"
 	"github.com/getlawrence/cli/pkg/knowledge/storage"
 	kbtypes "github.com/getlawrence/cli/pkg/knowledge/types"
 )
 
-func createTestKnowledgeClientForOrchestrator(t *testing.T) *client.KnowledgeClient {
+func createTestKnowledgeClientForOrchestrator(t *testing.T) *knowledge.Knowledge {
 	// Create a temporary database file
 	dbPath := "test_orchestrator.db"
 	t.Cleanup(func() {
@@ -165,6 +165,43 @@ func createTestKnowledgeClientForOrchestrator(t *testing.T) *client.KnowledgeCli
 				},
 			},
 		},
+		// C# core packages
+		{
+			Name:         "OpenTelemetry",
+			Type:         kbtypes.ComponentTypeAPI,
+			Category:     kbtypes.ComponentCategoryAPI,
+			Status:       kbtypes.ComponentStatusStable,
+			SupportLevel: kbtypes.SupportLevelOfficial,
+			Language:     kbtypes.ComponentLanguageCSharp,
+			Description:  "OpenTelemetry API for C#",
+			Repository:   "https://github.com/open-telemetry/opentelemetry-dotnet",
+			LastUpdated:  time.Now(),
+			Versions: []kbtypes.Version{
+				{
+					Name:        "1.0.0",
+					ReleaseDate: time.Now(),
+					Status:      kbtypes.VersionStatusLatest,
+				},
+			},
+		},
+		{
+			Name:         "OpenTelemetry.Sdk",
+			Type:         kbtypes.ComponentTypeSDK,
+			Category:     kbtypes.ComponentCategoryCore,
+			Status:       kbtypes.ComponentStatusStable,
+			SupportLevel: kbtypes.SupportLevelOfficial,
+			Language:     kbtypes.ComponentLanguageCSharp,
+			Description:  "OpenTelemetry SDK for C#",
+			Repository:   "https://github.com/open-telemetry/opentelemetry-dotnet",
+			LastUpdated:  time.Now(),
+			Versions: []kbtypes.Version{
+				{
+					Name:        "1.0.0",
+					ReleaseDate: time.Now(),
+					Status:      kbtypes.VersionStatusLatest,
+				},
+			},
+		},
 	}
 
 	// Save the test knowledge base
@@ -174,7 +211,7 @@ func createTestKnowledgeClientForOrchestrator(t *testing.T) *client.KnowledgeCli
 	}
 
 	// Create and return the knowledge client
-	kc := client.NewKnowledgeClient(store, logger)
+	kc := knowledge.NewKnowledge(*store, logger)
 
 	t.Cleanup(func() {
 		kc.Close()
@@ -388,6 +425,52 @@ func TestOrchestrator(t *testing.T) {
 			t.Errorf("Expected network timeout error, got: %v", err)
 		}
 	})
+
+	t.Run("csharp dependencies", func(t *testing.T) {
+		// Create mock commander
+		mock := commander.NewMock()
+		// dotnet command not available, so it will use fallback .csproj editing
+
+		// Create registry and orchestrator
+		reg := registry.New(mock)
+		orch := New(reg, kb)
+
+		// Create test project with .csproj
+		dir := t.TempDir()
+		createCSharpProject(t, dir)
+
+		// Create install plan
+		plan := types.InstallPlan{
+			Language:    "csharp",
+			InstallOTEL: true,
+		}
+
+		// Run orchestrator
+		installed, err := orch.Run(ctx, dir, plan, false)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		// Should have installed OpenTelemetry packages
+		if len(installed) == 0 {
+			t.Error("Expected OpenTelemetry packages to be installed")
+		}
+
+		// Check that the .csproj file was modified
+		csprojPath := filepath.Join(dir, "test.csproj")
+		content, err := os.ReadFile(csprojPath)
+		if err != nil {
+			t.Fatalf("Failed to read modified .csproj file: %v", err)
+		}
+
+		contentStr := string(content)
+		if !strings.Contains(contentStr, `<PackageReference Include="OpenTelemetry"`) {
+			t.Error("OpenTelemetry package reference not found in .csproj")
+		}
+
+		t.Logf("Installed dependencies: %v", installed)
+		t.Logf("Modified .csproj content:\n%s", contentStr)
+	})
 }
 
 // Helper functions
@@ -424,6 +507,21 @@ func createNodeProject(t *testing.T, dir string) {
 }`
 	if err := os.WriteFile(filepath.Join(dir, "package.json"), []byte(packageJSON), 0644); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func createCSharpProject(t *testing.T, dir string) {
+	csprojContent := `<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+</Project>`
+
+	csprojPath := filepath.Join(dir, "test.csproj")
+	if err := os.WriteFile(csprojPath, []byte(csprojContent), 0644); err != nil {
+		t.Fatalf("Failed to create test .csproj file: %v", err)
 	}
 }
 

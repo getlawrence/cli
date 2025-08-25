@@ -1,8 +1,14 @@
 package cmd
 
 import (
+	"context"
+	"embed"
+
 	"github.com/spf13/cobra"
 )
+
+// Context key for configuration
+const ConfigKey = "config"
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
@@ -17,8 +23,10 @@ to extend support for new languages and problem patterns.`,
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
-func Execute() error {
-	return rootCmd.Execute()
+func Execute(embeddedDB embed.FS) error {
+	config := NewAppConfig(embeddedDB, nil) // Logger will be created per command
+	ctx := context.WithValue(context.Background(), ConfigKey, config)
+	return rootCmd.ExecuteContext(ctx)
 }
 
 func init() {
