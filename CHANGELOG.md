@@ -60,11 +60,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - OTEL instrumentation analysis and recommendations
 - Template-based code generation with `--dry-run`
 - GoReleaser config and GitHub Actions workflow for releases
-- Homebrew tap publishing via GoReleaser
+
 - Install script for prebuilt archives
 
 ### Changed
 - Updated README to reflect implemented commands and installation paths
 
 ### Fixed
-- Improved Homebrew formula test to assert `--version`
+

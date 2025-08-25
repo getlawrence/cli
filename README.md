@@ -64,13 +64,7 @@ ln -sf $(go env GOPATH)/bin/cli $(go env GOPATH)/bin/lawrence
 
 Add the PATH export to your shell profile (`~/.bashrc`, `~/.zshrc`, etc.) to make it permanent.
 
-### Using Homebrew (macOS/Linux)
 
-```bash
-brew install getlawrence/tap/lawrence
-```
-
-> ✅ **Homebrew support**: Available for macOS (Intel and Apple Silicon) and Linux.
 
 ### Download Pre-built Binaries
 

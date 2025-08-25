@@ -104,8 +104,7 @@ Multi-language sample projects for testing and demonstration:
 ### `/e2e`
 End-to-end integration tests
 
-### `/homebrew`
-Homebrew formula for package distribution
+
 
 ## Tech Stack & Dependencies
 
