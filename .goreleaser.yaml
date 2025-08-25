@@ -13,15 +13,15 @@ builds:
     binary: lawrence
     env:
       - CGO_ENABLED=1
-    # Target platforms - only build what works reliably on the runner
-    goos: [linux, darwin]
+    # Target platforms - only build Linux targets on Linux runner
+    goos: [linux]
     goarch: [amd64]
     # Exclude problematic targets
     ignore:
       - goos: windows
         goarch: amd64
-      - goos: linux
-        goarch: arm64
+      - goos: darwin
+        goarch: amd64
       - goos: darwin
         goarch: arm64
     ldflags:
@@ -64,4 +64,5 @@ changelog:
 #     license: MIT
 #     test: |
 #       assert_match "OpenTelemetry codebase analyzer", shell_output("#{bin}/lawrence --help")
+#     commit_msg_template: "chore(brew): update {{ .ProjectName }} to {{ .Tag }}"
 #     commit_msg_template: "chore(brew): update {{ .ProjectName }} to {{ .Tag }}"
