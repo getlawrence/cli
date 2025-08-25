@@ -65,22 +65,22 @@ func (m *KnowledgeEnhancedMatcher) getPackageWithVersion(packageName, language s
 	}
 
 	// Check if this component is for the right language
-	if strings.ToLower(string(component.Language)) != strings.ToLower(language) {
+	if !strings.EqualFold(string(component.Language), language) {
 		return ""
 	}
 
 	// Find the latest stable version
-	latestVersion := m.getLatestStableVersion(component)
+	latestVersion := m.GetLatestStableVersion(component)
 	if latestVersion == nil {
 		return ""
 	}
 
 	// Format package with version based on language
-	return m.formatPackageWithVersion(packageName, latestVersion.Name, language)
+	return m.FormatPackageWithVersion(packageName, latestVersion.Name, language)
 }
 
-// getLatestStableVersion returns the latest stable version of a component
-func (m *KnowledgeEnhancedMatcher) getLatestStableVersion(component *kbtypes.Component) *kbtypes.Version {
+// GetLatestStableVersion returns the latest stable version of a component
+func (m *KnowledgeEnhancedMatcher) GetLatestStableVersion(component *kbtypes.Component) *kbtypes.Version {
 	// First, try to find a version marked as "latest"
 	for _, version := range component.Versions {
 		if version.Status == kbtypes.VersionStatusLatest && !version.Deprecated && version.Name != "unknown" {
@@ -108,8 +108,8 @@ func (m *KnowledgeEnhancedMatcher) getLatestStableVersion(component *kbtypes.Com
 	return latestVersion
 }
 
-// formatPackageWithVersion formats a package name with version based on language conventions
-func (m *KnowledgeEnhancedMatcher) formatPackageWithVersion(packageName, version, language string) string {
+// FormatPackageWithVersion formats a package name with version based on language conventions
+func (m *KnowledgeEnhancedMatcher) FormatPackageWithVersion(packageName, version, language string) string {
 	switch strings.ToLower(language) {
 	case "javascript", "typescript":
 		// npm format: package@version
