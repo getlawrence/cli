@@ -1,0 +1,79 @@
+name: Reusable release workflow
+
+on:
+  workflow_call:
+    inputs:
+      goos:
+        required: true
+        type: string
+      goarch:
+        required: true
+        type: string
+      runner_os:
+        required: false
+        type: string
+        default: ubuntu-latest
+
+permissions:
+  contents: read
+
+env:
+  GORELEASER_VERSION: v2.11.2
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        GOOS: ${{ fromJSON(inputs.goos) }}
+        GOARCH: ${{ fromJSON(inputs.goarch) }}
+        exclude:
+          - GOOS: darwin
+            GOARCH: "386"
+          - GOOS: darwin
+            GOARCH: s390x
+          - GOOS: darwin
+            GOARCH: ppc64le
+          - GOOS: darwin
+            GOARCH: arm
+          - GOOS: darwin
+            GOARCH: riscv64
+    runs-on: ${{ inputs.runner_os }}
+    permissions:
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '~1.24'
+          check-latest: true
+
+      - name: Install GoReleaser
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser
+          version: ${{ env.GORELEASER_VERSION }}
+          install-only: true
+
+      - name: Build binary
+        env:
+          GOOS: ${{ matrix.GOOS }}
+          GOARCH: ${{ matrix.GOARCH }}
+          GOAMD64: v1
+          CGO_ENABLED: 1
+        run: |
+          go build -ldflags="-s -w -X github.com/getlawrence/cli/cmd.Version=${{ github.ref_name }} -X github.com/getlawrence/cli/cmd.GitCommit=${{ github.sha }} -X github.com/getlawrence/cli/cmd.BuildDate=$(date -u +%Y-%m-%dT%H:%M:%SZ)" -o lawrence-${{ matrix.GOOS }}-${{ matrix.GOARCH }} .
+
+      - name: Create archive
+        run: |
+          mkdir -p dist
+          tar -czf dist/lawrence_${{ github.ref_name }}_${{ matrix.GOOS }}_${{ matrix.GOARCH }}.tar.gz lawrence-${{ matrix.GOOS }}-${{ matrix.GOARCH }} LICENSE README.md
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: artifacts-${{ matrix.GOOS }}-${{ matrix.GOARCH }}
+          path: dist/
+          if-no-files-found: error

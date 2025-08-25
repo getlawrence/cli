@@ -5,76 +5,55 @@ on:
     tags:
       - 'v*'
 
-permissions:
-  contents: write
-
-env:
-  GORELEASER_VERSION: v2.11.2
-
 jobs:
-  prev-tag:
-    outputs:
-      PREVIOUS_RELEASE_TAG: ${{ steps.prev-tag.outputs.PREVIOUS_RELEASE_TAG }}
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Set goreleaser last tag reference
-        id: prev-tag
-        run: |
-          prev_tag=$(git tag | sort -r --version-sort | head -n 2 | tail -n 1)
-          echo "PREVIOUS_RELEASE_TAG=$prev_tag" >> "$GITHUB_OUTPUT"
+  release-linux:
+    name: Release Linux AMD64
+    uses: ./.github/workflows/base-release.yaml
+    with:
+      goos: '["linux"]'
+      goarch: '["amd64"]'
+      runner_os: ubuntu-latest
+    secrets: inherit
+    permissions: write-all
 
-  build-linux:
-    name: Build Linux AMD64
-    runs-on: ubuntu-latest
-    permissions:
-      packages: write
+  release-windows:
+    name: Release Windows AMD64
+    uses: ./.github/workflows/base-release.yaml
+    with:
+      goos: '["windows"]'
+      goarch: '["amd64"]'
+      runner_os: windows-latest
+    secrets: inherit
+    permissions: write-all
 
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+  release-macos-amd64:
+    name: Release macOS AMD64
+    uses: ./.github/workflows/base-release.yaml
+    with:
+      goos: '["darwin"]'
+      goarch: '["amd64"]'
+      runner_os: macos-latest
+    secrets: inherit
+    permissions: write-all
 
-      - uses: actions/setup-go@v5
-        with:
-          go-version: '~1.24'
-          check-latest: true
+  release-macos-arm64:
+    name: Release macOS ARM64
+    uses: ./.github/workflows/base-release.yaml
+    with:
+      goos: '["darwin"]'
+      goarch: '["arm64"]'
+      runner_os: macos-latest
+    secrets: inherit
+    permissions: write-all
 
-      - name: Install GoReleaser
-        uses: goreleaser/goreleaser-action@v6
-        with:
-          distribution: goreleaser
-          version: ${{ env.GORELEASER_VERSION }}
-          install-only: true
-
-      - name: Build binary
-        env:
-          GOOS: linux
-          GOARCH: amd64
-          GOAMD64: v1
-          CGO_ENABLED: 1
-        run: |
-          go build -ldflags="-s -w -X github.com/getlawrence/cli/cmd.Version=${{ github.ref_name }} -X github.com/getlawrence/cli/cmd.GitCommit=${{ github.sha }} -X github.com/getlawrence/cli/cmd.BuildDate=$(date -u +%Y-%m-%dT%H:%M:%SZ)" -o lawrence-linux-amd64 .
-
-      - name: Create archive
-        run: |
-          mkdir -p dist
-          tar -czf dist/lawrence_${{ github.ref_name }}_linux_amd64.tar.gz lawrence-linux-amd64 LICENSE README.md
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: artifacts-linux-amd64
-          path: dist/
-          if-no-files-found: error
-
-  release:
-    name: Create Release
+  create-release:
+    name: Create GitHub Release
     runs-on: ubuntu-latest
     needs:
-      - build-linux
-      - prev-tag
+      - release-linux
+      - release-windows
+      - release-macos-amd64
+      - release-macos-arm64
     permissions:
       contents: write
 
@@ -87,6 +66,12 @@ jobs:
         with:
           go-version: '~1.24'
           check-latest: true
+
+      - name: Get previous tag
+        id: prev-tag
+        run: |
+          prev_tag=$(git tag | sort -r --version-sort | head -n 2 | tail -n 1)
+          echo "PREVIOUS_RELEASE_TAG=$prev_tag" >> "$GITHUB_OUTPUT"
 
       - uses: actions/download-artifact@v4
         with:
@@ -115,15 +100,24 @@ jobs:
             **Linux AMD64:**
             - [lawrence_${{ github.ref_name }}_linux_amd64.tar.gz](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/lawrence_${{ github.ref_name }}_linux_amd64.tar.gz)
             
+            **Windows AMD64:**
+            - [lawrence_${{ github.ref_name }}_windows_amd64.tar.gz](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/lawrence_${{ github.ref_name }}_windows_amd64.tar.gz)
+            
+            **macOS AMD64:**
+            - [lawrence_${{ github.ref_name }}_darwin_amd64.tar.gz](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/lawrence_${{ github.ref_name }}_darwin_amd64.tar.gz)
+            
+            **macOS ARM64:**
+            - [lawrence_${{ github.ref_name }}_darwin_arm64.tar.gz](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/lawrence_${{ github.ref_name }}_darwin_arm64.tar.gz)
+            
             ### Checksums
             
             ```
             $(cat dist/checksums.txt)
             ```
             
-            ### Changes since ${{ needs.prev-tag.outputs.PREVIOUS_RELEASE_TAG }}
+            ### Changes since ${{ steps.prev-tag.outputs.PREVIOUS_RELEASE_TAG }}
             
-            $(git log --oneline ${{ needs.prev-tag.outputs.PREVIOUS_RELEASE_TAG }}..HEAD)
+            $(git log --oneline ${{ steps.prev-tag.outputs.PREVIOUS_RELEASE_TAG }}..HEAD)
           files: dist/**/*
           draft: false
           prerelease: false
