@@ -103,26 +103,74 @@ func (p *Pipeline) GetCacheStats() map[string]interface{} {
 	return stats
 }
 
-// UpdateKnowledgeBase updates the knowledge base with fresh data for the specified language
-func (p *Pipeline) UpdateKnowledgeBase(language types.ComponentLanguage) error {
-	p.logger.Logf("Starting knowledge base update for language: %s\n", language)
+// UpdateKnowledgeBase updates the knowledge base with fresh data for the specified language(s)
+// It can handle both single language and multiple language updates efficiently
+func (p *Pipeline) UpdateKnowledgeBase(languages []types.ComponentLanguage) error {
+	if len(languages) == 0 {
+		return fmt.Errorf("no languages specified for update")
+	}
 
+	if len(languages) == 1 {
+		// Single language update - use optimized path
+		language := languages[0]
+		p.logger.Logf("Starting knowledge base update for language: %s\n", language)
+
+		components, err := p.processLanguage(language)
+		if err != nil {
+			return fmt.Errorf("failed to process language %s: %w", language, err)
+		}
+
+		// Save to storage immediately for single language
+		p.storageClient.SaveComponents(components, "knowledge.db")
+		p.logger.Log("Knowledge base update completed successfully")
+		return nil
+	}
+
+	// Multiple languages update - collect all components first, then save
+	p.logger.Logf("Starting knowledge base update for %d languages\n", len(languages))
+
+	var allComponents []types.Component
+
+	// Process each language and collect components
+	for _, language := range languages {
+		p.logger.Logf("Processing language: %s\n", language)
+
+		components, err := p.processLanguage(language)
+		if err != nil {
+			return fmt.Errorf("failed to process language %s: %w", language, err)
+		}
+
+		// Add to the collection
+		allComponents = append(allComponents, components...)
+	}
+
+	// Save all components at once
+	p.logger.Logf("Saving %d total components to knowledge base...\n", len(allComponents))
+	p.storageClient.SaveComponents(allComponents, "knowledge.db")
+
+	p.logger.Log("Knowledge base update for all languages completed successfully")
+	return nil
+}
+
+// processLanguage handles the processing of a single language and returns the components
+// This is extracted to avoid code duplication between single and multiple language paths
+func (p *Pipeline) processLanguage(language types.ComponentLanguage) ([]types.Component, error) {
 	// Get registry and package manager providers
 	registryProvider, err := p.providerFactory.GetRegistryProvider(language)
 	if err != nil {
-		return fmt.Errorf("failed to get registry provider for language %s: %w", language, err)
+		return nil, fmt.Errorf("failed to get registry provider for language %s: %w", language, err)
 	}
 
 	packageManagerProvider, err := p.providerFactory.GetPackageManagerProvider(language)
 	if err != nil {
-		return fmt.Errorf("failed to get package manager provider for language %s: %w", language, err)
+		return nil, fmt.Errorf("failed to get package manager provider for language %s: %w", language, err)
 	}
 
 	// Step 1: Fetch components from registry
 	p.logger.Logf("Fetching components from %s registry...\n", registryProvider.GetName())
 	registryComponents, err := registryProvider.DiscoverComponents(context.Background(), string(language))
 	if err != nil {
-		return fmt.Errorf("failed to fetch registry components: %w", err)
+		return nil, fmt.Errorf("failed to fetch registry components: %w", err)
 	}
 	p.logger.Logf("Found %d components in registry\n", len(registryComponents))
 
@@ -130,17 +178,14 @@ func (p *Pipeline) UpdateKnowledgeBase(language types.ComponentLanguage) error {
 	p.logger.Logf("Enriching components with %s metadata...\n", packageManagerProvider.GetName())
 	enrichedComponents, err := p.enrichComponentsWithPackageManager(registryComponents, packageManagerProvider)
 	if err != nil {
-		return fmt.Errorf("failed to enrich components: %w", err)
+		return nil, fmt.Errorf("failed to enrich components: %w", err)
 	}
 
 	// Step 3: Convert to knowledge base format
 	p.logger.Log("Converting to knowledge base format...")
 	components := p.convertToComponents(enrichedComponents, language)
 
-	p.storageClient.SaveComponents(components, "knowledge.db")
-
-	p.logger.Log("Knowledge base update completed successfully")
-	return nil
+	return components, nil
 }
 
 // enrichComponentsWithPackageManager enriches registry components with package manager metadata

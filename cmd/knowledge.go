@@ -189,11 +189,10 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 	providerFactory := providers.NewProviderFactory(absRegistryPath, cmdLogger)
 	pipeline := pipeline.NewPipeline(providerFactory, cmdLogger, githubToken, storageClient)
 
-	for _, language := range languages {
-		err := pipeline.UpdateKnowledgeBase(language)
-		if err != nil {
-			return fmt.Errorf("failed to update knowledge base: %w", err)
-		}
+	// Update knowledge base for all specified languages
+	err = pipeline.UpdateKnowledgeBase(languages)
+	if err != nil {
+		return fmt.Errorf("failed to update knowledge base: %w", err)
 	}
 	return nil
 }
