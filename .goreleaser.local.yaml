@@ -1,0 +1,42 @@
+# GoReleaser v2 configuration for local testing
+version: 2
+
+project_name: lawrence
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: lawrence
+    main: .
+    binary: lawrence
+    env:
+      - CGO_ENABLED=1
+    # For local testing, only build native targets
+    goos: [darwin]
+    goarch: [amd64, arm64]
+    ldflags:
+      - -s -w
+      - -X github.com/getlawrence/cli/cmd.Version={{.Version}}
+      - -X github.com/getlawrence/cli/cmd.GitCommit={{.Commit}}
+      - -X github.com/getlawrence/cli/cmd.BuildDate={{ time "2006-01-02T15:04:05Z07:00" }}
+
+archives:
+  - id: default
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - LICENSE
+      - README.md
+
+checksum:
+  name_template: "checksums.txt"
+
+release:
+  prerelease: auto
+  draft: false
+  make_latest: false
+
+changelog:
+  use: git
+  sort: asc
