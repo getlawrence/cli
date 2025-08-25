@@ -72,6 +72,7 @@ jobs:
           install-only: true
 
       - name: Build binary
+        id: build
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
@@ -79,15 +80,31 @@ jobs:
           GOAMD64: ${{ matrix.goamd64 }}
           CGO_ENABLED: 1
         run: |
-          go build -ldflags="-s -w -X github.com/getlawrence/cli/cmd.Version=${{ github.ref_name }} -X github.com/getlawrence/cli/cmd.GitCommit=${{ github.sha }} -X github.com/getlawrence/cli/cmd.BuildDate=$(date -u +%Y-%m-%dT%H:%M:%SZ)" -o lawrence-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.goarm == '8' && matrix.goarch == 'arm64' && '-v8' || '' }} .
+          # Determine binary name based on platform
+          if [[ "${{ matrix.goos }}" == "windows" ]]; then
+            binary_name="lawrence-${{ matrix.goos }}-${{ matrix.goarch }}.exe"
+          else
+            binary_name="lawrence-${{ matrix.goos }}-${{ matrix.goarch }}"
+          fi
+          
+          # Add ARM version suffix if needed
+          if [[ "${{ matrix.goarch }}" == "arm64" && "${{ matrix.goarm }}" == "8" ]]; then
+            binary_name="${binary_name}-v8"
+          fi
+          
+          echo "BINARY_NAME=$binary_name" >> $GITHUB_OUTPUT
+          
+          go build -ldflags="-s -w -X github.com/getlawrence/cli/cmd.Version=${{ github.ref_name }} -X github.com/getlawrence/cli/cmd.GitCommit=${{ github.sha }} -X github.com/getlawrence/cli/cmd.BuildDate=$(date -u +%Y-%m-%dT%H:%M:%SZ)" -o "$binary_name" .
 
       - name: Create archive
         run: |
           mkdir -p dist
+          binary_name="${{ steps.build.outputs.BINARY_NAME }}"
+          
           if [[ "${{ matrix.goos }}" == "windows" ]]; then
-            tar -czf dist/lawrence_${{ github.ref_name }}_${{ matrix.goos }}_${{ matrix.goarch }}.tar.gz lawrence-${{ matrix.goos }}-${{ matrix.goarch }}.exe LICENSE README.md
+            tar -czf "dist/lawrence_${{ github.ref_name }}_${{ matrix.goos }}_${{ matrix.goarch }}.tar.gz" "$binary_name" LICENSE README.md
           else
-            tar -czf dist/lawrence_${{ github.ref_name }}_${{ matrix.goos }}_${{ matrix.goarch }}.tar.gz lawrence-${{ matrix.goos }}-${{ matrix.goarch }} LICENSE README.md
+            tar -czf "dist/lawrence_${{ github.ref_name }}_${{ matrix.goos }}_${{ matrix.goarch }}.tar.gz" "$binary_name" LICENSE README.md
           fi
 
       - uses: actions/upload-artifact@v4
