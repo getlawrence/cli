@@ -13,8 +13,30 @@ builds:
     binary: lawrence
     env:
       - CGO_ENABLED=1
-    goos: [linux]
-    goarch: [amd64]
+    # Target platforms - excluding Windows ARM64 as it's not supported from macOS
+    goos: [linux, windows, darwin]
+    goarch: [amd64, arm64]
+    # Cross-compilation toolchain configuration
+    overrides:
+      - goos: linux
+        goarch: amd64
+        env:
+          - CC=x86_64-linux-musl-gcc
+          - CGO_ENABLED=1
+      - goos: linux
+        goarch: arm64
+        env:
+          - CC=aarch64-linux-musl-gcc
+          - CGO_ENABLED=1
+      - goos: windows
+        goarch: amd64
+        env:
+          - CC=x86_64-w64-mingw32-gcc
+          - CGO_ENABLED=1
+    # Exclude Windows ARM64 as it's not supported from macOS
+    ignore:
+      - goos: windows
+        goarch: arm64
     ldflags:
       - -s -w
       - -X github.com/getlawrence/cli/cmd.Version={{.Version}}
