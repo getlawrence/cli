@@ -207,4 +207,4 @@ jobs:
 - Update SHA256 hashes for all platforms
 - Automated update from release workflow"
           
-          git push origin main
+          git push origin HEAD:main
