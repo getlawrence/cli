@@ -176,7 +176,7 @@ func (p *Pipeline) updateSingleLanguage(language types.ComponentLanguage) error 
 		return fmt.Errorf("failed to process language %s: %w", language, err)
 	}
 
-	p.storageClient.SaveComponents(components, "knowledge.db")
+	p.storageClient.SaveComponents(components)
 	p.logger.Log("Knowledge base update completed successfully")
 	return nil
 }
@@ -191,7 +191,7 @@ func (p *Pipeline) updateMultipleLanguages(languages []types.ComponentLanguage) 
 	}
 
 	p.logger.Logf("Saving %d total components to knowledge base...\n", len(allComponents))
-	p.storageClient.SaveComponents(allComponents, "knowledge.db")
+	p.storageClient.SaveComponents(allComponents)
 	p.logger.Log("Knowledge base update for all languages completed successfully")
 	return nil
 }

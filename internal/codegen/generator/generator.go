@@ -15,6 +15,7 @@ import (
 	"github.com/getlawrence/cli/internal/domain"
 	"github.com/getlawrence/cli/internal/logger"
 	"github.com/getlawrence/cli/internal/templates"
+	"github.com/getlawrence/cli/pkg/knowledge/client"
 )
 
 // Generator extends the detector system for code generation
@@ -28,7 +29,7 @@ type Generator struct {
 }
 
 // NewGenerator creates a new code generator
-func NewGenerator(codebaseAnalyzer *detector.CodebaseAnalyzer, logger logger.Logger) (*Generator, error) {
+func NewGenerator(codebaseAnalyzer *detector.CodebaseAnalyzer, logger logger.Logger, kb *client.KnowledgeClient) (*Generator, error) {
 	templateEngine, err := templates.NewTemplateEngine()
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize template engine: %w", err)
@@ -46,7 +47,7 @@ func NewGenerator(codebaseAnalyzer *detector.CodebaseAnalyzer, logger logger.Log
 	pureTemplate := template.NewTemplateGenerationStrategy(templateEngine, logger)
 	strategies[types.TemplateMode] = NewOrchestratedTemplateStrategy(
 		pureTemplate,
-		dependency.NewDependencyWriter(logger),
+		dependency.NewDependencyWriter(logger, kb),
 		injector.NewCodeInjector(logger),
 		logger,
 	)
@@ -178,6 +179,7 @@ func (g *Generator) convertIssuesToOpportunities(analysis *detector.Analysis) []
 						Type:     domain.OpportunityInstallOTEL,
 						Language: issue.Language,
 						FilePath: dirAnalysis.Directory,
+						FullPath: dirAnalysis.FullPath,
 					})
 					addedInstallForDir = true
 				}
@@ -200,6 +202,7 @@ func (g *Generator) createOpportunitiesFromInstrumentations(analysis *detector.D
 				Type:          domain.OpportunityInstallComponent,
 				Suggestion:    fmt.Sprintf("Add OpenTelemetry instrumentation for %s", instr.Package.Name),
 				FilePath:      analysis.Directory,
+				FullPath:      analysis.FullPath,
 			}
 			opportunities = append(opportunities, opp)
 		}

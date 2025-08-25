@@ -41,3 +41,4 @@ vendor
 otel-examples/** 
 dist/
 lawrence*
+examples-1

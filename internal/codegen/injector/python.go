@@ -2,6 +2,7 @@ package injector
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/getlawrence/cli/internal/codegen/types"
@@ -596,12 +597,8 @@ func min(a, b int) int {
 
 // hasFlaskInstrumentation checks if Flask instrumentation is planned to be installed
 func (h *PythonInjector) hasFlaskInstrumentation(operationsData *types.OperationsData) bool {
-	for _, instrumentation := range operationsData.InstallInstrumentations {
-		if instrumentation == "flask" {
-			return true
-		}
-	}
-	return false
+	instrumentations := operationsData.InstallComponents["instrumentation"]
+	return len(instrumentations) > 0 && slices.Contains(instrumentations, "flask")
 }
 
 // findFlaskInstrumentationPoint finds the best place to inject Flask instrumentation

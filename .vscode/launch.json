@@ -50,7 +50,7 @@
             "request": "launch",
             "mode": "debug",
             "program": "${workspaceFolder}",
-            "args": ["gen", "${workspaceFolder}/examples"],
+            "args": ["gen", "${workspaceFolder}/examples-1"],
             "env": {"GO111MODULE": "on"}
         },
         {
@@ -60,6 +60,150 @@
             "mode": "debug",
             "program": "${workspaceFolder}",
             "args": ["gen", "${workspaceFolder}/examples/${input:projectName}", "--dry-run"],
+            "env": {"GO111MODULE": "on"}
+        },
+        {
+            "name": "kb status",
+            "type": "go",
+            "request": "launch",
+            "mode": "debug",
+            "program": "${workspaceFolder}",
+            "args": ["knowledge", "status"],
+            "env": {"GO111MODULE": "on"}
+        },
+        {
+            "name": "kb update all",
+            "type": "go",
+            "request": "launch",
+            "mode": "debug",
+            "program": "${workspaceFolder}",
+            "args": ["knowledge", "update"],
+            "env": {"GO111MODULE": "on"}
+        },
+        {
+            "name": "kb update go",
+            "type": "go",
+            "request": "launch",
+            "mode": "debug",
+            "program": "${workspaceFolder}",
+            "args": ["knowledge", "update", "go", "--force"],
+            "env": {"GO111MODULE": "on"}
+        },
+        {
+            "name": "kb update js",
+            "type": "go",
+            "request": "launch",
+            "mode": "debug",
+            "program": "${workspaceFolder}",
+            "args": ["knowledge", "update", "js"],
+            "env": {"GO111MODULE": "on"}
+        },
+        {
+            "name": "kb update python",
+            "type": "go",
+            "request": "launch",
+            "mode": "debug",
+            "program": "${workspaceFolder}",
+            "args": ["knowledge", "update", "python"],
+            "env": {"GO111MODULE": "on"}
+        },
+        {
+            "name": "kb update java",
+            "type": "go",
+            "request": "launch",
+            "mode": "debug",
+            "program": "${workspaceFolder}",
+            "args": ["knowledge", "update", "java"],
+            "env": {"GO111MODULE": "on"}
+        },
+        {
+            "name": "kb update csharp",
+            "type": "go",
+            "request": "launch",
+            "mode": "debug",
+            "program": "${workspaceFolder}",
+            "args": ["knowledge", "update", "csharp"],
+            "env": {"GO111MODULE": "on"}
+        },
+        {
+            "name": "kb update php",
+            "type": "go",
+            "request": "launch",
+            "mode": "debug",
+            "program": "${workspaceFolder}",
+            "args": ["knowledge", "update", "php"],
+            "env": {"GO111MODULE": "on"}
+        },
+        {
+            "name": "kb update ruby",
+            "type": "go",
+            "request": "launch",
+            "mode": "debug",
+            "program": "${workspaceFolder}",
+            "args": ["knowledge", "update", "ruby"],
+            "env": {"GO111MODULE": "on"}
+        },
+        {
+            "name": "kb update with custom output",
+            "type": "go",
+            "request": "launch",
+            "mode": "debug",
+            "program": "${workspaceFolder}",
+            "args": ["knowledge", "update", "--output", "custom_kb.db"],
+            "env": {"GO111MODULE": "on"}
+        },
+        {
+            "name": "kb update force",
+            "type": "go",
+            "request": "launch",
+            "mode": "debug",
+            "program": "${workspaceFolder}",
+            "args": ["knowledge", "update", "--force"],
+            "env": {"GO111MODULE": "on"}
+        },
+        {
+            "name": "registry sync",
+            "type": "go",
+            "request": "launch",
+            "mode": "debug",
+            "program": "${workspaceFolder}",
+            "args": ["registry", "sync"],
+            "env": {"GO111MODULE": "on"}
+        },
+        {
+            "name": "registry sync force",
+            "type": "go",
+            "request": "launch",
+            "mode": "debug",
+            "program": "${workspaceFolder}",
+            "args": ["registry", "sync", "--force"],
+            "env": {"GO111MODULE": "on"}
+        },
+        {
+            "name": "registry sync custom path",
+            "type": "go",
+            "request": "launch",
+            "mode": "debug",
+            "program": "${workspaceFolder}",
+            "args": ["registry", "sync", "--path", "custom_registry"],
+            "env": {"GO111MODULE": "on"}
+        },
+        {
+            "name": "registry info",
+            "type": "go",
+            "request": "launch",
+            "mode": "debug",
+            "program": "${workspaceFolder}",
+            "args": ["registry", "info"],
+            "env": {"GO111MODULE": "on"}
+        },
+        {
+            "name": "registry info custom path",
+            "type": "go",
+            "request": "launch",
+            "mode": "debug",
+            "program": "${workspaceFolder}",
+            "args": ["registry", "info", "--registry", "custom_registry"],
             "env": {"GO111MODULE": "on"}
         }
     ],

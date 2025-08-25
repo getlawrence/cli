@@ -1,7 +1,6 @@
 package client
 
 import (
-	"fmt"
 	"strings"
 	"time"
 
@@ -14,22 +13,15 @@ import (
 // It only loads data on-demand to keep memory usage low
 type KnowledgeClient struct {
 	storage *storage.Storage
+	logger  logger.Logger
 }
 
 // NewKnowledgeClient creates a new knowledge client
-func NewKnowledgeClient(dbPath string, logger logger.Logger) (*KnowledgeClient, error) {
-	if dbPath == "" {
-		dbPath = "knowledge.db"
-	}
-
-	storageClient, err := storage.NewStorage(dbPath, logger)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create knowledge storage: %w", err)
-	}
-
+func NewKnowledgeClient(storageClient *storage.Storage, logger logger.Logger) *KnowledgeClient {
 	return &KnowledgeClient{
 		storage: storageClient,
-	}, nil
+		logger:  logger,
+	}
 }
 
 // Close closes the underlying storage connection
@@ -348,6 +340,10 @@ func extractComponentSimpleName(name string) string {
 
 	// Handle Go packages - extract the last path component
 	if strings.HasPrefix(name, "go.opentelemetry.io/") {
+		// For instrumentation packages, extract just the target name
+		if strings.Contains(name, "instrumentation/") {
+			return extractInstrumentationTarget(name)
+		}
 		parts := strings.Split(name, "/")
 		if len(parts) > 0 {
 			return parts[len(parts)-1]
@@ -356,9 +352,17 @@ func extractComponentSimpleName(name string) string {
 
 	// Handle JavaScript packages
 	if strings.HasPrefix(name, "@opentelemetry/") {
+		// For instrumentation packages, extract just the target name
+		if strings.Contains(name, "instrumentation-") || strings.Contains(name, "auto-instrumentations-") {
+			return extractInstrumentationTarget(name)
+		}
 		return strings.TrimPrefix(name, "@opentelemetry/")
 	}
 	if strings.HasPrefix(name, "opentelemetry-") {
+		// For instrumentation packages, extract just the target name
+		if strings.Contains(name, "instrumentation-") {
+			return extractInstrumentationTarget(name)
+		}
 		return strings.TrimPrefix(name, "opentelemetry-")
 	}
 

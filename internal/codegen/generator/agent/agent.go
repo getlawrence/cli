@@ -229,12 +229,8 @@ func (s *AIGenerationStrategy) sendInstructionsToAgent(allInstructions []string,
 					case domain.OpportunityInstallOTEL:
 						plan.InstallOTEL = true
 					case domain.OpportunityInstallComponent:
-						if opp.ComponentType == domain.ComponentTypeInstrumentation {
-							plan.InstallInstrumentations = append(plan.InstallInstrumentations, string(opp.Component))
-						} else {
-							ctype := string(opp.ComponentType)
-							plan.InstallComponents[ctype] = append(plan.InstallComponents[ctype], string(opp.Component))
-						}
+						ctype := string(opp.ComponentType)
+						plan.InstallComponents[ctype] = append(plan.InstallComponents[ctype], string(opp.Component))
 					case domain.OpportunityRemoveComponent:
 						ctype := string(opp.ComponentType)
 						plan.RemoveComponents[ctype] = append(plan.RemoveComponents[ctype], string(opp.Component))
@@ -247,7 +243,6 @@ func (s *AIGenerationStrategy) sendInstructionsToAgent(allInstructions []string,
 		}
 
 		sort.Strings(plan.DetectedFrameworks)
-		sort.Strings(plan.InstallInstrumentations)
 		for _, v := range plan.InstallComponents {
 			sort.Strings(v)
 		}

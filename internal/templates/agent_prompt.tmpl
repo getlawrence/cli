@@ -18,7 +18,6 @@ Focus on the per-directory plan below. Implement changes directly in each direct
 - **Packages:** {{if .Packages}}{{range $i, $pkg := .Packages}}{{if $i}}, {{end}}`{{$pkg}}`{{end}}{{else}}`(none detected)`{{end}}
 - **Frameworks:** {{if .DetectedFrameworks}}{{range $i, $f := .DetectedFrameworks}}{{if $i}}, {{end}}`{{$f}}`{{end}}{{else}}`(none detected)`{{end}}
 - **Install OTEL SDK:** {{if .InstallOTEL}}`yes`{{else}}`no`{{end}}
-- **Install Instrumentations:** {{if .InstallInstrumentations}}{{range $i, $inst := .InstallInstrumentations}}{{if $i}}, {{end}}`{{$inst}}`{{end}}{{else}}`(none)`{{end}}
 {{if .InstallComponents}}- **Install Components:**
 {{range $ctype, $components := .InstallComponents}}  - {{$ctype}}: {{range $i, $c := $components}}{{if $i}}, {{end}}`{{$c}}`{{end}}
 {{end}}{{end}}

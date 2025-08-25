@@ -137,9 +137,8 @@ echo "hi";
 			}
 
 			ops := &types.OperationsData{
-				InstallOTEL:             true,
-				InstallInstrumentations: []string{},
-				InstallComponents:       map[string][]string{},
+				InstallOTEL:       true,
+				InstallComponents: map[string][]string{},
 			}
 
 			req := types.GenerationRequest{

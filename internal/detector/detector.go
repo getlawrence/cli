@@ -9,6 +9,7 @@ import (
 	"github.com/getlawrence/cli/internal/codegen/injector"
 	"github.com/getlawrence/cli/internal/domain"
 	"github.com/getlawrence/cli/internal/logger"
+	"github.com/getlawrence/cli/pkg/knowledge/storage"
 )
 
 // Language represents a programming language detector
@@ -48,6 +49,7 @@ type Analysis struct {
 // DirectoryAnalysis contains analysis results for a specific directory
 type DirectoryAnalysis struct {
 	Directory                 string                       `json:"directory"`
+	FullPath                  string                       `json:"full_path"`
 	Language                  string                       `json:"language"`
 	Libraries                 []domain.Library             `json:"libraries"`
 	Packages                  []domain.Package             `json:"packages"`
@@ -64,14 +66,9 @@ type CodebaseAnalyzer struct {
 }
 
 // NewCodebaseAnalyzer creates a new analysis engine
-func NewCodebaseAnalyzer(detectors []IssueDetector, languages map[string]Language, logger logger.Logger) *CodebaseAnalyzer {
-	// Try to initialize the knowledge service, but don't fail if it's not available
-	knowledgeService, err := NewKnowledgeBasedInstrumentationService(logger)
-	if err != nil {
-		// Log warning but continue without knowledge service
-		logger.Logf("Warning: Failed to initialize knowledge service: %v\n", err)
-		knowledgeService = nil
-	}
+func NewCodebaseAnalyzer(detectors []IssueDetector, languages map[string]Language, storageClient *storage.Storage, logger logger.Logger) *CodebaseAnalyzer {
+	// Initialize the knowledge service with the provided storage client
+	knowledgeService := NewKnowledgeBasedInstrumentationService(storageClient, logger)
 
 	return &CodebaseAnalyzer{
 		detectors:         detectors,
@@ -146,6 +143,7 @@ func (ca *CodebaseAnalyzer) processDirectory(ctx context.Context, directory, dir
 
 	dirAnalysis := &DirectoryAnalysis{
 		Directory: directory,
+		FullPath:  dirPath,
 		Language:  language,
 		Libraries: libs,
 		Packages:  packages,
@@ -182,35 +180,6 @@ func (ca *CodebaseAnalyzer) collectLibrariesAndPackagesForDirectory(ctx context.
 
 // populateInstrumentationsForDirectory populates instrumentations for a specific directory
 func (ca *CodebaseAnalyzer) populateInstrumentationsForDirectory(ctx context.Context, dirAnalysis *DirectoryAnalysis) error {
-	// Use knowledge-based service if available, otherwise fall back to old registry service
-	if ca.knowledgeService != nil {
-		return ca.populateInstrumentationsWithKnowledge(ctx, dirAnalysis)
-	}
-
-	// Fallback to old registry service
-	instrumentationService := NewInstrumentationRegistryService()
-	seenInstrumentations := make(map[string]bool)
-
-	for _, pkg := range dirAnalysis.Packages {
-		instrumentation, err := instrumentationService.GetInstrumentation(ctx, pkg)
-		if err != nil {
-			// Log error but continue - instrumentation lookup is optional
-			continue
-		}
-		if instrumentation != nil {
-			key := fmt.Sprintf("%s-%s", instrumentation.Language, instrumentation.Package.Name)
-			if !seenInstrumentations[key] {
-				seenInstrumentations[key] = true
-				dirAnalysis.AvailableInstrumentations = append(dirAnalysis.AvailableInstrumentations, *instrumentation)
-			}
-		}
-	}
-
-	return nil
-}
-
-// populateInstrumentationsWithKnowledge populates instrumentations using the knowledge base
-func (ca *CodebaseAnalyzer) populateInstrumentationsWithKnowledge(ctx context.Context, dirAnalysis *DirectoryAnalysis) error {
 	seenInstrumentations := make(map[string]bool)
 
 	for _, pkg := range dirAnalysis.Packages {

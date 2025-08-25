@@ -41,23 +41,17 @@ func (m *PlanMatcher) Match(existingDeps []string, plan types.InstallPlan, kb *c
 		}
 	}
 
-	// Expand instrumentations with prerequisites
-	prerequisites, err := kb.GetPrerequisites(plan.Language)
-	if err != nil {
-		prerequisites = []client.PrerequisiteRule{} // fallback to empty
-	}
-	instrumentations := m.expandPrerequisites(plan.InstallInstrumentations, prerequisites)
-
-	// Add instrumentation packages
-	for _, inst := range instrumentations {
-		pkg, err := kb.GetInstrumentationPackage(plan.Language, inst)
-		if err == nil && pkg != "" {
-			required[normalizePackage(pkg)] = pkg
-		}
-	}
-
 	// Add component packages
 	for compType, components := range plan.InstallComponents {
+		// For instrumentation components, expand with prerequisites
+		if compType == "instrumentation" {
+			// Get prerequisite rules for this language
+			rules, err := kb.GetPrerequisites(plan.Language)
+			if err == nil {
+				components = m.expandPrerequisites(components, rules)
+			}
+		}
+
 		for _, comp := range components {
 			pkg, err := kb.GetComponentPackage(plan.Language, compType, comp)
 			if err == nil && pkg != "" {

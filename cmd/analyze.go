@@ -12,6 +12,7 @@ import (
 	"github.com/getlawrence/cli/internal/detector/issues"
 	"github.com/getlawrence/cli/internal/detector/languages"
 	"github.com/getlawrence/cli/internal/logger"
+	"github.com/getlawrence/cli/pkg/knowledge/storage"
 	"github.com/spf13/cobra"
 )
 
@@ -71,6 +72,13 @@ func runAnalyze(cmd *cobra.Command, args []string) error {
 		uiLogger.Logf("Analyzing codebase at: %s\n", absPath)
 	}
 
+	// Create storage client for knowledge base
+	storageClient, err := storage.NewStorageWithEmbedded("knowledge.db", uiLogger)
+	if err != nil {
+		return fmt.Errorf("failed to create knowledge storage: %w", err)
+	}
+	defer storageClient.Close()
+
 	// Create analysis engine
 	codebaseAnalyzer := detector.NewCodebaseAnalyzer([]detector.IssueDetector{
 		issues.NewMissingOTelDetector(),
@@ -82,7 +90,7 @@ func runAnalyze(cmd *cobra.Command, args []string) error {
 		"csharp":     languages.NewDotNetDetector(),
 		"ruby":       languages.NewRubyDetector(),
 		"php":        languages.NewPHPDetector(),
-	}, uiLogger)
+	}, storageClient, uiLogger)
 
 	analysis, err := codebaseAnalyzer.AnalyzeCodebase(cmd.Context(), absPath)
 	if err != nil {

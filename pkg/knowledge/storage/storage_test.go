@@ -45,7 +45,7 @@ func TestSQLiteStorage(t *testing.T) {
 	}
 
 	// Test saving knowledge base
-	err = storage.SaveKnowledgeBase(components, "test")
+	err = storage.SaveKnowledgeBase(components)
 	if err != nil {
 		t.Fatalf("Failed to save knowledge base: %v", err)
 	}

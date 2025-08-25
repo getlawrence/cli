@@ -202,16 +202,13 @@ func createTestKnowledgeClient(t *testing.T) *client.KnowledgeClient {
 	}
 
 	// Save the test knowledge base
-	err = store.SaveKnowledgeBase(components, "test")
+	err = store.SaveKnowledgeBase(components)
 	if err != nil {
 		t.Fatalf("Failed to save test knowledge base: %v", err)
 	}
 
 	// Create and return the knowledge client
-	kc, err := client.NewKnowledgeClient(dbPath, logger)
-	if err != nil {
-		t.Fatalf("Failed to create knowledge client: %v", err)
-	}
+	kc := client.NewKnowledgeClient(store, logger)
 
 	t.Cleanup(func() {
 		kc.Close()
@@ -269,8 +266,8 @@ func TestPlanMatcher(t *testing.T) {
 	t.Run("missing instrumentation", func(t *testing.T) {
 		existing := []string{}
 		plan := types.InstallPlan{
-			Language:                "go",
-			InstallInstrumentations: []string{"http"},
+			Language:          "go",
+			InstallComponents: map[string][]string{"instrumentation": {"http"}},
 		}
 
 		missing := matcher.Match(existing, plan, kb)
@@ -303,8 +300,8 @@ func TestPlanMatcher(t *testing.T) {
 	t.Run("prerequisites expansion", func(t *testing.T) {
 		existing := []string{}
 		plan := types.InstallPlan{
-			Language:                "javascript",
-			InstallInstrumentations: []string{"express"},
+			Language:          "javascript",
+			InstallComponents: map[string][]string{"instrumentation": {"express"}},
 		}
 
 		missing := matcher.Match(existing, plan, kb)
@@ -327,8 +324,8 @@ func TestPlanMatcher(t *testing.T) {
 	t.Run("prerequisites with unless condition", func(t *testing.T) {
 		existing := []string{}
 		plan := types.InstallPlan{
-			Language:                "javascript",
-			InstallInstrumentations: []string{"express", "auto"},
+			Language:          "javascript",
+			InstallComponents: map[string][]string{"instrumentation": {"express", "auto"}},
 		}
 
 		missing := matcher.Match(existing, plan, kb)
@@ -410,8 +407,8 @@ func TestKnowledgeEnhancedMatcher(t *testing.T) {
 	t.Run("version resolution for instrumentation", func(t *testing.T) {
 		existing := []string{}
 		plan := types.InstallPlan{
-			Language:                "go",
-			InstallInstrumentations: []string{"http"},
+			Language:          "go",
+			InstallComponents: map[string][]string{"instrumentation": {"http"}},
 		}
 
 		missing := matcher.Match(existing, plan, kb)
@@ -456,8 +453,8 @@ func TestKnowledgeEnhancedMatcher(t *testing.T) {
 	t.Run("preserves existing version specifiers", func(t *testing.T) {
 		existing := []string{}
 		plan := types.InstallPlan{
-			Language:                "go",
-			InstallInstrumentations: []string{"http"},
+			Language:          "go",
+			InstallComponents: map[string][]string{"instrumentation": {"http"}},
 		}
 
 		// Mock a package that already has a version

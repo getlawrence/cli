@@ -168,16 +168,13 @@ func createTestKnowledgeClientForOrchestrator(t *testing.T) *client.KnowledgeCli
 	}
 
 	// Save the test knowledge base
-	err = store.SaveKnowledgeBase(components, "test")
+	err = store.SaveKnowledgeBase(components)
 	if err != nil {
 		t.Fatalf("Failed to save test knowledge base: %v", err)
 	}
 
 	// Create and return the knowledge client
-	kc, err := client.NewKnowledgeClient(dbPath, logger)
-	if err != nil {
-		t.Fatalf("Failed to create knowledge client: %v", err)
-	}
+	kc := client.NewKnowledgeClient(store, logger)
 
 	t.Cleanup(func() {
 		kc.Close()
@@ -301,8 +298,8 @@ func TestOrchestrator(t *testing.T) {
 		createNodeProject(t, dir)
 
 		plan := types.InstallPlan{
-			Language:                "javascript",
-			InstallInstrumentations: []string{"express"},
+			Language:          "javascript",
+			InstallComponents: map[string][]string{"instrumentation": {"express"}},
 		}
 
 		installed, err := orch.Run(ctx, dir, plan, false)

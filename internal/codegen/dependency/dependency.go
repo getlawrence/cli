@@ -3,8 +3,6 @@ package dependency
 import (
 	"context"
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/getlawrence/cli/internal/codegen/dependency/commander"
@@ -25,15 +23,7 @@ type DependencyWriter struct {
 }
 
 // NewDependencyWriter creates a new dependency manager using the modular orchestrator
-func NewDependencyWriter(l logger.Logger) *DependencyWriter {
-	// Load knowledge base using the unified client
-	kb, err := client.NewKnowledgeClient("knowledge.db", l)
-	if err != nil {
-		l.Logf("Warning: could not load knowledge base: %v\n", err)
-		// This will cause a panic, but it's better to fail fast than have broken functionality
-		// In production, you might want to create a mock client instead
-	}
-
+func NewDependencyWriter(l logger.Logger, kb *client.KnowledgeClient) *DependencyWriter {
 	// Create registry and orchestrator
 	commander := commander.NewReal()
 	reg := registry.New(commander)
@@ -56,10 +46,9 @@ func (dm *DependencyWriter) AddDependencies(
 ) error {
 	// Convert OperationsData to InstallPlan
 	plan := types.InstallPlan{
-		Language:                language,
-		InstallOTEL:             operationsData.InstallOTEL,
-		InstallInstrumentations: operationsData.InstallInstrumentations,
-		InstallComponents:       operationsData.InstallComponents,
+		Language:          language,
+		InstallOTEL:       operationsData.InstallOTEL,
+		InstallComponents: operationsData.InstallComponents,
 	}
 
 	// Run orchestrator
@@ -87,10 +76,9 @@ func (dm *DependencyWriter) AddDependencies(
 func (dm *DependencyWriter) GetRequiredDependencies(language string, operationsData *generatorTypes.OperationsData) ([]types.Dependency, error) {
 	// Convert to InstallPlan
 	plan := types.InstallPlan{
-		Language:                language,
-		InstallOTEL:             operationsData.InstallOTEL,
-		InstallInstrumentations: operationsData.InstallInstrumentations,
-		InstallComponents:       operationsData.InstallComponents,
+		Language:          language,
+		InstallOTEL:       operationsData.InstallOTEL,
+		InstallComponents: operationsData.InstallComponents,
 	}
 
 	// Get all required packages from KB
@@ -108,21 +96,6 @@ func (dm *DependencyWriter) GetRequiredDependencies(language string, operationsD
 				ImportPath: pkg,
 				Category:   "core",
 				Required:   true,
-			})
-		}
-	}
-
-	for _, inst := range plan.InstallInstrumentations {
-		pkg, err := dm.kb.GetInstrumentationPackage(language, inst)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get instrumentation package for %s: %w", inst, err)
-		}
-		if pkg != "" {
-			deps = append(deps, types.Dependency{
-				Name:       inst,
-				Language:   language,
-				ImportPath: pkg,
-				Category:   "instrumentation",
 			})
 		}
 	}
@@ -187,52 +160,6 @@ func (dm *DependencyWriter) GetEnhancedDependencies(language string, operationsD
 		}
 	}
 
-	// Get instrumentations with enhanced metadata
-	for _, inst := range operationsData.InstallInstrumentations {
-		pkg, err := dm.kb.GetInstrumentationPackage(language, inst)
-		if err != nil {
-			continue // Skip on error
-		}
-		if pkg == "" {
-			continue // Skip if not found
-		}
-
-		// Get the component details
-		component, err := dm.kb.GetComponentByName(pkg)
-		if err != nil || component == nil {
-			// Fallback to basic dependency if component details not found
-			enhancedDeps = append(enhancedDeps, EnhancedDependency{
-				Dependency: types.Dependency{
-					Name:       inst,
-					Language:   language,
-					ImportPath: pkg,
-					Category:   "instrumentation",
-				},
-				Metadata: nil,
-			})
-			continue
-		}
-
-		enhancedDeps = append(enhancedDeps, EnhancedDependency{
-			Dependency: types.Dependency{
-				Name:       inst,
-				Language:   language,
-				ImportPath: component.Name,
-				Category:   "instrumentation",
-			},
-			Metadata: &DependencyMetadata{
-				Description:     component.Description,
-				Repository:      component.Repository,
-				License:         component.License,
-				Status:          string(component.Status),
-				SupportLevel:    string(component.SupportLevel),
-				Documentation:   component.DocumentationURL,
-				LatestVersion:   getLatestVersion(*component),
-				BreakingChanges: getBreakingChanges(*component),
-			},
-		})
-	}
-
 	return enhancedDeps, nil
 }
 
@@ -265,7 +192,7 @@ func (dm *DependencyWriter) ValidateProjectStructure(projectPath, language strin
 	}
 
 	if !scanner.Detect(projectPath) {
-		return fmt.Errorf("no dependency management file found for %s project", language)
+		return fmt.Errorf("no dependency management file found for %s project at %s", language, projectPath)
 	}
 
 	return nil
@@ -274,26 +201,6 @@ func (dm *DependencyWriter) ValidateProjectStructure(projectPath, language strin
 // GetSupportedLanguages returns all languages supported by dependency management
 func (dm *DependencyWriter) GetSupportedLanguages() []string {
 	return []string{"go", "javascript", "python", "ruby", "php", "java", "csharp", "dotnet"}
-}
-
-// findRepoRoot walks up directory tree to find go.mod
-func findRepoRoot() (string, error) {
-	dir, err := os.Getwd()
-	if err != nil {
-		return "", err
-	}
-
-	for {
-		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
-			return dir, nil
-		}
-
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			return "", fmt.Errorf("go.mod not found")
-		}
-		dir = parent
-	}
 }
 
 // EnhancedDependency represents a dependency with additional metadata

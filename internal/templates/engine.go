@@ -45,17 +45,15 @@ type AgentPromptData struct {
 
 // DirectoryPlan summarizes the tech stack and planned actions for a directory
 type DirectoryPlan struct {
-	Directory                string              `json:"directory"`
-	Language                 string              `json:"language"`
-	Libraries                []string            `json:"libraries,omitempty"`
-	Packages                 []string            `json:"packages,omitempty"`
-	DetectedFrameworks       []string            `json:"detected_frameworks,omitempty"`
-	ExistingInstrumentations []string            `json:"existing_instrumentations,omitempty"`
-	InstallOTEL              bool                `json:"install_otel,omitempty"`
-	InstallInstrumentations  []string            `json:"install_instrumentations,omitempty"`
-	InstallComponents        map[string][]string `json:"install_components,omitempty"`
-	RemoveComponents         map[string][]string `json:"remove_components,omitempty"`
-	Issues                   []string            `json:"issues,omitempty"`
+	Directory          string              `json:"directory"`
+	Language           string              `json:"language"`
+	Libraries          []string            `json:"libraries,omitempty"`
+	Packages           []string            `json:"packages,omitempty"`
+	DetectedFrameworks []string            `json:"detected_frameworks,omitempty"`
+	InstallOTEL        bool                `json:"install_otel,omitempty"`
+	InstallComponents  map[string][]string `json:"install_components,omitempty"`
+	RemoveComponents   map[string][]string `json:"remove_components,omitempty"`
+	Issues             []string            `json:"issues,omitempty"`
 }
 
 // TemplateEngine handles template loading and execution
