@@ -35,8 +35,9 @@ func (m *MockStorage) GetComponentsLight(query storage.Query) *storage.QueryResu
 }
 
 func (m *MockStorage) GetComponentByName(name string) *types.Component {
-	for _, components := range m.components {
-		for _, comp := range components {
+	// Search through all query results to find the component by name
+	for _, result := range m.queryResults {
+		for _, comp := range result.Components {
 			if comp.Name == name {
 				return &comp
 			}
@@ -400,8 +401,8 @@ func createTestKnowledge() *TestKnowledge {
 	}
 
 	mockProviders := map[string]*providers.OTELCoreProvider{
-		"csharp":     &providers.OTELCoreProvider{},
-		"javascript": &providers.OTELCoreProvider{},
+		"csharp":     providers.NewOTELCoreProvider("csharp", &logger.StdoutLogger{}),
+		"javascript": providers.NewOTELCoreProvider("javascript", &logger.StdoutLogger{}),
 	}
 
 	return &TestKnowledge{
@@ -645,17 +646,17 @@ func TestGetComponentPackage(t *testing.T) {
 	kc := createTestKnowledge()
 
 	// Test with "dotnet" (should normalize to "csharp")
-	pkg, err := kc.GetComponentPackage("dotnet", "SDK", "OpenTelemetry.Sdk")
+	pkg, err := kc.GetComponentPackage("dotnet", "SDK", "NonExistentComponent")
 	if err != nil {
 		t.Fatalf("GetComponentPackage failed: %v", err)
 	}
-	// Should return empty string since we don't have exact match in mock
+	// Should return empty string since we don't have this component in mock
 	if pkg != "" {
 		t.Errorf("Expected empty string for unknown component, got %s", pkg)
 	}
 
 	// Test with "csharp" (should work directly)
-	pkg, err = kc.GetComponentPackage("csharp", "SDK", "OpenTelemetry.Sdk")
+	pkg, err = kc.GetComponentPackage("csharp", "SDK", "NonExistentComponent")
 	if err != nil {
 		t.Fatalf("GetComponentPackage failed: %v", err)
 	}
