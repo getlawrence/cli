@@ -48,18 +48,25 @@ detect_platform() {
     info "Detected platform: $OS/$ARCH"
     
     # Check if platform is currently supported
-    if [ "$OS" != "linux" ] || [ "$ARCH" != "amd64" ]; then
-        error "Currently only Linux x64 (amd64) is supported. 
-Your platform: $OS/$ARCH
+    case "$OS/$ARCH" in
+        "linux/amd64"|"darwin/amd64"|"darwin/arm64"|"windows/amd64")
+            info "Platform $OS/$ARCH is supported"
+            ;;
+        *)
+            error "Unsupported platform: $OS/$ARCH
 
-Due to CGO cross-compilation requirements, other platforms are temporarily unavailable.
+Currently supported platforms:
+- Linux AMD64
+- macOS AMD64 (Intel)
+- macOS ARM64 (Apple Silicon)
+- Windows AMD64
+
 Please use one of these alternatives:
 - Use 'go install github.com/getlawrence/cli@latest' if you have Go installed
 - Build from source: https://github.com/getlawrence/cli#from-source
-- Use Docker: docker run --rm -v \$(pwd):/workspace ghcr.io/getlawrence/cli
-
-We're working to restore full platform support in future releases."
-    fi
+- Use Docker: docker run --rm -v \$(pwd):/workspace ghcr.io/getlawrence/cli"
+            ;;
+    esac
 }
 
 # Get the latest release version (including prereleases)
@@ -94,12 +101,8 @@ install_binary() {
     local archive_ext
     local asset_name
 
-    if [ "$OS" = "windows" ]; then
-        archive_ext="zip"
-    else
-        archive_ext="tar.gz"
-    fi
-
+    # All platforms now use tar.gz format
+    archive_ext="tar.gz"
     asset_name="${BINARY_NAME}_${LATEST_VERSION}_${OS}_${ARCH}.${archive_ext}"
     download_url="https://github.com/${REPO}/releases/download/${LATEST_VERSION}/${asset_name}"
 
@@ -117,14 +120,12 @@ install_binary() {
     fi
 
     info "Extracting archive"
-    if [ "$archive_ext" = "zip" ]; then
-        if ! command -v unzip >/dev/null 2>&1; then
-            error "unzip is required to extract zip archives"
-        fi
-        unzip -q "${ARCHIVE_PATH}" -d "${TMP_DIR}"
+    tar -xzf "${ARCHIVE_PATH}" -C "${TMP_DIR}"
+    
+    # Handle Windows executable naming
+    if [ "$OS" = "windows" ]; then
         BIN_PATH="${TMP_DIR}/${BINARY_NAME}.exe"
     else
-        tar -xzf "${ARCHIVE_PATH}" -C "${TMP_DIR}"
         BIN_PATH="${TMP_DIR}/${BINARY_NAME}"
     fi
 
@@ -170,7 +171,7 @@ main() {
     info "Installing Lawrence CLI..."
     warn "⚠️  Lawrence CLI is currently in active development (prerelease)"
     warn "⚠️  Do NOT use on production codebases - use only for testing"
-    warn "⚠️  Only Linux x64 is currently supported"
+    warn "⚠️  Multi-platform support available (Linux, Windows, macOS Intel/ARM)"
     echo
     detect_platform
     get_latest_version
