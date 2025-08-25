@@ -122,11 +122,11 @@ install_binary() {
     info "Extracting archive"
     tar -xzf "${ARCHIVE_PATH}" -C "${TMP_DIR}"
     
-    # Handle Windows executable naming
+    # Handle binary naming - the workflow creates lawrence-{OS}-{ARCH}
     if [ "$OS" = "windows" ]; then
-        BIN_PATH="${TMP_DIR}/${BINARY_NAME}.exe"
+        BIN_PATH="${TMP_DIR}/${BINARY_NAME}-${OS}-${ARCH}.exe"
     else
-        BIN_PATH="${TMP_DIR}/${BINARY_NAME}"
+        BIN_PATH="${TMP_DIR}/${BINARY_NAME}-${OS}-${ARCH}"
     fi
 
     [ -f "$BIN_PATH" ] || error "Binary not found in archive"
