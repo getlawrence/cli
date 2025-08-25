@@ -123,3 +123,88 @@ jobs:
           prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  update-homebrew:
+    name: Update Homebrew Formula
+    runs-on: ubuntu-latest
+    needs:
+      - create-release
+    permissions:
+      contents: write
+    if: startsWith(github.ref_name, 'v') && !contains(github.ref_name, '-test')
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download release artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: artifacts-*
+          path: dist/
+          merge-multiple: true
+
+      - name: Create checksums
+        run: |
+          cd dist
+          find . -name "*.tar.gz" -exec shasum -a 256 {} \; > checksums.txt
+
+      - name: Extract checksums for each platform
+        id: checksums
+        run: |
+          cd dist
+          
+          # Extract SHA256 for each platform
+          LINUX_SHA=$(grep "linux_amd64.tar.gz" checksums.txt | awk '{print $1}')
+          WINDOWS_SHA=$(grep "windows_amd64.tar.gz" checksums.txt | awk '{print $1}')
+          DARWIN_AMD64_SHA=$(grep "darwin_amd64.tar.gz" checksums.txt | awk '{print $1}')
+          DARWIN_ARM64_SHA=$(grep "darwin_arm64.tar.gz" checksums.txt | awk '{print $1}')
+          
+          echo "LINUX_SHA=$LINUX_SHA" >> "$GITHUB_OUTPUT"
+          echo "WINDOWS_SHA=$WINDOWS_SHA" >> "$GITHUB_OUTPUT"
+          echo "DARWIN_AMD64_SHA=$DARWIN_AMD64_SHA" >> "$GITHUB_OUTPUT"
+          echo "DARWIN_ARM64_SHA=$DARWIN_ARM64_SHA" >> "$GITHUB_OUTPUT"
+          
+          echo "Extracted checksums:"
+          echo "Linux: $LINUX_SHA"
+          echo "Windows: $WINDOWS_SHA"
+          echo "macOS AMD64: $DARWIN_AMD64_SHA"
+          echo "macOS ARM64: $DARWIN_ARM64_SHA"
+
+      - name: Update Homebrew formula
+        run: |
+          # Update the Homebrew formula with new URLs and SHA256 hashes
+          # Update URLs
+          sed -i "s|url \".*darwin_arm64.tar.gz\"|url \"https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/lawrence_${{ github.ref_name }}_darwin_arm64.tar.gz\"|" homebrew/lawrence.rb
+          sed -i "s|url \".*darwin_amd64.tar.gz\"|url \"https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/lawrence_${{ github.ref_name }}_darwin_amd64.tar.gz\"|" homebrew/lawrence.rb
+          sed -i "s|url \".*linux_amd64.tar.gz\"|url \"https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/lawrence_${{ github.ref_name }}_linux_amd64.tar.gz\"|" homebrew/lawrence.rb
+          
+          # Update SHA256 hashes - use more specific patterns
+          sed -i "/darwin_arm64.tar.gz/,/sha256/s|sha256 \".*\"|sha256 \"${{ steps.checksums.outputs.DARWIN_ARM64_SHA}}\"|" homebrew/lawrence.rb
+          sed -i "/darwin_amd64.tar.gz/,/sha256/s|sha256 \".*\"|sha256 \"${{ steps.checksums.outputs.DARWIN_AMD64_SHA}}\"|" homebrew/lawrence.rb
+          sed -i "/linux_amd64.tar.gz/,/sha256/s|sha256 \".*\"|sha256 \"${{ steps.checksums.outputs.LINUX_SHA}}\"|" homebrew/lawrence.rb
+          
+          echo "Updated Homebrew formula with new URLs and SHA256 hashes"
+          
+          # Show the updated formula for verification
+          echo "Updated Homebrew formula:"
+          cat homebrew/lawrence.rb
+          
+          # Show git diff for verification
+          echo "Git diff of changes:"
+          git diff homebrew/lawrence.rb
+
+      - name: Commit and push Homebrew formula updates
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          
+          git add homebrew/lawrence.rb
+          git commit -m "Update Homebrew formula for ${{ github.ref_name }}
+
+- Update URLs to use ${{ github.ref_name }} release
+- Update SHA256 hashes for all platforms
+- Automated update from release workflow"
+          
+          git push origin main
