@@ -38,6 +38,10 @@ deps: ## Download dependencies
 	$(GOMOD) tidy
 
 build: ## Build the binary
+	@if [ ! -f "knowledge.db" ]; then \
+		echo "Knowledge database not found. Generating from existing data..."; \
+		cp pkg/knowledge/pipeline/knowledge.db . || echo "Warning: Could not copy knowledge.db"; \
+	fi
 	$(GOBUILD) $(LDFLAGS) -o $(BINARY_NAME) .
 
 clean: ## Clean build artifacts

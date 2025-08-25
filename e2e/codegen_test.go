@@ -55,11 +55,11 @@ func TestCodegenTemplateDryRunOnGoSample(t *testing.T) {
 			t.Fatalf("codegen failed: %v\n%s", err, string(out))
 		}
 		stdout := string(out)
-		// Basic smoke assertions that confirm template strategy ran and produced output paths
+		// The Go example has OpenTelemetry code but missing dependencies, so opportunities should be found
 		if !strings.Contains(stdout, "Using Template-based generation strategy") && !strings.Contains(stdout, "Template-based") {
 			t.Fatalf("expected output to indicate template strategy; got: %s", stdout)
 		}
-		if !strings.Contains(stdout, "Generated Go instrumentation code (dry run)") && !strings.Contains(stdout, "Successfully generated") {
+		if !strings.Contains(stdout, "Generated go instrumentation code (dry run)") && !strings.Contains(stdout, "Successfully generated") {
 			t.Fatalf("expected output to show generated code paths; got: %s", stdout)
 		}
 		if !strings.Contains(stdout, outputDir) && !strings.Contains(stdout, "examples/go") {

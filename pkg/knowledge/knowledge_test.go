@@ -20,7 +20,6 @@ type StorageInterface interface {
 
 // MockStorage implements StorageInterface for testing
 type MockStorage struct {
-	components   map[string][]types.Component
 	queryResults map[string]*storage.QueryResult
 }
 
@@ -48,7 +47,6 @@ func (m *MockStorage) GetComponentByName(name string) *types.Component {
 
 // MockProvider implements providers.OTELCoreProvider for testing
 type MockProvider struct {
-	language string
 	mainSDKs []providers.CorePackage
 }
 
