@@ -8,28 +8,168 @@ on:
 permissions:
   contents: write
 
+env:
+  GORELEASER_VERSION: v2.11.2
+
 jobs:
-  goreleaser:
+  prev-tag:
+    outputs:
+      PREVIOUS_RELEASE_TAG: ${{ steps.prev-tag.outputs.PREVIOUS_RELEASE_TAG }}
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Set goreleaser last tag reference
+        id: prev-tag
+        run: |
+          prev_tag=$(git tag | sort -r --version-sort | head -n 2 | tail -n 1)
+          echo "PREVIOUS_RELEASE_TAG=$prev_tag" >> "$GITHUB_OUTPUT"
+
+  build:
+    strategy:
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            goos: linux
+            goarch: amd64
+            goarm: ""
+            goamd64: "v1"
+          - runner: ubuntu-latest
+            goos: linux
+            goarch: arm64
+            goarm: "8"
+            goamd64: ""
+          - runner: windows-latest
+            goos: windows
+            goarch: amd64
+            goarm: ""
+            goamd64: "v1"
+          - runner: macos-latest
+            goos: darwin
+            goarch: amd64
+            goarm: ""
+            goamd64: "v1"
+          - runner: macos-latest
+            goos: darwin
+            goarch: arm64
+            goarm: "8"
+            goamd64: ""
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Setup Go
-        uses: actions/setup-go@v5
+      - uses: actions/setup-go@v5
         with:
-          go-version: '1.23.x'
+          go-version: '~1.24'
+          check-latest: true
 
       - name: Install GoReleaser
         uses: goreleaser/goreleaser-action@v6
         with:
           distribution: goreleaser
-          version: latest
+          version: ${{ env.GORELEASER_VERSION }}
           install-only: true
 
-      - name: Run GoReleaser
+      - name: Build binary
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          GOARM: ${{ matrix.goarm }}
+          GOAMD64: ${{ matrix.goamd64 }}
+          CGO_ENABLED: 1
+        run: |
+          go build -ldflags="-s -w -X github.com/getlawrence/cli/cmd.Version=${{ github.ref_name }} -X github.com/getlawrence/cli/cmd.GitCommit=${{ github.sha }} -X github.com/getlawrence/cli/cmd.BuildDate=$(date -u +%Y-%m-%dT%H:%M:%SZ)" -o lawrence-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.goarm == '8' && matrix.goarch == 'arm64' && '-v8' || '' }} .
+
+      - name: Create archive
+        run: |
+          mkdir -p dist
+          if [[ "${{ matrix.goos }}" == "windows" ]]; then
+            tar -czf dist/lawrence_${{ github.ref_name }}_${{ matrix.goos }}_${{ matrix.goarch }}.tar.gz lawrence-${{ matrix.goos }}-${{ matrix.goarch }}.exe LICENSE README.md
+          else
+            tar -czf dist/lawrence_${{ github.ref_name }}_${{ matrix.goos }}_${{ matrix.goarch }}.tar.gz lawrence-${{ matrix.goos }}-${{ matrix.goarch }} LICENSE README.md
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: artifacts-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: dist/
+          if-no-files-found: error
+
+  release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    needs:
+      - build
+      - prev-tag
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '~1.24'
+          check-latest: true
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: artifacts-*
+          path: dist/
+          merge-multiple: true
+
+      - name: Display structure of downloaded files
+        run: ls -R dist/
+
+      - name: Create checksums
+        run: |
+          cd dist
+          find . -name "*.tar.gz" -exec shasum -a 256 {} \; > checksums.txt
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Lawrence CLI ${{ github.ref_name }}
+          body: |
+            ## Lawrence CLI ${{ github.ref_name }}
+            
+            ### Downloads
+            
+            **Linux AMD64:**
+            - [lawrence_${{ github.ref_name }}_linux_amd64.tar.gz](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/lawrence_${{ github.ref_name }}_linux_amd64.tar.gz)
+            
+            **Linux ARM64:**
+            - [lawrence_${{ github.ref_name }}_linux_arm64.tar.gz](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/lawrence_${{ github.ref_name }}_linux_arm64.tar.gz)
+            
+            **Windows AMD64:**
+            - [lawrence_${{ github.ref_name }}_windows_amd64.tar.gz](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/lawrence_${{ github.ref_name }}_windows_amd64.tar.gz)
+            
+            **macOS AMD64:**
+            - [lawrence_${{ github.ref_name }}_darwin_amd64.tar.gz](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/lawrence_${{ github.ref_name }}_darwin_amd64.tar.gz)
+            
+            **macOS ARM64:**
+            - [lawrence_${{ github.ref_name }}_darwin_arm64.tar.gz](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/lawrence_${{ github.ref_name }}_darwin_arm64.tar.gz)
+            
+            ### Checksums
+            
+            ```
+            $(cat dist/checksums.txt)
+            ```
+            
+            ### Changes since ${{ needs.prev-tag.outputs.PREVIOUS_RELEASE_TAG }}
+            
+            $(git log --oneline ${{ needs.prev-tag.outputs.PREVIOUS_RELEASE_TAG }}..HEAD)
+          files: dist/**/*
+          draft: false
+          prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: goreleaser release --clean

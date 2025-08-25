@@ -1,4 +1,4 @@
-# GoReleaser v2 configuration
+# GoReleaser v2 configuration for matrix builds
 version: 2
 
 project_name: lawrence
@@ -13,17 +13,9 @@ builds:
     binary: lawrence
     env:
       - CGO_ENABLED=1
-    # Target platforms - only build Linux targets on Linux runner
+    # Target platforms - will be overridden by matrix builds
     goos: [linux]
     goarch: [amd64]
-    # Exclude problematic targets
-    ignore:
-      - goos: windows
-        goarch: amd64
-      - goos: darwin
-        goarch: amd64
-      - goos: darwin
-        goarch: arm64
     ldflags:
       - -s -w
       - -X github.com/getlawrence/cli/cmd.Version={{.Version}}
@@ -49,20 +41,6 @@ changelog:
   use: git
   sort: asc
 
-# Homebrew disabled temporarily due to CGO cross-compilation issues
-# brews:
-#   - name: lawrence
-#     ids: [lawrence]
-#     repository:
-#       owner: getlawrence
-#       name: homebrew-tap
-#     commit_author:
-#       name: goreleaser
-#       email: noreply@getlawrence.dev
-#     homepage: https://github.com/getlawrence/cli
-#     description: CLI tool to analyze codebases and instrument them with OpenTelemetry
-#     license: MIT
-#     test: |
-#       assert_match "OpenTelemetry codebase analyzer", shell_output("#{bin}/lawrence --help")
-#     commit_msg_template: "chore(brew): update {{ .ProjectName }} to {{ .Tag }}"
-#     commit_msg_template: "chore(brew): update {{ .ProjectName }} to {{ .Tag }}"
+# Note: This configuration is now used primarily for local testing
+# The actual releases are built using the GitHub Actions matrix workflow
+# which builds natively on each platform for better compatibility
