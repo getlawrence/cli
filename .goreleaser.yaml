@@ -13,12 +13,16 @@ builds:
     binary: lawrence
     env:
       - CGO_ENABLED=1
-    # Target platforms - build what can be built on the current platform
+    # Target platforms - only build what works reliably on the runner
     goos: [linux, darwin]
-    goarch: [amd64, arm64]
-    # Exclude Windows ARM64 as it's not well supported
+    goarch: [amd64]
+    # Exclude problematic targets
     ignore:
       - goos: windows
+        goarch: amd64
+      - goos: linux
+        goarch: arm64
+      - goos: darwin
         goarch: arm64
     ldflags:
       - -s -w
