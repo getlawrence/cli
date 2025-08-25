@@ -1,23 +1,29 @@
 class Lawrence < Formula
   desc "CLI tool to analyze codebases and instrument them with OpenTelemetry"
   homepage "https://github.com/getlawrence/cli"
-  head "https://github.com/getlawrence/cli.git", branch: "main"
   license "MIT"
 
-  depends_on "go" => :build
+  on_macos do
+    if Hardware::CPU.arm?
+      url "https://github.com/getlawrence/cli/releases/latest/download/lawrence_darwin_arm64.tar.gz"
+      sha256 "placeholder_sha256_for_arm64" # This will be updated by the release workflow
+    else
+      url "https://github.com/getlawrence/cli/releases/latest/download/lawrence_darwin_amd64.tar.gz"
+      sha256 "placeholder_sha256_for_amd64" # This will be updated by the release workflow
+    end
+  end
+
+  on_linux do
+    url "https://github.com/getlawrence/cli/releases/latest/download/lawrence_linux_amd64.tar.gz"
+    sha256 "placeholder_sha256_for_linux" # This will be updated by the release workflow
+  end
 
   def install
-    ldflags = %W[
-      -s -w
-      -X github.com/getlawrence/cli/cmd.Version=#{version}
-      -X github.com/getlawrence/cli/cmd.GitCommit=homebrew
-      -X github.com/getlawrence/cli/cmd.BuildDate=#{Time.now.utc.iso8601}
-    ]
-    system "go", "build", *std_go_args(ldflags: ldflags.join(" "), output: bin/"lawrence")
+    bin.install "lawrence"
   end
 
   test do
     output = shell_output("#{bin}/lawrence --version")
-    assert_match version.to_s, output
+    assert_match "Lawrence CLI", output
   end
 end

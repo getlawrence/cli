@@ -36,11 +36,15 @@ We recommend:
 
 ## Installation
 
+Lawrence CLI is available for multiple platforms and can be installed using various methods:
+
 ### Quick Install (Recommended)
 
 ```bash
 curl -sSL https://raw.githubusercontent.com/getlawrence/cli/main/install.sh | bash
 ```
+
+**Supported platforms**: Linux AMD64, Windows AMD64, macOS AMD64, macOS ARM64
 
 ### Using Go Install
 
@@ -62,16 +66,22 @@ Add the PATH export to your shell profile (`~/.bashrc`, `~/.zshrc`, etc.) to mak
 
 ### Using Homebrew (macOS/Linux)
 
-> ⚠️ **Note**: Homebrew installation is temporarily unavailable due to technical issues with cross-compilation. Please use one of the other installation methods below.
+```bash
+brew install getlawrence/tap/lawrence
+```
+
+> ✅ **Homebrew support**: Available for macOS (Intel and Apple Silicon) and Linux.
 
 ### Download Pre-built Binaries
 
 Download the latest release from the [releases page](https://github.com/getlawrence/cli/releases).
 
-Currently available for:
-- Linux (x64)
+Available for:
+- **Linux**: AMD64
+- **Windows**: AMD64  
+- **macOS**: AMD64 and ARM64 (Apple Silicon)
 
-> ⚠️ **Note**: macOS, Windows, and ARM64 support are temporarily unavailable due to CGO cross-compilation requirements. We're working to restore full platform support in future releases.
+> ✅ **Multi-platform support**: All platforms are built natively on their respective runners for optimal compatibility and performance.
 
 ### Using Docker
 
@@ -79,7 +89,7 @@ Currently available for:
 docker run --rm -v $(pwd):/workspace ghcr.io/getlawrence/cli analyze /workspace
 ```
 
-> 📋 **Note**: Docker images are available for Linux x64 only at this time.
+> 📋 **Note**: Docker images are available for Linux AMD64. Multi-platform Docker support coming soon.
 
 ### From Source
 
@@ -252,12 +262,11 @@ See [Contributing](#contributing) to add support for your language.
 
 As this project is in active development, please be aware of these current limitations:
 
-- **Platform Support**: Currently only Linux x64 is supported due to CGO cross-compilation requirements
-- **Homebrew**: Installation via Homebrew is temporarily disabled
 - **Beta Status**: Features may change between releases; use `--dry-run` to preview changes
 - **Production Use**: Not recommended for production codebases (see warning above)
+- **Docker**: Multi-platform Docker images coming soon
 
-We're actively working to address these limitations in future releases.
+> ✅ **Platform Support**: Full multi-platform support is now available for Linux, Windows, and macOS (Intel and Apple Silicon).
 
 ## Examples
 
@@ -336,6 +345,18 @@ Total Components: 1,247
 Languages: 7
 Last Updated: 2024-01-15 10:30:00 UTC
 ```
+
+## Development
+
+### Multi-Platform Builds
+
+Lawrence CLI uses GitHub Actions with native runners to build for all supported platforms:
+- **Linux AMD64**: Built on Ubuntu runners
+- **Windows AMD64**: Built on Windows Server runners  
+- **macOS AMD64**: Built on macOS runners
+- **macOS ARM64**: Built on macOS runners with Apple Silicon
+
+All builds are performed in parallel and automatically create releases with proper checksums and multi-platform artifacts.
 
 ## License
 
