@@ -26,31 +26,9 @@ jobs:
           prev_tag=$(git tag | sort -r --version-sort | head -n 2 | tail -n 1)
           echo "PREVIOUS_RELEASE_TAG=$prev_tag" >> "$GITHUB_OUTPUT"
 
-  build:
-    strategy:
-      matrix:
-        include:
-          - runner: ubuntu-latest
-            goos: linux
-            goarch: amd64
-            goarm: ""
-            goamd64: "v1"
-          - runner: windows-latest
-            goos: windows
-            goarch: amd64
-            goarm: ""
-            goamd64: "v1"
-          - runner: macos-latest
-            goos: darwin
-            goarch: amd64
-            goarm: ""
-            goamd64: "v1"
-          - runner: macos-latest
-            goos: darwin
-            goarch: arm64
-            goarm: "8"
-            goamd64: ""
-    runs-on: ${{ matrix.runner }}
+  build-linux:
+    name: Build Linux AMD64
+    runs-on: ubuntu-latest
     permissions:
       packages: write
 
@@ -72,44 +50,22 @@ jobs:
           install-only: true
 
       - name: Build binary
-        id: build
         env:
-          GOOS: ${{ matrix.goos }}
-          GOARCH: ${{ matrix.goarch }}
-          GOARM: ${{ matrix.goarm }}
-          GOAMD64: ${{ matrix.goamd64 }}
+          GOOS: linux
+          GOARCH: amd64
+          GOAMD64: v1
           CGO_ENABLED: 1
         run: |
-          # Determine binary name based on platform
-          if [[ "${{ matrix.goos }}" == "windows" ]]; then
-            binary_name="lawrence-${{ matrix.goos }}-${{ matrix.goarch }}.exe"
-          else
-            binary_name="lawrence-${{ matrix.goos }}-${{ matrix.goarch }}"
-          fi
-          
-          # Add ARM version suffix if needed
-          if [[ "${{ matrix.goarch }}" == "arm64" && "${{ matrix.goarm }}" == "8" ]]; then
-            binary_name="${binary_name}-v8"
-          fi
-          
-          echo "BINARY_NAME=$binary_name" >> $GITHUB_OUTPUT
-          
-          go build -ldflags="-s -w -X github.com/getlawrence/cli/cmd.Version=${{ github.ref_name }} -X github.com/getlawrence/cli/cmd.GitCommit=${{ github.sha }} -X github.com/getlawrence/cli/cmd.BuildDate=$(date -u +%Y-%m-%dT%H:%M:%SZ)" -o "$binary_name" .
+          go build -ldflags="-s -w -X github.com/getlawrence/cli/cmd.Version=${{ github.ref_name }} -X github.com/getlawrence/cli/cmd.GitCommit=${{ github.sha }} -X github.com/getlawrence/cli/cmd.BuildDate=$(date -u +%Y-%m-%dT%H:%M:%SZ)" -o lawrence-linux-amd64 .
 
       - name: Create archive
         run: |
           mkdir -p dist
-          binary_name="${{ steps.build.outputs.BINARY_NAME }}"
-          
-          if [[ "${{ matrix.goos }}" == "windows" ]]; then
-            tar -czf "dist/lawrence_${{ github.ref_name }}_${{ matrix.goos }}_${{ matrix.goarch }}.tar.gz" "$binary_name" LICENSE README.md
-          else
-            tar -czf "dist/lawrence_${{ github.ref_name }}_${{ matrix.goos }}_${{ matrix.goarch }}.tar.gz" "$binary_name" LICENSE README.md
-          fi
+          tar -czf dist/lawrence_${{ github.ref_name }}_linux_amd64.tar.gz lawrence-linux-amd64 LICENSE README.md
 
       - uses: actions/upload-artifact@v4
         with:
-          name: artifacts-${{ matrix.goos }}-${{ matrix.goarch }}
+          name: artifacts-linux-amd64
           path: dist/
           if-no-files-found: error
 
@@ -117,7 +73,7 @@ jobs:
     name: Create Release
     runs-on: ubuntu-latest
     needs:
-      - build
+      - build-linux
       - prev-tag
     permissions:
       contents: write
@@ -158,15 +114,6 @@ jobs:
             
             **Linux AMD64:**
             - [lawrence_${{ github.ref_name }}_linux_amd64.tar.gz](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/lawrence_${{ github.ref_name }}_linux_amd64.tar.gz)
-            
-            **Windows AMD64:**
-            - [lawrence_${{ github.ref_name }}_windows_amd64.tar.gz](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/lawrence_${{ github.ref_name }}_windows_amd64.tar.gz)
-            
-            **macOS AMD64:**
-            - [lawrence_${{ github.ref_name }}_darwin_amd64.tar.gz](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/lawrence_${{ github.ref_name }}_darwin_amd64.tar.gz)
-            
-            **macOS ARM64:**
-            - [lawrence_${{ github.ref_name }}_darwin_arm64.tar.gz](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/lawrence_${{ github.ref_name }}_darwin_arm64.tar.gz)
             
             ### Checksums
             
