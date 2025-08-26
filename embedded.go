@@ -2,5 +2,5 @@ package main
 
 import "embed"
 
-//go:embed knowledge.db
+//go:embed data/knowledge.db
 var EmbeddedKnowledgeDB embed.FS

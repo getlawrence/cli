@@ -15,7 +15,7 @@ GOTEST=$(GOCMD) test
 GOGET=$(GOCMD) get
 GOMOD=$(GOCMD) mod
 
-.PHONY: all build clean test deps fmt vet lint install uninstall cross-compile help
+.PHONY: all build clean test deps fmt vet lint install uninstall help
 
 all: deps fmt vet test build
 
@@ -24,23 +24,15 @@ help: ## Show this help message
 	@echo ''
 	@echo 'Targets:'
 	@egrep '^(.+)\s*:.*##\s*(.+)' $(MAKEFILE_LIST) | column -t -c 2 -s ':#'
-	@echo ''
-	@echo 'Cross-compilation targets:'
-	@echo '  build-native         - Build for native platforms (macOS AMD64/ARM64)'
-	@echo '  cross-compile        - Build for all platforms (requires C compilers)'
-	@echo '  goreleaser-local     - Test GoReleaser locally (dry-run)'
-	@echo '  goreleaser-build     - Build all targets using GoReleaser locally'
-	@echo '  test-windows-arm64   - Test Windows ARM64 build in Docker'
-	@echo '  test-all-platforms   - Test all platforms including Windows ARM64'
 
 deps: ## Download dependencies
 	$(GOMOD) download
 	$(GOMOD) tidy
 
 build: ## Build the binary
-	@if [ ! -f "knowledge.db" ]; then \
+	@if [ ! -f "data/knowledge.db" ]; then \
 		echo "Knowledge database not found. Generating from existing data..."; \
-		cp pkg/knowledge/pipeline/knowledge.db . || echo "Warning: Could not copy knowledge.db"; \
+		cp pkg/knowledge/pipeline/knowledge.db data/ || echo "Warning: Could not copy knowledge.db to data/"; \
 	fi
 	$(GOBUILD) $(LDFLAGS) -o $(BINARY_NAME) .
 
@@ -75,25 +67,20 @@ vet: ## Run go vet
 lint: ## Run golangci-lint (requires golangci-lint to be installed)
 	golangci-lint run
 
-# E2E Tests
-validate-e2e: ## Validate E2E test structure without Docker
-	./validate-e2e.sh
-
-e2e-test: ## Run E2E tests in Docker
-	docker-compose -f docker-compose.e2e.yml up --build --abort-on-container-exit lawrence-e2e
-
-e2e-test-instrumentation: ## Run instrumentation-specific E2E tests
-	docker-compose -f docker-compose.e2e.yml up --build --abort-on-container-exit lawrence-instrumentation-tests
-
-e2e-test-multi: ## Run E2E tests on multiple distributions
-	docker-compose -f docker-compose.e2e.yml --profile multi-distro up --build --abort-on-container-exit
+# E2E Tests using examples docker-compose
+e2e-test: ## Run E2E tests using examples docker-compose
+	@echo "Running E2E tests using examples docker-compose..."
+	@if [ ! -f "examples/docker-compose.yml" ]; then \
+		echo "Error: examples/docker-compose.yml not found"; \
+		exit 1; \
+	fi
+	cd examples && docker-compose up --build --abort-on-container-exit
 
 e2e-clean: ## Clean up E2E test artifacts
-	docker-compose -f docker-compose.e2e.yml down --volumes --remove-orphans
+	@if [ -f "examples/docker-compose.yml" ]; then \
+		cd examples && docker-compose down --volumes --remove-orphans; \
+	fi
 	docker system prune -f
-
-e2e-shell: ## Start an interactive shell in the E2E test environment
-	docker-compose -f docker-compose.e2e.yml run --rm lawrence-e2e /bin/bash
 
 install: build ## Install the binary to GOPATH/bin
 	cp $(BINARY_NAME) $(GOPATH)/bin/$(BINARY_NAME)
@@ -115,41 +102,7 @@ update-embedded-kb: generate-kb ## Update the embedded knowledge database
 	@echo "Knowledge base ready for embedding in binary"
 	@echo "Run 'make build' to create binary with embedded database"
 
-# Cross compilation
-cross-compile: ## Build for multiple platforms
-	@echo "Building for multiple platforms..."
-	@echo "Note: This requires cross-compilation toolchains. For easier cross-compilation, use 'make goreleaser-local'"
-	@if command -v x86_64-linux-musl-gcc >/dev/null 2>&1; then \
-		CC=x86_64-linux-musl-gcc CGO_ENABLED=1 GOOS=linux GOARCH=amd64 $(GOBUILD) $(LDFLAGS) -o $(BINARY_NAME)-linux-amd64 .; \
-		echo "✓ Built $(BINARY_NAME)-linux-amd64"; \
-	else \
-		echo "⚠ x86_64-linux-musl-gcc not found, skipping linux-amd64"; \
-	fi
-	@if command -v aarch64-linux-musl-gcc >/dev/null 2>&1; then \
-		CC=aarch64-linux-musl-gcc CGO_ENABLED=1 GOOS=linux GOARCH=arm64 $(GOBUILD) $(LDFLAGS) -o $(BINARY_NAME)-linux-arm64 .; \
-		echo "✓ Built $(BINARY_NAME)-linux-arm64"; \
-	else \
-		echo "⚠ aarch64-linux-musl-gcc not found, skipping linux-arm64"; \
-	fi
-	@if command -v x86_64-w64-mingw32-gcc >/dev/null 2>&1; then \
-		CC=x86_64-w64-mingw32-gcc CGO_ENABLED=1 GOOS=windows GOARCH=amd64 $(GOBUILD) $(LDFLAGS) -o $(BINARY_NAME)-windows-amd64.exe .; \
-		echo "✓ Built $(BINARY_NAME)-windows-amd64.exe"; \
-	else \
-		echo "⚠ x86_64-w64-mingw32-gcc not found, skipping windows-amd64"; \
-	fi
-	@if command -v aarch64-w64-mingw32-gcc >/dev/null 2>&1; then \
-		CC=aarch64-w64-mingw32-gcc CGO_ENABLED=1 GOOS=windows GOARCH=arm64 $(GOBUILD) $(LDFLAGS) -o $(BINARY_NAME)-windows-arm64.exe .; \
-		echo "✓ Built $(BINARY_NAME)-windows-arm64.exe"; \
-	else \
-		echo "⚠ aarch64-w64-mingw32-gcc not found, skipping windows-arm64"; \
-	fi
-	@CGO_ENABLED=1 GOOS=darwin GOARCH=amd64 $(GOBUILD) $(LDFLAGS) -o $(BINARY_NAME)-darwin-amd64 .; \
-	echo "✓ Built $(BINARY_NAME)-darwin-amd64"
-	@CGO_ENABLED=1 GOOS=darwin GOARCH=arm64 $(GOBUILD) $(LDFLAGS) -o $(BINARY_NAME)-darwin-arm64 .; \
-	echo "✓ Built $(BINARY_NAME)-darwin-arm64"
-	@echo "Cross-compilation complete!"
-
-# GoReleaser local testing
+# Cross compilation using GoReleaser (recommended approach)
 goreleaser-local: ## Test GoReleaser locally (dry-run)
 	@echo "Testing GoReleaser locally..."
 	@if ! command -v goreleaser >/dev/null 2>&1; then \
@@ -165,38 +118,6 @@ goreleaser-build: ## Build all targets using GoReleaser locally
 		go install github.com/goreleaser/goreleaser@latest; \
 	fi
 	goreleaser build --snapshot --clean
-
-# Build native platforms only (works without cross-compilation toolchains)
-build-native: ## Build for native platforms only (macOS AMD64/ARM64)
-	@echo "Building for native platforms..."
-	@CGO_ENABLED=1 GOOS=darwin GOARCH=amd64 $(GOBUILD) $(LDFLAGS) -o $(BINARY_NAME)-darwin-amd64 .
-	@CGO_ENABLED=1 GOOS=darwin GOARCH=arm64 $(GOBUILD) $(LDFLAGS) -o $(BINARY_NAME)-darwin-arm64 .
-	@echo "✅ Native builds complete: $(BINARY_NAME)-darwin-amd64, $(BINARY_NAME)-darwin-arm64"
-
-# Test Windows ARM64 build in Docker
-test-windows-arm64: ## Test Windows ARM64 build in Docker environment
-	@echo "Testing Windows ARM64 build in Docker..."
-	@echo "This will attempt to build Windows ARM64 in an emulated environment"
-	docker compose -f docker-compose.windows-arm64.yml up ubuntu-windows-arm64 --build
-
-# Test all platforms including Windows ARM64
-test-all-platforms: ## Test all platforms including Windows ARM64
-	@echo "Testing all platforms including Windows ARM64..."
-	@echo "1. Testing native builds..."
-	@make build-native
-	@echo ""
-	@echo "2. Testing GoReleaser (5 platforms)..."
-	@make goreleaser-local
-	@echo ""
-	@echo "3. Testing Windows ARM64 in Docker..."
-	@make test-windows-arm64
-
-# Cross compilation without CGO (easier for local testing)
-cross-compile-no-cgo: ## Build for multiple platforms without CGO (easier local testing)
-	@echo "⚠️  Warning: This project requires CGO and cannot be built without it."
-	@echo "Use 'make goreleaser-local' instead for local testing."
-	@echo "Or install cross-compilation toolchains with './install-cross-compilers.sh'"
-	exit 1
 
 # Docker commands
 docker-build: ## Build Docker image

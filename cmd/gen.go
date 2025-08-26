@@ -97,11 +97,12 @@ func runGen(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to resolve path: %w", err)
 	}
 
-	ui := logger.NewUILogger()
+	cmdLogger := logger.NewUILogger()
 
 	// Create storage client for knowledge base
 	config := cmd.Context().Value(ConfigKey).(*AppConfig)
-	storageClient, err := storage.NewStorageWithEmbedded("knowledge.db", config.EmbeddedDB, ui)
+	dbPath := "data/knowledge.db"
+	storageClient, err := storage.NewStorageWithEmbedded(dbPath, config.EmbeddedDB, cmdLogger)
 	if err != nil {
 		return fmt.Errorf("failed to create knowledge storage: %w", err)
 	}
@@ -118,25 +119,25 @@ func runGen(cmd *cobra.Command, args []string) error {
 		"csharp":     languages.NewDotNetDetector(),
 		"ruby":       languages.NewRubyDetector(),
 		"php":        languages.NewPHPDetector(),
-	}, storageClient, ui)
+	}, storageClient, cmdLogger)
 
-	kb := knowledge.NewKnowledge(*storageClient, ui)
-	codeGenerator, err := generator.NewGenerator(codebaseAnalyzer, ui, kb)
+	kb := knowledge.NewKnowledge(*storageClient, cmdLogger)
+	codeGenerator, err := generator.NewGenerator(codebaseAnalyzer, cmdLogger, kb)
 	if err != nil {
 		return err
 	}
 
 	// Handle list commands
 	if listAgents {
-		return listAvailableAgents(codeGenerator, ui)
+		return listAvailableAgents(codeGenerator, cmdLogger)
 	}
 
 	if listTemplates {
-		return listAvailableTemplates(codeGenerator, ui)
+		return listAvailableTemplates(codeGenerator, cmdLogger)
 	}
 
 	if listStrategies {
-		return listAvailableStrategies(codeGenerator, ui)
+		return listAvailableStrategies(codeGenerator, cmdLogger)
 	}
 
 	// If we're using the standard generator, continue with the original logic
