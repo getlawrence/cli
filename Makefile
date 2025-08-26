@@ -139,3 +139,27 @@ docker-build: ## Build Docker image
 
 docker-run: ## Run Docker container
 	docker run --rm -v $(PWD):/workspace $(BINARY_NAME):latest analyze /workspace
+
+# Release build commands
+release-build: clean ## Build release binary with fresh knowledge database
+	@echo "Building release binary with embedded knowledge database..."
+	@if [ -n "$(GITHUB_TOKEN)" ]; then \
+		echo "Using GitHub token for enhanced API access"; \
+		GITHUB_TOKEN="$(GITHUB_TOKEN)" ./scripts/generate-release-db.sh; \
+	else \
+		echo "No GitHub token provided - API access may be limited"; \
+		./scripts/generate-release-db.sh; \
+	fi
+	$(GOBUILD) $(LDFLAGS) -o $(BINARY_NAME) .
+	@echo "Release binary built: $(BINARY_NAME)"
+
+# CI/CD pipeline commands
+ci-release-db: ## Generate knowledge database for CI/CD releases (no build)
+	@echo "Generating knowledge database for CI/CD release..."
+	@if [ -n "$(GITHUB_TOKEN)" ]; then \
+		echo "Using GitHub token for enhanced API access"; \
+		GITHUB_TOKEN="$(GITHUB_TOKEN)" ./scripts/generate-release-db.sh; \
+	else \
+		echo "No GitHub token provided - API access may be limited"; \
+		./scripts/generate-release-db.sh; \
+	fi

@@ -77,3 +77,28 @@ jobs:
           name: artifacts-${{ matrix.GOOS }}-${{ matrix.GOARCH }}
           path: dist/
           if-no-files-found: error
+
+      - name: Generate knowledge database
+        env:
+          GOOS: ${{ matrix.GOOS }}
+          GOARCH: ${{ matrix.GOARCH }}
+          GOAMD64: v1
+          CGO_ENABLED: 1
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "Generating knowledge database for release..."
+          
+          # First, sync the registry to get latest data
+          go run . registry sync
+          
+          # Generate the knowledge database with GitHub token for better API access
+          go run . knowledge update --output data/knowledge.db --force --token $GITHUB_TOKEN
+          
+          # Verify the database was created
+          if [ ! -f "data/knowledge.db" ]; then
+            echo "Error: Knowledge database was not generated"
+            exit 1
+          fi
+          
+          echo "Knowledge database generated successfully"
+          ls -la data/knowledge.db
