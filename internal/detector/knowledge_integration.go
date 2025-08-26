@@ -2,7 +2,6 @@ package detector
 
 import (
 	"context"
-	"fmt"
 	"strings"
 
 	"github.com/getlawrence/cli/internal/domain"
@@ -17,15 +16,10 @@ type KnowledgeBasedInstrumentationService struct {
 }
 
 // NewKnowledgeBasedInstrumentationService creates a new knowledge-based instrumentation service
-func NewKnowledgeBasedInstrumentationService(logger logger.Logger) (*KnowledgeBasedInstrumentationService, error) {
-	storageClient, err := storage.NewStorageWithEmbedded("knowledge.db", logger)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create knowledge storage: %w", err)
-	}
-
+func NewKnowledgeBasedInstrumentationService(storageClient *storage.Storage, logger logger.Logger) *KnowledgeBasedInstrumentationService {
 	return &KnowledgeBasedInstrumentationService{
 		storage: storageClient,
-	}, nil
+	}
 }
 
 // Close closes the underlying storage connection

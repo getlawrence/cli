@@ -64,6 +64,7 @@ type Opportunity struct {
 	ComponentType ComponentType   `json:"componentType"`
 	Component     string          `json:"component"`
 	FilePath      string          `json:"file_path"`
+	FullPath      string          `json:"full_path,omitempty"`
 	Suggestion    string          `json:"suggestion"`
 	Issue         *Issue          `json:"issue,omitempty"`
 }

@@ -8,6 +8,8 @@ import (
 	det "github.com/getlawrence/cli/internal/detector"
 	"github.com/getlawrence/cli/internal/domain"
 	"github.com/getlawrence/cli/internal/logger"
+	"github.com/getlawrence/cli/pkg/knowledge"
+	"github.com/getlawrence/cli/pkg/knowledge/storage"
 )
 
 // fakeLanguage implements detector.Language with static responses
@@ -23,8 +25,13 @@ func (f *fakeLanguage) GetAllPackages(ctx context.Context, rootPath string) ([]d
 func (f *fakeLanguage) GetFilePatterns() []string { return []string{"**/*.go"} }
 
 func TestNewGenerator_DefaultsAndListings(t *testing.T) {
-	ca := det.NewCodebaseAnalyzer(nil, map[string]det.Language{}, &logger.StdoutLogger{})
-	g, err := NewGenerator(ca, &logger.StdoutLogger{})
+	ca := det.NewCodebaseAnalyzer(nil, map[string]det.Language{}, (*storage.Storage)(nil), &logger.StdoutLogger{})
+	store, err := storage.NewStorage("test.db", &logger.StdoutLogger{})
+	if err != nil {
+		t.Fatalf("Failed to create storage: %v", err)
+	}
+	kb := knowledge.NewKnowledge(*store, &logger.StdoutLogger{})
+	g, err := NewGenerator(ca, &logger.StdoutLogger{}, kb)
 	if err != nil {
 		t.Fatalf("NewGenerator error: %v", err)
 	}
@@ -48,8 +55,13 @@ func TestNewGenerator_DefaultsAndListings(t *testing.T) {
 }
 
 func TestGenerator_ConvertIssuesToOpportunities(t *testing.T) {
-	ca := det.NewCodebaseAnalyzer(nil, nil, &logger.StdoutLogger{})
-	g, err := NewGenerator(ca, &logger.StdoutLogger{})
+	ca := det.NewCodebaseAnalyzer(nil, nil, (*storage.Storage)(nil), &logger.StdoutLogger{})
+	store, err := storage.NewStorage("test.db", &logger.StdoutLogger{})
+	if err != nil {
+		t.Fatalf("Failed to create storage: %v", err)
+	}
+	kb := knowledge.NewKnowledge(*store, &logger.StdoutLogger{})
+	g, err := NewGenerator(ca, &logger.StdoutLogger{}, kb)
 	if err != nil {
 		t.Fatalf("NewGenerator error: %v", err)
 	}

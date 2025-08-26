@@ -12,6 +12,7 @@ import (
 	"github.com/getlawrence/cli/internal/detector/issues"
 	"github.com/getlawrence/cli/internal/detector/languages"
 	"github.com/getlawrence/cli/internal/logger"
+	"github.com/getlawrence/cli/pkg/knowledge/storage"
 	"github.com/spf13/cobra"
 )
 
@@ -65,11 +66,19 @@ func runAnalyze(cmd *cobra.Command, args []string) error {
 	detailed, _ := cmd.Flags().GetBool("detailed")
 	outputFormat, _ := cmd.Flags().GetString("output")
 
-	uiLogger := logger.NewUILogger()
+	cmdLogger := logger.NewUILogger()
 
 	if verbose {
-		uiLogger.Logf("Analyzing codebase at: %s\n", absPath)
+		cmdLogger.Logf("Analyzing codebase at: %s\n", absPath)
 	}
+
+	// Create storage client for knowledge base
+	config := cmd.Context().Value(ConfigKey).(*AppConfig)
+	storageClient, err := storage.NewStorageWithEmbedded("data/knowledge.db", config.EmbeddedDB, cmdLogger)
+	if err != nil {
+		return fmt.Errorf("failed to create knowledge storage: %w", err)
+	}
+	defer storageClient.Close()
 
 	// Create analysis engine
 	codebaseAnalyzer := detector.NewCodebaseAnalyzer([]detector.IssueDetector{
@@ -82,7 +91,7 @@ func runAnalyze(cmd *cobra.Command, args []string) error {
 		"csharp":     languages.NewDotNetDetector(),
 		"ruby":       languages.NewRubyDetector(),
 		"php":        languages.NewPHPDetector(),
-	}, uiLogger)
+	}, storageClient, cmdLogger)
 
 	analysis, err := codebaseAnalyzer.AnalyzeCodebase(cmd.Context(), absPath)
 	if err != nil {
@@ -93,7 +102,7 @@ func runAnalyze(cmd *cobra.Command, args []string) error {
 	case "json":
 		return outputJSON(analysis)
 	default:
-		return outputText(analysis, detailed, uiLogger)
+		return outputText(analysis, detailed, cmdLogger)
 	}
 }
 

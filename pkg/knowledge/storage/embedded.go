@@ -10,16 +10,8 @@ import (
 	"github.com/getlawrence/cli/internal/logger"
 )
 
-// Embedded knowledge database
-//
-//go:embed knowledge.db
-var embeddedKnowledgeFS embed.FS
-
-// GetEmbeddedDatabasePath returns a path to the embedded database file.
-// It extracts the embedded database to a temporary location if needed.
-func GetEmbeddedDatabasePath() (string, error) {
-	// Try to read the embedded database
-	embeddedFile, err := embeddedKnowledgeFS.Open("knowledge.db")
+func getEmbeddedDatabasePath(dbPath string, embeddedFS embed.FS) (string, error) {
+	embeddedFile, err := embeddedFS.Open(dbPath)
 	if err != nil {
 		return "", fmt.Errorf("embedded knowledge database not found: %w", err)
 	}
@@ -53,56 +45,20 @@ func GetEmbeddedDatabasePath() (string, error) {
 
 // NewStorageWithEmbedded creates a new storage instance using the embedded database
 // as a fallback if no database path is provided or if the specified path doesn't exist.
-func NewStorageWithEmbedded(dbPath string, logger logger.Logger) (*Storage, error) {
+func NewStorageWithEmbedded(dbPath string, embeddedFS embed.FS, logger logger.Logger) (*Storage, error) {
 	var finalDBPath string
 
-	// If no path provided or path doesn't exist, use embedded database
-	if dbPath == "" || dbPath == ":memory:" {
-		embeddedPath, err := GetEmbeddedDatabasePath()
-		if err != nil {
-			logger.Logf("Warning: Failed to extract embedded database, falling back to in-memory: %v\n", err)
-			finalDBPath = ":memory:"
-		} else {
-			finalDBPath = embeddedPath
-			logger.Logf("Using embedded knowledge database\n")
+	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
+		embeddedPath, embeddedErr := getEmbeddedDatabasePath(dbPath, embeddedFS)
+		if embeddedErr != nil {
+			return nil, fmt.Errorf("failed to get embedded database path: %w", embeddedErr)
 		}
+		logger.Logf("Using embedded knowledge database: %s\n", embeddedPath)
+		finalDBPath = embeddedPath
 	} else {
-		// Check if the specified path exists
-		if _, err := os.Stat(dbPath); os.IsNotExist(err) {
-			// File doesn't exist, try to use embedded database as fallback
-			embeddedPath, embeddedErr := GetEmbeddedDatabasePath()
-			if embeddedErr != nil {
-				logger.Logf("Warning: Specified database not found and embedded database unavailable, using in-memory database\n")
-				finalDBPath = ":memory:"
-			} else {
-				logger.Logf("Specified database not found, using embedded knowledge database as fallback\n")
-				finalDBPath = embeddedPath
-			}
-		} else {
-			finalDBPath = dbPath
-		}
+		logger.Logf("Using local knowledge database: %s\n", dbPath)
+		finalDBPath = dbPath
 	}
 
 	return NewStorage(finalDBPath, logger)
-}
-
-// HasEmbeddedDatabase checks if an embedded database is available
-func HasEmbeddedDatabase() bool {
-	file, err := embeddedKnowledgeFS.Open("knowledge.db")
-	if err != nil {
-		return false
-	}
-	file.Close()
-	return true
-}
-
-// CleanupTempDatabase removes the temporary database file if it exists
-func CleanupTempDatabase() error {
-	tempDir := os.TempDir()
-	tempFile := filepath.Join(tempDir, "lawrence-knowledge.db")
-
-	if _, err := os.Stat(tempFile); err == nil {
-		return os.Remove(tempFile)
-	}
-	return nil
 }

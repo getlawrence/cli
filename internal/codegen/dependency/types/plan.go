@@ -15,10 +15,9 @@ type Dependency struct {
 
 // InstallPlan represents the installation request from the generator
 type InstallPlan struct {
-	Language                string
-	InstallOTEL             bool
-	InstallInstrumentations []string
-	InstallComponents       map[string][]string // componentType -> []componentName
+	Language          string
+	InstallOTEL       bool
+	InstallComponents map[string][]string // componentType -> []componentName
 }
 
 // Commander abstracts command execution for testing

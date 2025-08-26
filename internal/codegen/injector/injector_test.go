@@ -96,6 +96,24 @@ public class Program {
 			expectImportSub: "using OpenTelemetry;",
 		},
 		{
+			name:     "CSharpMinimalAPI",
+			language: "csharp",
+			filename: "Program.cs",
+			source: `using Microsoft.AspNetCore.Builder;
+using Microsoft.Extensions.Hosting;
+
+var builder = WebApplication.CreateBuilder(args);
+
+var app = builder.Build();
+
+app.MapGet("/", () => "Hello World!");
+
+app.Run();
+`,
+			expectInitSub:   "Otel.Configure(",
+			expectImportSub: "using OpenTelemetry;",
+		},
+		{
 			name:     "Ruby",
 			language: "ruby",
 			filename: "app.rb",
@@ -137,9 +155,8 @@ echo "hi";
 			}
 
 			ops := &types.OperationsData{
-				InstallOTEL:             true,
-				InstallInstrumentations: []string{},
-				InstallComponents:       map[string][]string{},
+				InstallOTEL:       true,
+				InstallComponents: map[string][]string{},
 			}
 
 			req := types.GenerationRequest{

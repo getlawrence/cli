@@ -25,7 +25,7 @@ func NewDotNetInjector() *DotNetInjector {
             `,
 			},
 			FunctionQueries: map[string]string{
-				// Capture method bodies (we will not filter by name for compatibility across C# versions)
+				// Capture method bodies and global statements (including minimal API top-level statements)
 				"main_function": `
                 (method_declaration
                   name: (identifier) @method_name
@@ -33,6 +33,8 @@ func NewDotNetInjector() *DotNetInjector {
                 )
 
                 (global_statement) @global
+                
+                (compilation_unit) @compilation_unit
             `,
 			},
 			InsertionQueries: map[string]string{
@@ -123,7 +125,7 @@ func (h *DotNetInjector) AnalyzeFunctionCapture(captureName string, node *sitter
 	switch captureName {
 	case "method_name":
 		// handled together with body capture
-	case "method_body", "global":
+	case "method_body", "global", "compilation_unit":
 		insertion := h.findBestInsertionPoint(node, content, config)
 		entry := types.EntryPointInfo{
 			Name:         "main",
@@ -161,6 +163,16 @@ func (h *DotNetInjector) findBestInsertionPoint(node *sitter.Node, content []byt
 			return types.InsertionPoint{LineNumber: uint32(baseLine + i + 1), Column: 1, Priority: 10}
 		}
 	}
+
+	// For minimal API syntax, also look for var builder = WebApplication.CreateBuilder
+	for i, ln := range lines {
+		if strings.Contains(ln, "var builder") && strings.Contains(ln, "WebApplication.CreateBuilder") {
+			// Insert on the next line after the builder is created
+			baseLine := int(node.StartPoint().Row) + 1
+			return types.InsertionPoint{LineNumber: uint32(baseLine + i + 1), Column: 1, Priority: 10}
+		}
+	}
+
 	defaultPoint := types.InsertionPoint{LineNumber: node.StartPoint().Row + 1, Column: node.StartPoint().Column + 1, Priority: 1}
 	if insertQuery, ok := config.InsertionQueries["optimal_insertion"]; ok {
 		q, err := sitter.NewQuery([]byte(insertQuery), h.GetLanguage())

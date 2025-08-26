@@ -137,7 +137,6 @@ func (s *TemplateGenerationStrategy) generateCodeWithLanguage(
 	// Create template data
 	data := templates.TemplateData{
 		Language:          language,
-		Instrumentations:  operationsData.InstallInstrumentations,
 		ServiceName:       serviceName,
 		InstallOTEL:       operationsData.InstallOTEL,
 		InstallComponents: operationsData.InstallComponents,
@@ -269,12 +268,8 @@ func (s *TemplateGenerationStrategy) analyzeOpportunities(opportunities []domain
 			data.InstallOTEL = true
 
 		case domain.OpportunityInstallComponent:
-			if opp.ComponentType == domain.ComponentTypeInstrumentation {
-				data.InstallInstrumentations = append(data.InstallInstrumentations, opp.Component)
-			} else {
-				componentType := string(opp.ComponentType)
-				data.InstallComponents[componentType] = append(data.InstallComponents[componentType], opp.Component)
-			}
+			componentType := string(opp.ComponentType)
+			data.InstallComponents[componentType] = append(data.InstallComponents[componentType], opp.Component)
 
 		case domain.OpportunityRemoveComponent:
 			componentType := string(opp.ComponentType)
@@ -283,7 +278,7 @@ func (s *TemplateGenerationStrategy) analyzeOpportunities(opportunities []domain
 	}
 	// If instrumentations or components are planned, ensure OTEL core is also installed and initialized.
 	// Many projects need the bootstrap even if the "missing otel" issue wasn't explicitly raised.
-	if !data.InstallOTEL && (len(data.InstallInstrumentations) > 0 || len(data.InstallComponents) > 0) {
+	if !data.InstallOTEL && len(data.InstallComponents) > 0 {
 		data.InstallOTEL = true
 	}
 	return data
@@ -295,10 +290,6 @@ func (s *TemplateGenerationStrategy) createOperationsSummary(language string, da
 
 	if data.InstallOTEL {
 		summary = append(summary, fmt.Sprintf("[%s] Install OpenTelemetry SDK", language))
-	}
-
-	if len(data.InstallInstrumentations) > 0 {
-		summary = append(summary, fmt.Sprintf("[%s] Install instrumentations: %s", language, strings.Join(data.InstallInstrumentations, ", ")))
 	}
 
 	for componentType, components := range data.InstallComponents {

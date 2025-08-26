@@ -7,11 +7,13 @@ import (
 
 	"github.com/getlawrence/cli/internal/codegen/generator"
 	"github.com/getlawrence/cli/internal/codegen/types"
-	cfg "github.com/getlawrence/cli/internal/config"
+	internalconfig "github.com/getlawrence/cli/internal/config"
 	"github.com/getlawrence/cli/internal/detector"
 	"github.com/getlawrence/cli/internal/detector/issues"
 	"github.com/getlawrence/cli/internal/detector/languages"
 	"github.com/getlawrence/cli/internal/logger"
+	"github.com/getlawrence/cli/pkg/knowledge"
+	"github.com/getlawrence/cli/pkg/knowledge/storage"
 	"github.com/spf13/cobra"
 )
 
@@ -95,7 +97,16 @@ func runGen(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to resolve path: %w", err)
 	}
 
-	ui := logger.NewUILogger()
+	cmdLogger := logger.NewUILogger()
+
+	// Create storage client for knowledge base
+	config := cmd.Context().Value(ConfigKey).(*AppConfig)
+	dbPath := "data/knowledge.db"
+	storageClient, err := storage.NewStorageWithEmbedded(dbPath, config.EmbeddedDB, cmdLogger)
+	if err != nil {
+		return fmt.Errorf("failed to create knowledge storage: %w", err)
+	}
+	defer storageClient.Close()
 
 	// Create analysis engine
 	codebaseAnalyzer := detector.NewCodebaseAnalyzer([]detector.IssueDetector{
@@ -108,24 +119,25 @@ func runGen(cmd *cobra.Command, args []string) error {
 		"csharp":     languages.NewDotNetDetector(),
 		"ruby":       languages.NewRubyDetector(),
 		"php":        languages.NewPHPDetector(),
-	}, ui)
+	}, storageClient, cmdLogger)
 
-	codeGenerator, err := generator.NewGenerator(codebaseAnalyzer, ui)
+	kb := knowledge.NewKnowledge(*storageClient, cmdLogger)
+	codeGenerator, err := generator.NewGenerator(codebaseAnalyzer, cmdLogger, kb)
 	if err != nil {
 		return err
 	}
 
 	// Handle list commands
 	if listAgents {
-		return listAvailableAgents(codeGenerator, ui)
+		return listAvailableAgents(codeGenerator, cmdLogger)
 	}
 
 	if listTemplates {
-		return listAvailableTemplates(codeGenerator, ui)
+		return listAvailableTemplates(codeGenerator, cmdLogger)
 	}
 
 	if listStrategies {
-		return listAvailableStrategies(codeGenerator, ui)
+		return listAvailableStrategies(codeGenerator, cmdLogger)
 	}
 
 	// If we're using the standard generator, continue with the original logic
@@ -151,7 +163,7 @@ func runGen(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return fmt.Errorf("failed to read config file: %w", err)
 		}
-		parsed, err := cfg.LoadOTELConfig(content)
+		parsed, err := internalconfig.LoadOTELConfig(content)
 		if err != nil {
 			return err
 		}

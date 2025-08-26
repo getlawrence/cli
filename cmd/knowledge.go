@@ -54,7 +54,7 @@ func init() {
 
 	// Add flags for update command
 	updateCmd.Flags().StringP("registry", "", "", "Path to local registry (if not specified, will try to find .registry)")
-	updateCmd.Flags().StringP("output", "o", "knowledge.db", "Output file path")
+	updateCmd.Flags().StringP("output", "o", "data/knowledge.db", "Output file path")
 	updateCmd.Flags().BoolP("force", "f", false, "Force update even if recent data exists")
 	updateCmd.Flags().StringP("token", "", "", "GitHub personal access token for API authentication (needed for changelog and package data)")
 
@@ -68,23 +68,13 @@ func runKnowledge(cmd *cobra.Command, args []string) error {
 func runStatus(cmd *cobra.Command, args []string) error {
 	cmdLogger := logger.NewUILogger()
 
-	// Check if embedded database is available
-	if storage.HasEmbeddedDatabase() {
-		cmdLogger.Logf("✓ Embedded knowledge database is available\n")
-	} else {
-		cmdLogger.Logf("✗ No embedded knowledge database found\n")
-	}
+	// Get config from context
+	config := cmd.Context().Value(ConfigKey).(*AppConfig)
 
-	// Check for local knowledge.db file
-	if _, err := os.Stat("knowledge.db"); err == nil {
-		info, _ := os.Stat("knowledge.db")
-		cmdLogger.Logf("✓ Local knowledge.db found (modified: %s)\n", info.ModTime().Format("2006-01-02 15:04:05"))
-	} else {
-		cmdLogger.Logf("✗ No local knowledge.db file found\n")
-	}
+	dbPath := "data/knowledge.db"
 
 	// Test storage connection and show component count
-	storageClient, err := storage.NewStorageWithEmbedded("", cmdLogger)
+	storageClient, err := storage.NewStorageWithEmbedded(dbPath, config.EmbeddedDB, cmdLogger)
 	if err != nil {
 		return fmt.Errorf("failed to create storage client: %w", err)
 	}
@@ -93,15 +83,14 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	// Get component and version counts
 	componentCount, err := storageClient.GetComponentCount()
 	if err != nil {
-		cmdLogger.Logf("✗ Failed to get component count: %v\n", err)
-	} else {
-		versionCount, err := storageClient.GetVersionCount()
-		if err != nil {
-			cmdLogger.Logf("✓ Knowledge base contains %d components\n", componentCount)
-		} else {
-			cmdLogger.Logf("✓ Knowledge base contains %d components with %d versions\n", componentCount, versionCount)
-		}
+		return fmt.Errorf("failed to get component count: %w", err)
 	}
+
+	versionCount, err := storageClient.GetVersionCount()
+	if err != nil {
+		return fmt.Errorf("failed to get version count: %w", err)
+	}
+	cmdLogger.Logf("✓ Knowledge base contains %d components with %d versions\n", componentCount, versionCount)
 
 	return nil
 }
@@ -189,11 +178,10 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 	providerFactory := providers.NewProviderFactory(absRegistryPath, cmdLogger)
 	pipeline := pipeline.NewPipeline(providerFactory, cmdLogger, githubToken, storageClient)
 
-	for _, language := range languages {
-		err := pipeline.UpdateKnowledgeBase(language)
-		if err != nil {
-			return fmt.Errorf("failed to update knowledge base: %w", err)
-		}
+	// Update knowledge base for all specified languages
+	err = pipeline.UpdateKnowledgeBase(languages)
+	if err != nil {
+		return fmt.Errorf("failed to update knowledge base: %w", err)
 	}
 	return nil
 }

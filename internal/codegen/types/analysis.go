@@ -32,8 +32,7 @@ type InsertionPoint struct {
 
 // OperationsData contains the analysis of opportunities organized by operation type
 type OperationsData struct {
-	InstallOTEL             bool                `json:"install_otel"`             // Whether OTEL needs to be installed
-	InstallInstrumentations []string            `json:"install_instrumentations"` // Instrumentations to install
-	InstallComponents       map[string][]string `json:"install_components"`       // Components to install by type (sdk, propagator, exporter)
-	RemoveComponents        map[string][]string `json:"remove_components"`        // Components to remove by type
+	InstallOTEL       bool                `json:"install_otel"`       // Whether OTEL needs to be installed
+	InstallComponents map[string][]string `json:"install_components"` // Components to install by type (sdk, propagator, exporter, instrumentation)
+	RemoveComponents  map[string][]string `json:"remove_components"`  // Components to remove by type
 }

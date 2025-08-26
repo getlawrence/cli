@@ -7,7 +7,7 @@ import (
 )
 
 func main() {
-	if err := cmd.Execute(); err != nil {
+	if err := cmd.Execute(EmbeddedKnowledgeDB); err != nil {
 		os.Exit(1)
 	}
 }

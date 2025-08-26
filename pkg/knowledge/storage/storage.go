@@ -45,12 +45,12 @@ func (s *Storage) Close() error {
 	return s.db.Close()
 }
 
-func (s *Storage) SaveComponents(components []types.Component, filename string) error {
-	return s.SaveKnowledgeBase(components, filename)
+func (s *Storage) SaveComponents(components []types.Component) error {
+	return s.SaveKnowledgeBase(components)
 }
 
 // SaveKnowledgeBase saves the knowledge base to the SQLite database using parallel processing
-func (s *Storage) SaveKnowledgeBase(components []types.Component, filename string) error {
+func (s *Storage) SaveKnowledgeBase(components []types.Component) error {
 	startTime := time.Now()
 
 	// For small datasets, use sequential processing
@@ -451,9 +451,6 @@ func migrateDatabaseIfNeeded(db *sql.DB, l logger.Logger) error {
 		return nil
 	}
 
-	// We need to migrate from the old schema
-	l.Log("Migrating database schema to support parallel processing...")
-
 	// Start a transaction for the migration
 	tx, err := db.Begin()
 	if err != nil {
@@ -533,7 +530,6 @@ func migrateDatabaseIfNeeded(db *sql.DB, l logger.Logger) error {
 		return fmt.Errorf("failed to commit migration: %w", err)
 	}
 
-	l.Log("Database migration completed successfully!")
 	return nil
 }
 

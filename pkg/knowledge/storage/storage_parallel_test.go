@@ -27,7 +27,7 @@ func TestSaveKnowledgeBaseParallel(t *testing.T) {
 
 	// Test parallel processing
 	startTime := time.Now()
-	err = storage.SaveKnowledgeBase(components, "test")
+	err = storage.SaveKnowledgeBase(components)
 	duration := time.Since(startTime)
 
 	if err != nil {
@@ -86,7 +86,7 @@ func TestSaveKnowledgeBaseSequential(t *testing.T) {
 
 	// Test sequential processing
 	startTime := time.Now()
-	err = storage.SaveKnowledgeBase(components, "test")
+	err = storage.SaveKnowledgeBase(components)
 	duration := time.Since(startTime)
 
 	if err != nil {
@@ -164,7 +164,7 @@ func BenchmarkSaveKnowledgeBaseParallel(b *testing.B) {
 		storage.db.Exec("DELETE FROM versions")
 		storage.db.Exec("DELETE FROM components")
 
-		err := storage.SaveKnowledgeBase(components, "benchmark")
+		err := storage.SaveKnowledgeBase(components)
 		if err != nil {
 			b.Fatalf("Failed to save knowledge base: %v", err)
 		}
@@ -193,7 +193,7 @@ func BenchmarkSaveKnowledgeBaseSequential(b *testing.B) {
 		storage.db.Exec("DELETE FROM versions")
 		storage.db.Exec("DELETE FROM components")
 
-		err := storage.SaveKnowledgeBase(components, "benchmark")
+		err := storage.SaveKnowledgeBase(components)
 		if err != nil {
 			b.Fatalf("Failed to save knowledge base: %v", err)
 		}

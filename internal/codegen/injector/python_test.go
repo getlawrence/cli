@@ -45,9 +45,8 @@ func TestPythonInjector_FlaskInstrumentation(t *testing.T) {
 	injector := NewPythonInjector()
 
 	operationsData := &types.OperationsData{
-		InstallOTEL:             true,
-		InstallInstrumentations: []string{"flask"},
-		InstallComponents:       make(map[string][]string),
+		InstallOTEL:       true,
+		InstallComponents: map[string][]string{"instrumentation": {"flask"}},
 	}
 
 	// Test Flask instrumentation generation
@@ -97,9 +96,8 @@ func TestPythonInjector_NoFlaskInstrumentation(t *testing.T) {
 	injector := NewPythonInjector()
 
 	operationsData := &types.OperationsData{
-		InstallOTEL:             true,
-		InstallInstrumentations: []string{"requests"}, // Not Flask
-		InstallComponents:       make(map[string][]string),
+		InstallOTEL:       true,
+		InstallComponents: map[string][]string{},
 	}
 
 	// Test that no Flask instrumentation is generated when not requested
@@ -185,9 +183,8 @@ if __name__ == '__main__':
 `
 
 	operationsData := &types.OperationsData{
-		InstallOTEL:             true,
-		InstallInstrumentations: []string{"flask"},
-		InstallComponents:       make(map[string][]string),
+		InstallOTEL:       true,
+		InstallComponents: map[string][]string{"instrumentation": {"flask"}},
 	}
 
 	// Generate modifications
@@ -282,9 +279,8 @@ func TestPythonInjector_FlaskCleanup(t *testing.T) {
 	injector := NewPythonInjector()
 
 	operationsData := &types.OperationsData{
-		InstallOTEL:             true,
-		InstallInstrumentations: []string{"flask"},
-		InstallComponents:       make(map[string][]string),
+		InstallOTEL:       true,
+		InstallComponents: map[string][]string{"instrumentation": {"flask"}},
 	}
 
 	// Test content with duplicate imports and misplaced instrumentation

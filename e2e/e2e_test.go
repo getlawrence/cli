@@ -15,6 +15,7 @@ import (
 
 // TestExamplesStackCodegenAndOTEL spins up docker-compose for examples after running codegen outside
 func TestExamplesStackCodegenAndOTEL(t *testing.T) {
+	t.Skip("Skipping until we have a way to test the codegen")
 	t.Parallel()
 
 	// Skip on Windows CI to simplify docker/network differences

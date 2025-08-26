@@ -296,7 +296,7 @@ func (ci *CodeInjector) generateModifications(
 	}
 
 	// Generate framework-specific import modifications
-	if len(operationsData.InstallInstrumentations) > 0 {
+	if len(operationsData.InstallComponents["instrumentation"]) > 0 {
 		frameworkImportMods := ci.generateFrameworkImportModifications(analysis, operationsData, handler)
 		modifications = append(modifications, frameworkImportMods...)
 	}
@@ -327,7 +327,7 @@ func (ci *CodeInjector) generateModifications(
 	}
 
 	// Generate framework-specific modifications
-	if len(operationsData.InstallInstrumentations) > 0 {
+	if len(operationsData.InstallComponents["instrumentation"]) > 0 {
 		if err == nil {
 			frameworkMods := handler.GenerateFrameworkModifications(content, operationsData)
 			// Set the file path for framework modifications
@@ -460,7 +460,6 @@ func (ci *CodeInjector) generateInitializationModification(
 	// Generate initialization code from template
 	templateData := map[string]interface{}{
 		"ServiceName":       filepath.Base(req.CodebasePath),
-		"Instrumentations":  operationsData.InstallInstrumentations,
 		"InstallComponents": operationsData.InstallComponents,
 	}
 
@@ -573,17 +572,11 @@ func (ci *CodeInjector) applyModifications(filePath string, modifications []type
 		return nil
 	}
 
-	// Create backup
-	backupPath := filePath + ".backup"
-	if err := os.WriteFile(backupPath, content, 0644); err != nil {
-		ci.logger.Logf("Warning: failed to create backup: %v\n", err)
-	}
-
 	// Write modified content
 	if err := os.WriteFile(filePath, []byte(modifiedContent), 0644); err != nil {
 		return fmt.Errorf("failed to write modified file: %w", err)
 	}
 
-	ci.logger.Logf("Successfully modified: %s (backup: %s)\n", filePath, backupPath)
+	ci.logger.Logf("Successfully modified: %s\n", filePath)
 	return nil
 }

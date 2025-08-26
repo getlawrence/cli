@@ -1078,3 +1078,33 @@ func (p *OTELCoreProvider) GetComplianceReport() map[string]interface{} {
 
 	return report
 }
+
+// IsMainSDK checks if a package is a main SDK package (not framework-specific)
+func (p *OTELCoreProvider) IsMainSDK(packageName string) bool {
+	langStr := string(p.language)
+	corePackages := p.getCorePackagesForLanguage(langStr)
+
+	for _, pkg := range corePackages {
+		if pkg.Name == packageName {
+			// Main SDKs are typically of type "sdk" and don't contain "instrumentation"
+			return pkg.Type == "sdk" && !strings.Contains(strings.ToLower(pkg.Name), "instrumentation")
+		}
+	}
+
+	return false
+}
+
+// GetMainSDKs returns all main SDK packages for the language
+func (p *OTELCoreProvider) GetMainSDKs() []CorePackage {
+	langStr := string(p.language)
+	corePackages := p.getCorePackagesForLanguage(langStr)
+	var mainSDKs []CorePackage
+
+	for _, pkg := range corePackages {
+		if pkg.Type == "sdk" && !strings.Contains(strings.ToLower(pkg.Name), "instrumentation") {
+			mainSDKs = append(mainSDKs, pkg)
+		}
+	}
+
+	return mainSDKs
+}
