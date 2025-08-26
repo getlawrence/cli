@@ -15,7 +15,14 @@ GOTEST=$(GOCMD) test
 GOGET=$(GOCMD) get
 GOMOD=$(GOCMD) mod
 
-.PHONY: all build clean test deps fmt vet lint install uninstall help
+# Get Go environment variables
+GOBIN=$(shell $(GOCMD) env GOBIN)
+GOPATH=$(shell $(GOCMD) env GOPATH)
+ifeq ($(GOBIN),)
+GOBIN=$(GOPATH)/bin
+endif
+
+.PHONY: all build clean test deps fmt vet lint setup unsetup help
 
 all: deps fmt vet test build
 
@@ -82,11 +89,18 @@ e2e-clean: ## Clean up E2E test artifacts
 	fi
 	docker system prune -f
 
-install: build ## Install the binary to GOPATH/bin
-	cp $(BINARY_NAME) $(GOPATH)/bin/$(BINARY_NAME)
+# Using 'setup' instead of 'install' to avoid conflicts with GNU Make 3.81's built-in rules
+install: build ## Install the binary to GOBIN directory
+	@echo "Installing $(BINARY_NAME) to $(GOBIN)/$(BINARY_NAME)"
+	@echo "GOBIN: $(GOBIN)"
+	@echo "GOPATH: $(GOPATH)"
+	cp $(BINARY_NAME) $(GOBIN)/$(BINARY_NAME)
+	@echo "Installation complete! You can now run '$(BINARY_NAME)' from anywhere"
 
-uninstall: ## Remove the binary from GOPATH/bin
-	rm -f $(GOPATH)/bin/$(BINARY_NAME)
+uninstall: ## Remove the binary from GOBIN directory
+	@echo "Removing $(BINARY_NAME) from $(GOBIN)/$(BINARY_NAME)"
+	rm -f $(GOBIN)/$(BINARY_NAME)
+	@echo "Uninstallation complete!"
 
 # Knowledge base commands
 generate-kb: build ## Generate knowledge base from local registry
