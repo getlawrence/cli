@@ -103,7 +103,7 @@ jobs:
           go run . registry sync
           
           # Generate the knowledge database with GitHub token for better API access
-          go run . knowledge update --output data/knowledge.db --force --token $GITHUB_TOKEN
+          go run . knowledge update --output data/knowledge.db --force --token $env:GITHUB_TOKEN
           
           # Verify the database was created
           if (-not (Test-Path "data/knowledge.db")) {
